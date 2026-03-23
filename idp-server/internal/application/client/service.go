@@ -309,6 +309,9 @@ func normalizeRedirectURIs(values []string) ([]string, error) {
 		if len(redirectURI) > 1024 {
 			return nil, ErrInvalidRedirectURI
 		}
+		if strings.Contains(redirectURI, "#") {
+			return nil, ErrInvalidRedirectURI
+		}
 
 		parsed, err := url.ParseRequestURI(redirectURI)
 		if err != nil || parsed.Scheme == "" || parsed.Fragment != "" {
