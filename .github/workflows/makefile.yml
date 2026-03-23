@@ -38,6 +38,8 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
+      - name: Run tests
+        run: go test ./...
 
   build-binaries:
     needs: test
@@ -105,8 +107,7 @@ jobs:
       - name: Prepare image name
         id: image
         run: |
-          repo_name="${GITHUB_REPOSITORY#*/}"
-          echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${repo_name,,}-idp-server" >> "$GITHUB_OUTPUT"
+          echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${GITHUB_REPOSITORY#*/}-idp-server" >> "$GITHUB_OUTPUT"
 
       - name: Extract Docker metadata
         id: meta
