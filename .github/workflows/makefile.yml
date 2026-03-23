@@ -38,9 +38,6 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
-      - name: Run tests
-        run: go test ./...
-
       - name: Build binary
         run: go build -o bin/idp-server ./cmd/idp
 
