@@ -13,7 +13,7 @@ ISSUER ?= http://localhost:8080
 APP_ENV ?= dev
 SESSION_TTL ?= 8h
 
-MYSQL_HOST ?= mysql
+MYSQL_HOST ?= db
 MYSQL_PORT ?= 3306
 MYSQL_DATABASE ?= app
 MYSQL_USER ?= app
@@ -24,11 +24,11 @@ REDIS_PORT ?= 6379
 REDIS_DB ?= 0
 
 DOCKER ?= docker
-DOCKERFILE ?= Dockerfile
+DOCKERFILE ?= dockerfile.server
 IMAGE ?= $(APP_NAME):latest
 COMPOSE ?= docker compose
 COMPOSE_FILE ?=
-MYSQL_CONTAINER ?= mysql
+MYSQL_CONTAINER ?= idp-db
 
 MYSQL_CMD = mysql -h $(MYSQL_HOST) -P $(MYSQL_PORT) -u$(MYSQL_USER) -p$(MYSQL_PASSWORD) $(MYSQL_DATABASE)
 
@@ -97,6 +97,7 @@ env:
 	@echo "MYSQL_PORT=$(MYSQL_PORT)"
 	@echo "MYSQL_DATABASE=$(MYSQL_DATABASE)"
 	@echo "MYSQL_USER=$(MYSQL_USER)"
+	@echo "MYSQL_CONTAINER=$(MYSQL_CONTAINER)"
 	@echo "REDIS_HOST=$(REDIS_HOST)"
 	@echo "REDIS_PORT=$(REDIS_PORT)"
 	@echo "REDIS_DB=$(REDIS_DB)"

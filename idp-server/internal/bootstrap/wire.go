@@ -12,6 +12,7 @@ import (
 	"idp-server/internal/application/authn"
 	appconsent "idp-server/internal/application/consent"
 	"idp-server/internal/application/oidc"
+	appregister "idp-server/internal/application/register"
 	"idp-server/internal/application/authz"
 	apptoken "idp-server/internal/application/token"
 	cacheRedis "idp-server/internal/infrastructure/cache/redis"
@@ -60,6 +61,7 @@ func Wire() (*App, error) {
 	passwordVerifier := infrasecurity.NewPasswordVerifier()
 	authzService := authz.NewService(clientRepo, sessionRepo, authCodeRepo, consentRepo, 10*time.Minute)
 	consentService := appconsent.NewService(clientRepo, sessionRepo, consentRepo)
+	registerService := appregister.NewService(userRepo, passwordVerifier)
 	authnService := authn.NewService(userRepo, sessionRepo, sessionCache, passwordVerifier, cfg.SessionTTL)
 	rotationConfig := infracrypto.RotationConfig{
 		WorkingDir:    cfg.WorkDir,
@@ -96,7 +98,7 @@ func Wire() (*App, error) {
 	authMiddleware := httpmiddleware.NewAuthMiddleware(&jwtMiddlewareAdapter{service: jwtService}, cfg.Issuer)
 
 	return &App{
-		Router: interfacehttp.NewRouter(authzService, consentService, authnService, tokenService, oidcService, authMiddleware),
+		Router: interfacehttp.NewRouter(authzService, consentService, registerService, authnService, tokenService, oidcService, authMiddleware),
 	}, nil
 }
 

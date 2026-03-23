@@ -17,6 +17,44 @@ func NewUserRepository(db *sql.DB) *UserRepository {
 	return &UserRepository{db: db}
 }
 
+func (r *UserRepository) Create(ctx context.Context, model *user.Model) error {
+	const query = `
+INSERT INTO users (
+    user_uuid,
+    username,
+    email,
+    email_verified,
+    display_name,
+    password_hash,
+    status,
+    failed_login_count,
+    last_login_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	result, err := r.db.ExecContext(
+		ctx,
+		query,
+		model.UserUUID,
+		model.Username,
+		model.Email,
+		model.EmailVerified,
+		model.DisplayName,
+		model.PasswordHash,
+		model.Status,
+		model.FailedLoginCount,
+		nullTime(model.LastLoginAt),
+	)
+	if err != nil {
+		return err
+	}
+
+	id, err := result.LastInsertId()
+	if err == nil {
+		model.ID = id
+	}
+	return nil
+}
+
 func (r *UserRepository) FindByID(ctx context.Context, id int64) (*user.Model, error) {
 	const query = `
 SELECT
@@ -59,6 +97,28 @@ WHERE username = ?
 LIMIT 1`
 
 	return r.getOne(ctx, query, username)
+}
+
+func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*user.Model, error) {
+	const query = `
+SELECT
+    id,
+    user_uuid,
+    username,
+    email,
+    email_verified,
+    display_name,
+    password_hash,
+    status,
+    failed_login_count,
+    last_login_at,
+    created_at,
+    updated_at
+FROM users
+WHERE email = ?
+LIMIT 1`
+
+	return r.getOne(ctx, query, email)
 }
 
 func (r *UserRepository) FindByUserUUID(ctx context.Context, userUUID string) (*user.Model, error) {

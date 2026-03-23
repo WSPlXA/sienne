@@ -4,6 +4,7 @@
 
 当前这版已经可以真实启动，并跑通下面这些链路：
 
+- `POST /register`
 - `POST /login`
 - `GET /oauth2/authorize`
 - `POST /oauth2/token` 的 `authorization_code`
@@ -69,7 +70,7 @@ make migrate
 如果你的 MySQL 跑在容器里，更方便的是：
 
 ```bash
-make migrate-docker MYSQL_CONTAINER=mysql
+make migrate-docker
 ```
 
 底层执行的就是 [migrate.sql](/workspace/idp-server/scripts/migrate.sql)。
@@ -116,7 +117,7 @@ make migrate-docker MYSQL_CONTAINER=mysql
 
 ```bash
 export REDIS_HOST=redis
-export MYSQL_HOST=mysql
+export MYSQL_HOST=db
 export MYSQL_DATABASE=app
 export MYSQL_USER=app
 export MYSQL_PASSWORD=apppass
@@ -172,7 +173,49 @@ curl http://localhost:8080/healthz
 
 ## 接口说明
 
-### 1. 登录
+### 1. 注册
+
+现在已经支持完整注册接口：
+
+- 校验用户名格式
+- 校验邮箱格式
+- 校验显示名长度
+- 校验密码强度
+- 检查用户名唯一性
+- 检查邮箱唯一性
+- 使用 `PasswordVerifier.HashPassword(...)` 生成 bcrypt hash
+- 写入 `users`
+
+真正注册使用 `POST /register`。
+
+示例：
+
+```bash
+curl -i \
+  -X POST http://localhost:8080/register \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "username": "charlie01",
+    "email": "charlie01@example.com",
+    "display_name": "Charlie One",
+    "password": "charlie123"
+  }'
+```
+
+成功后返回 `201 Created`，并带回新用户的基础信息。
+
+当前密码策略是：
+
+- 长度 `8-128`
+- 至少包含一个字母
+- 至少包含一个数字
+
+冲突和校验失败时：
+
+- 用户名/邮箱已存在：`409 Conflict`
+- 格式不合法或密码太弱：`400 Bad Request`
+
+### 2. 登录
 
 `GET /login` 只是一个提示接口。真正登录使用 `POST /login`。
 
@@ -195,7 +238,7 @@ curl -i \
 - 写入 MySQL `login_sessions`
 - 写入 Redis session cache 和用户 session 索引
 
-### 2. 用 authorization code 换 token
+### 3. 用 authorization code 换 token
 
 当前最容易联调的方式是直接使用 seed 里的 sample code：
 
@@ -218,7 +261,7 @@ curl -i \
 - `expires_in`
 - `scope`
 
-### 2.1 真实走一遍 authorize
+### 3.1 真实走一遍 authorize
 
 如果你想确认 `/oauth2/authorize` 现在已经会真实发 code，最快的方式是直接带 seed 里的 session cookie：
 
@@ -236,7 +279,7 @@ http://localhost:8081/callback?code=...&state=demo-state
 
 我已经按这条路径做过一次真实联调，随后再用返回的 `code` 调 `/oauth2/token`，换 token 成功。
 
-### 2.2 未登录时的行为
+### 3.2 未登录时的行为
 
 如果你没有带 `idp_session`，`/oauth2/authorize` 会先把你重定向到 `/login`，并自动附带 `return_to`：
 
@@ -246,7 +289,7 @@ http://localhost:8081/callback?code=...&state=demo-state
 
 登录成功后，`POST /login` 现在会在设置 `idp_session` cookie 后跳回原始 authorize URL。
 
-### 2.3 consent 流程
+### 3.3 consent 流程
 
 如果你请求的 scope 超过了当前已授权范围，例如加上 `offline_access`，`/oauth2/authorize` 会先跳到 `/consent`：
 
@@ -300,7 +343,49 @@ curl -i \
 http://localhost:8081/callback?error=access_denied&state=deny-state
 ```
 
-### 5. OIDC Discovery
+### 4. 用 refresh token 轮换
+
+把上一步返回的 `refresh_token` 带上：
+
+```bash
+curl -i \
+  -X POST http://localhost:8080/oauth2/token \
+  -u web-client:secret123 \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  -d 'grant_type=refresh_token' \
+  -d 'refresh_token=REPLACE_WITH_REFRESH_TOKEN'
+```
+
+当前实现会真正做 refresh token rotation：
+
+- 旧 refresh token 在 MySQL 中写入 `revoked_at`
+- 新 refresh token 被创建
+- Redis 中执行 `rotate_token.lua`
+- 旧 token 的 revoke marker 会被写入 Redis
+
+### 5. 获取 userinfo
+
+把 `access_token` 作为 Bearer token 带上：
+
+```bash
+curl -i \
+  http://localhost:8080/oauth2/userinfo \
+  -H 'Authorization: Bearer REPLACE_WITH_ACCESS_TOKEN'
+```
+
+成功返回类似：
+
+```json
+{
+  "sub": "11111111-1111-1111-1111-111111111111",
+  "name": "Alice",
+  "preferred_username": "alice",
+  "email": "alice@example.com",
+  "email_verified": true
+}
+```
+
+### 6. OIDC Discovery
 
 Discovery 文档：
 
@@ -319,7 +404,7 @@ curl http://localhost:8080/.well-known/openid-configuration
 - `grant_types_supported`
 - `code_challenge_methods_supported`
 
-### 6. JWKS
+### 7. JWKS
 
 公开 JWK 集：
 
@@ -387,48 +472,6 @@ curl http://localhost:8080/oauth2/jwks
 - `kms://prod/signing/key` 会映射到环境变量 `KMS_PROD_SIGNING_KEY`
 - 这让本地、容器和简化部署场景可以先跑通，不必先接真正的外部 secret SDK
 
-### 3. 用 refresh token 轮换
-
-把上一步返回的 `refresh_token` 带上：
-
-```bash
-curl -i \
-  -X POST http://localhost:8080/oauth2/token \
-  -u web-client:secret123 \
-  -H 'Content-Type: application/x-www-form-urlencoded' \
-  -d 'grant_type=refresh_token' \
-  -d 'refresh_token=REPLACE_WITH_REFRESH_TOKEN'
-```
-
-当前实现会真正做 refresh token rotation：
-
-- 旧 refresh token 在 MySQL 中写入 `revoked_at`
-- 新 refresh token 被创建
-- Redis 中执行 `rotate_token.lua`
-- 旧 token 的 revoke marker 会被写入 Redis
-
-### 4. 获取 userinfo
-
-把 `access_token` 作为 Bearer token 带上：
-
-```bash
-curl -i \
-  http://localhost:8080/oauth2/userinfo \
-  -H 'Authorization: Bearer REPLACE_WITH_ACCESS_TOKEN'
-```
-
-成功返回类似：
-
-```json
-{
-  "sub": "11111111-1111-1111-1111-111111111111",
-  "name": "Alice",
-  "preferred_username": "alice",
-  "email": "alice@example.com",
-  "email_verified": true
-}
-```
-
 ## Redis Lua 脚本
 
 Lua 脚本放在 [scripts/lua](/workspace/idp-server/scripts/lua)，服务启动时会预热 `SCRIPT LOAD`。
@@ -493,7 +536,7 @@ make test
 make fmt
 make env
 make migrate
-make migrate-docker MYSQL_CONTAINER=mysql
+make migrate-docker
 ```
 
 ## 编译与部署
@@ -535,12 +578,12 @@ make migrate
 容器内 MySQL：
 
 ```bash
-make migrate-docker MYSQL_CONTAINER=mysql
+make migrate-docker
 ```
 
 ### Docker 镜像构建
 
-如果仓库里已经有可用的 `Dockerfile`，可以直接：
+当前默认会使用 [dockerfile.server](/workspace/idp-server/dockerfile.server)：
 
 ```bash
 make docker-build IMAGE=idp-server:latest
@@ -548,7 +591,7 @@ make docker-build IMAGE=idp-server:latest
 
 ### Compose 启停
 
-如果你当前目录下有 `compose.yaml` 或 `docker-compose.yml`：
+当前仓库根目录已经有 [docker-compose.yml](/workspace/idp-server/docker-compose.yml)：
 
 ```bash
 make up
@@ -567,7 +610,7 @@ make up COMPOSE_FILE=../infra/docker-compose.yml
 开发或测试环境通常就是这几步：
 
 ```bash
-make migrate-docker MYSQL_CONTAINER=mysql
+make migrate-docker
 make build
 make run ISSUER=http://localhost:8080
 ```
@@ -575,7 +618,7 @@ make run ISSUER=http://localhost:8080
 如果是容器部署，通常就是：
 
 ```bash
-make migrate-docker MYSQL_CONTAINER=mysql
+make migrate-docker
 make docker-build IMAGE=idp-server:latest
 make up
 ```
