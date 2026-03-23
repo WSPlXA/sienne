@@ -51,18 +51,13 @@ services:
     image: idp-server
     container_name: idp-server
     restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
     environment:
-      MYSQL_HOST: db
+      MYSQL_HOST: idp-db
       MYSQL_PORT: 3306
       MYSQL_DATABASE: app
       MYSQL_USER: app
       MYSQL_PASSWORD: apppass
-      REDIS_HOST: redis
+      REDIS_HOST: idp-redis
       REDIS_PORT: 6379
       REDIS_DB: 0
       APP_ENV: dev
@@ -75,6 +70,11 @@ services:
       SIGNING_KEY_RETIRE_AFTER: 24h
     ports:
       - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "sh", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /healthz HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && grep -q '200 OK' <&3"]
       interval: 15s
@@ -86,6 +86,7 @@ services:
 
 networks:
   idp-network:
+    name: idp-network
     driver: bridge
 
 volumes:

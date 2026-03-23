@@ -71,6 +71,8 @@ func (s *Service) Exchange(ctx context.Context, input ExchangeInput) (*ExchangeR
 		return s.exchangeAuthorizationCode(ctx, input)
 	case pkgoauth2.GrantTypeRefreshToken:
 		return s.exchangeRefreshToken(ctx, input)
+	case pkgoauth2.GrantTypeClientCredentials:
+		return s.exchangeClientCredentials(ctx, input)
 	default:
 		return nil, ErrUnsupportedGrantType
 	}
@@ -384,6 +386,88 @@ func (s *Service) exchangeRefreshToken(ctx context.Context, input ExchangeInput)
 	return result, nil
 }
 
+func (s *Service) exchangeClientCredentials(ctx context.Context, input ExchangeInput) (*ExchangeResult, error) {
+	client, err := s.clients.FindByClientID(ctx, strings.TrimSpace(input.ClientID))
+	if err != nil {
+		return nil, err
+	}
+	if client == nil || client.Status != "active" {
+		return nil, ErrInvalidClient
+	}
+	if !contains(client.GrantTypes, string(pkgoauth2.GrantTypeClientCredentials)) {
+		return nil, ErrInvalidClient
+	}
+	if err := s.validateClientSecret(client.ClientSecretHash, input.ClientSecret); err != nil {
+		return nil, err
+	}
+
+	scopes := normalizeScopes(input.Scopes)
+	if len(scopes) == 0 {
+		scopes = append([]string(nil), client.Scopes...)
+	}
+	if !allContained(scopes, client.Scopes) {
+		return nil, ErrInvalidScope
+	}
+
+	now := s.now()
+	accessExpiresAt := now.Add(time.Duration(client.AccessTokenTTLSeconds) * time.Second)
+	audiences := []string{client.ClientID}
+	accessToken, err := s.signer.Mint(map[string]any{
+		"iss": s.issuer,
+		"sub": client.ClientID,
+		"aud": audiences,
+		"exp": accessExpiresAt.Unix(),
+		"iat": now.Unix(),
+		"nbf": now.Unix(),
+		"jti": uuid.NewString(),
+		"cid": client.ClientID,
+		"scp": scopes,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	accessAudienceJSON, _ := json.Marshal(audiences)
+	accessScopesJSON, _ := json.Marshal(scopes)
+	accessModel := &tokendomain.AccessToken{
+		TokenValue:   accessToken,
+		TokenSHA256:  sha256Hex(accessToken),
+		ClientID:     client.ID,
+		UserID:       nil,
+		Subject:      client.ClientID,
+		AudienceJSON: string(accessAudienceJSON),
+		ScopesJSON:   string(accessScopesJSON),
+		TokenType:    "Bearer",
+		TokenFormat:  "jwt",
+		IssuedAt:     now,
+		ExpiresAt:    accessExpiresAt,
+	}
+	if err := s.tokens.CreateAccessToken(ctx, accessModel); err != nil {
+		return nil, err
+	}
+	if s.tokenCache != nil {
+		_ = s.tokenCache.SaveAccessToken(ctx, cacheport.AccessTokenCacheEntry{
+			TokenSHA256:  accessModel.TokenSHA256,
+			ClientID:     client.ClientID,
+			UserID:       "",
+			Subject:      client.ClientID,
+			ScopesJSON:   string(accessScopesJSON),
+			AudienceJSON: string(accessAudienceJSON),
+			TokenType:    accessModel.TokenType,
+			TokenFormat:  accessModel.TokenFormat,
+			IssuedAt:     accessModel.IssuedAt,
+			ExpiresAt:    accessModel.ExpiresAt,
+		}, time.Until(accessExpiresAt))
+	}
+
+	return &ExchangeResult{
+		AccessToken: accessToken,
+		TokenType:   "Bearer",
+		ExpiresIn:   int64(time.Until(accessExpiresAt).Seconds()),
+		Scope:       strings.Join(scopes, " "),
+	}, nil
+}
+
 func (s *Service) validateClientSecret(secretHash, presentedSecret string) error {
 	if strings.TrimSpace(secretHash) == "" {
 		return nil
@@ -438,6 +522,23 @@ func mustDecodeScopeJSON(raw string) []string {
 	return nil
 }
 
+func normalizeScopes(scopes []string) []string {
+	seen := make(map[string]struct{}, len(scopes))
+	result := make([]string, 0, len(scopes))
+	for _, scope := range scopes {
+		scope = strings.TrimSpace(scope)
+		if scope == "" {
+			continue
+		}
+		if _, ok := seen[scope]; ok {
+			continue
+		}
+		seen[scope] = struct{}{}
+		result = append(result, scope)
+	}
+	return result
+}
+
 func contains(values []string, expected string) bool {
 	for _, value := range values {
 		if value == expected {
@@ -450,6 +551,24 @@ func contains(values []string, expected string) bool {
 func sha256Hex(value string) string {
 	sum := sha256.Sum256([]byte(value))
 	return hex.EncodeToString(sum[:])
+}
+
+func allContained(values, allowed []string) bool {
+	allowedSet := make(map[string]struct{}, len(allowed))
+	for _, value := range allowed {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		allowedSet[value] = struct{}{}
+	}
+
+	for _, value := range values {
+		if _, ok := allowedSet[value]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func int64String(value int64) string {

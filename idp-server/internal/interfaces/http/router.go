@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"idp-server/internal/application/authn"
+	appclient "idp-server/internal/application/client"
 	appconsent "idp-server/internal/application/consent"
 	"idp-server/internal/application/oidc"
 	appregister "idp-server/internal/application/register"
@@ -16,14 +17,16 @@ import (
 	"idp-server/internal/interfaces/http/middleware"
 )
 
-func NewRouter(authzService authz.Service, consentService appconsent.Manager, registerService appregister.Registrar, authnService authn.Authenticator, tokenService apptoken.Exchanger, oidcService *oidc.Service, authMiddleware *middleware.AuthMiddleware) *gin.Engine {
+func NewRouter(authzService authz.Service, consentService appconsent.Manager, registerService appregister.Registrar, clientCreator appclient.Creator, clientRedirectRegistrar appclient.Registrar, authnService authn.Authenticator, tokenService apptoken.Exchanger, oidcService *oidc.Service, authMiddleware *middleware.AuthMiddleware) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(middleware.NewLoggingMiddleware(log.Default()).Handler())
 
 	authorizeHandler := handler.NewAuthorizationHandler(authzService)
+	clientHandler := handler.NewClientHandler(clientCreator)
 	consentHandler := handler.NewConsentHandler(consentService)
 	registerHandler := handler.NewRegisterHandler(registerService)
+	clientRedirectURIHandler := handler.NewClientRedirectURIHandler(clientRedirectRegistrar)
 	loginHandler := handler.NewLoginHandler(authnService)
 	tokenHandler := handler.NewTokenHandler(tokenService)
 	userInfoHandler := handler.NewUserInfoHandler(oidcService)
@@ -44,6 +47,8 @@ func NewRouter(authzService authz.Service, consentService appconsent.Manager, re
 	{
 		oauth2.GET("/authorize", gin.WrapF(authorizeHandler.ServeHTTP))
 		oauth2.GET("/jwks", oidcMetadataHandler.JWKS)
+		oauth2.POST("/clients", clientHandler.Create)
+		oauth2.POST("/clients/:client_id/redirect-uris", clientRedirectURIHandler.Handle)
 		oauth2.POST("/token", tokenHandler.Handle)
 		if authMiddleware != nil {
 			oauth2.GET("/userinfo", authMiddleware.RequireBearerToken(), userInfoHandler.Handle)

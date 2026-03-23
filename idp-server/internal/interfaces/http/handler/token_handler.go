@@ -49,6 +49,7 @@ func (h *TokenHandler) Handle(c *gin.Context) {
 		RedirectURI:  req.RedirectURI,
 		CodeVerifier: req.CodeVerifier,
 		RefreshToken: req.RefreshToken,
+		Scopes:       req.ScopeList(),
 	})
 	if err != nil {
 		log.Printf("token exchange failed grant_type=%s client_id=%s err=%v", req.GrantType, clientID, err)
@@ -62,6 +63,8 @@ func (h *TokenHandler) Handle(c *gin.Context) {
 		case errors.Is(err, apptoken.ErrInvalidClient):
 			status = http.StatusUnauthorized
 			oauthErr.Code = "invalid_client"
+		case errors.Is(err, apptoken.ErrInvalidScope):
+			oauthErr.Code = "invalid_scope"
 		case errors.Is(err, apptoken.ErrUnsupportedGrantType):
 			oauthErr.Code = "unsupported_grant_type"
 		case errors.Is(err, apptoken.ErrInvalidCode),

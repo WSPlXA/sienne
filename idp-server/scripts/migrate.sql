@@ -436,8 +436,8 @@ INSERT INTO
         redirect_uri,
         redirect_uri_sha256
     )
-SELECT id, 'http://localhost:8081/callback', SHA2(
-        'http://localhost:8081/callback', 256
+SELECT id, 'http://localhost:3060/callback', SHA2(
+        'http://localhost:3060/callback', 256
     )
 FROM oauth_clients
 WHERE
@@ -449,8 +449,8 @@ INSERT INTO
         redirect_uri,
         redirect_uri_sha256
     )
-SELECT id, 'http://127.0.0.1:8081/callback', SHA2(
-        'http://127.0.0.1:8081/callback', 256
+SELECT id, 'http://127.0.0.1:3060/callback', SHA2(
+        'http://127.0.0.1:3060/callback', 256
     )
 FROM oauth_clients
 WHERE
@@ -679,7 +679,7 @@ INSERT INTO
         expires_at,
         consumed_at
     )
-SELECT 'sample_auth_code_abc123', c.id, u.id, s.id, 'http://localhost:8081/callback', JSON_ARRAY('openid', 'profile', 'email'), 'sample-state-001', 'sample-nonce-001', 'Z_P4EKbGwIkA01e3Y5fp4tMCvn_Ae5nUw7qY7XwkTrQ', 'S256', DATE_ADD(NOW(), INTERVAL 10 MINUTE), NULL
+SELECT 'sample_auth_code_abc123', c.id, u.id, s.id, 'http://localhost:3060/callback', JSON_ARRAY('openid', 'profile', 'email'), 'sample-state-001', 'sample-nonce-001', 'Z_P4EKbGwIkA01e3Y5fp4tMCvn_Ae5nUw7qY7XwkTrQ', 'S256', DATE_ADD(NOW(), INTERVAL 10 MINUTE), NULL
 FROM
     oauth_clients c
     JOIN users u ON u.username = 'alice'

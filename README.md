@@ -9,6 +9,9 @@
 - `GET /oauth2/authorize`
 - `POST /oauth2/token` 的 `authorization_code`
 - `POST /oauth2/token` 的 `refresh_token`
+- `POST /oauth2/token` 的 `client_credentials`
+- `POST /oauth2/clients`
+- `POST /oauth2/clients/:client_id/redirect-uris`
 - `GET /oauth2/userinfo`
 - `GET /.well-known/openid-configuration`
 - `GET /oauth2/jwks`
@@ -108,7 +111,7 @@ make migrate-docker
 - `APP_ENV`，默认 `dev`
 - `SESSION_TTL`，默认 `8h`
 - `ISSUER`，默认 `http://localhost:8080`
-- `JWT_KEY_ID`，默认 `dev-rs256-key`
+- `JWT_KEY_ID`，默认 `kid-2026-01-rs256`
 - `LISTEN_ADDR`，默认 `:8080`
 
 ## 按你当前环境启动
@@ -162,6 +165,7 @@ curl http://localhost:8080/healthz
 ### OAuth Client
 
 - `web-client / secret123`
+- `mobile-public-client / (public client，无 client secret)`
 - `service-client / service123`
 
 ### 授权码联调夹具
@@ -237,6 +241,74 @@ curl -i \
 - 设置 `idp_session` Cookie
 - 写入 MySQL `login_sessions`
 - 写入 Redis session cache 和用户 session 索引
+
+### 2.1 OAuth Client 管理
+
+现在已经支持通过 HTTP 直接创建 OAuth client，并在后续为它追加 redirect URI。
+
+`POST /oauth2/clients` 会一次性写入这些表：
+
+- `oauth_clients`
+- `oauth_client_grant_types`
+- `oauth_client_auth_methods`
+- `oauth_client_scopes`
+- `oauth_client_redirect_uris`（当请求里带了 `redirect_uris` 且 grant 包含 `authorization_code` 时）
+
+创建一个 confidential web client：
+
+```bash
+curl -i \
+  -X POST http://localhost:8080/oauth2/clients \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "client_id": "demo-web-client",
+    "client_name": "Demo Web Client",
+    "client_secret": "super-secret-1",
+    "grant_types": ["authorization_code", "refresh_token"],
+    "scopes": ["openid", "profile", "offline_access"],
+    "redirect_uris": ["http://localhost:3000/callback"]
+  }'
+```
+
+创建一个 service client：
+
+```bash
+curl -i \
+  -X POST http://localhost:8080/oauth2/clients \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "client_id": "demo-service-client",
+    "client_name": "Demo Service Client",
+    "client_secret": "service-secret-1",
+    "grant_types": ["client_credentials"],
+    "scopes": ["internal.api.read", "internal.api.write"]
+  }'
+```
+
+当前的创建规则包括：
+
+- `client_type` 默认是 `confidential`
+- `confidential` 默认 `token_endpoint_auth_method=client_secret_basic`
+- `public` 默认 `token_endpoint_auth_method=none`
+- `public` client 必须启用 PKCE
+- `client_credentials` 只允许配置在 `confidential` client 上
+- `authorization_code` client 必须提供至少一个合法 `redirect_uri`
+
+如果你只是想给现有 client 追加回调地址，可以用：
+
+```bash
+curl -i \
+  -X POST http://localhost:8080/oauth2/clients/demo-web-client/redirect-uris \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "redirect_uris": [
+      "http://localhost:3000/callback",
+      "http://localhost:5173/callback"
+    ]
+  }'
+```
+
+这个端点是幂等的；重复注册同一个 URI 会被跳过，不会重复写入。
 
 ### 3. 用 authorization code 换 token
 
@@ -362,6 +434,32 @@ curl -i \
 - 新 refresh token 被创建
 - Redis 中执行 `rotate_token.lua`
 - 旧 token 的 revoke marker 会被写入 Redis
+
+### 4.1 用 client_credentials 换 token
+
+对于 service client，可以直接走 `client_credentials`：
+
+```bash
+curl -i \
+  -X POST http://localhost:8080/oauth2/token \
+  -u service-client:service123 \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  -d 'grant_type=client_credentials' \
+  -d 'scope=internal.api.read'
+```
+
+成功后会返回：
+
+- `access_token`
+- `token_type`
+- `expires_in`
+- `scope`
+
+当前实现里：
+
+- 如果不传 `scope`，默认会下发该 client 允许的全部 scopes
+- 如果请求了未被该 client 授权的 scope，会返回 `invalid_scope`
+- `client_credentials` 不会返回 `refresh_token`
 
 ### 5. 获取 userinfo
 

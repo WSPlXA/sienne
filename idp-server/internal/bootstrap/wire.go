@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"idp-server/internal/application/authn"
+	appclient "idp-server/internal/application/client"
 	appconsent "idp-server/internal/application/consent"
 	"idp-server/internal/application/oidc"
 	appregister "idp-server/internal/application/register"
@@ -62,6 +63,7 @@ func Wire() (*App, error) {
 	authzService := authz.NewService(clientRepo, sessionRepo, authCodeRepo, consentRepo, 10*time.Minute)
 	consentService := appconsent.NewService(clientRepo, sessionRepo, consentRepo)
 	registerService := appregister.NewService(userRepo, passwordVerifier)
+	clientService := appclient.NewService(clientRepo, passwordVerifier)
 	authnService := authn.NewService(userRepo, sessionRepo, sessionCache, passwordVerifier, cfg.SessionTTL)
 	rotationConfig := infracrypto.RotationConfig{
 		WorkingDir:    cfg.WorkDir,
@@ -98,21 +100,21 @@ func Wire() (*App, error) {
 	authMiddleware := httpmiddleware.NewAuthMiddleware(&jwtMiddlewareAdapter{service: jwtService}, cfg.Issuer)
 
 	return &App{
-		Router: interfacehttp.NewRouter(authzService, consentService, registerService, authnService, tokenService, oidcService, authMiddleware),
+		Router: interfacehttp.NewRouter(authzService, consentService, registerService, clientService, clientService, authnService, tokenService, oidcService, authMiddleware),
 	}, nil
 }
 
 type config struct {
-	MySQLDSN       string
-	RedisAddr      string
-	RedisPassword  string
-	RedisDB        int
-	RedisKeyPrefix string
-	AppEnv         string
-	SessionTTL     time.Duration
-	Issuer         string
-	JWTKeyID       string
-	WorkDir        string
+	MySQLDSN                 string
+	RedisAddr                string
+	RedisPassword            string
+	RedisDB                  int
+	RedisKeyPrefix           string
+	AppEnv                   string
+	SessionTTL               time.Duration
+	Issuer                   string
+	JWTKeyID                 string
+	WorkDir                  string
 	SigningKeyDir           string
 	SigningKeyBits          int
 	SigningKeyCheckInterval time.Duration
@@ -122,16 +124,16 @@ type config struct {
 
 func loadConfigFromEnv() (*config, error) {
 	cfg := &config{
-		MySQLDSN:       strings.TrimSpace(os.Getenv("MYSQL_DSN")),
-		RedisAddr:      strings.TrimSpace(os.Getenv("REDIS_ADDR")),
-		RedisPassword:  strings.TrimSpace(os.Getenv("REDIS_PASSWORD")),
-		RedisDB:        getEnvInt("REDIS_DB", 0),
-		RedisKeyPrefix: getEnvString("REDIS_KEY_PREFIX", "idp"),
-		AppEnv:         getEnvString("APP_ENV", "dev"),
-		SessionTTL:     getEnvDuration("SESSION_TTL", 8*time.Hour),
-		Issuer:         getEnvString("ISSUER", "http://localhost:8080"),
-		JWTKeyID:       getEnvString("JWT_KEY_ID", "kid-2026-01-rs256"),
-		WorkDir:        getWorkingDir(),
+		MySQLDSN:                 strings.TrimSpace(os.Getenv("MYSQL_DSN")),
+		RedisAddr:                strings.TrimSpace(os.Getenv("REDIS_ADDR")),
+		RedisPassword:            strings.TrimSpace(os.Getenv("REDIS_PASSWORD")),
+		RedisDB:                  getEnvInt("REDIS_DB", 0),
+		RedisKeyPrefix:           getEnvString("REDIS_KEY_PREFIX", "idp"),
+		AppEnv:                   getEnvString("APP_ENV", "dev"),
+		SessionTTL:               getEnvDuration("SESSION_TTL", 8*time.Hour),
+		Issuer:                   getEnvString("ISSUER", "http://localhost:8080"),
+		JWTKeyID:                 getEnvString("JWT_KEY_ID", "kid-2026-01-rs256"),
+		WorkDir:                  getWorkingDir(),
 		SigningKeyDir:           getEnvString("SIGNING_KEY_DIR", "scripts/dev_keys"),
 		SigningKeyBits:          getEnvInt("SIGNING_KEY_BITS", 2048),
 		SigningKeyCheckInterval: getEnvDuration("SIGNING_KEY_CHECK_INTERVAL", 1*time.Hour),

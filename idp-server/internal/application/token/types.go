@@ -9,6 +9,7 @@ import (
 var (
 	ErrUnsupportedGrantType = errors.New("unsupported grant type")
 	ErrInvalidClient        = errors.New("invalid client")
+	ErrInvalidScope         = errors.New("invalid scope")
 	ErrInvalidCode          = errors.New("invalid authorization code")
 	ErrInvalidRedirectURI   = errors.New("invalid redirect uri")
 	ErrInvalidCodeVerifier  = errors.New("invalid code verifier")
@@ -23,6 +24,7 @@ type ExchangeInput struct {
 	RedirectURI  string
 	CodeVerifier string
 	RefreshToken string
+	Scopes       []string
 }
 
 type ExchangeResult struct {

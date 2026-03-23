@@ -326,10 +326,103 @@ paths:
               schema:
                 type: string
 
+  /oauth2/clients:
+    post:
+      tags: [authz]
+      summary: Create an OAuth client
+      description: |
+        Creates a new OAuth client and writes its core configuration, grant
+        types, auth methods, scopes, and optional redirect URIs in one step.
+      operationId: createClient
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateClientRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CreateClientRequest'
+      responses:
+        '201':
+          description: Client created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateClientResponse'
+        '400':
+          description: Invalid client payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Client ID already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Client creation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /oauth2/clients/{client_id}/redirect-uris:
+    post:
+      tags: [authz]
+      summary: Register redirect URIs for an OAuth client
+      description: |
+        Adds one or more redirect URIs into `oauth_client_redirect_uris` for
+        an existing OAuth client. Re-registering the same URI is idempotent.
+      operationId: registerClientRedirectUris
+      parameters:
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: web-client
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterClientRedirectURIRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RegisterClientRedirectURIRequest'
+      responses:
+        '201':
+          description: Redirect URIs registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterClientRedirectURIResponse'
+        '400':
+          description: Invalid client id or redirect URI payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Client not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Registration failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /oauth2/token:
     post:
       tags: [authz]
-      summary: Exchange authorization code or refresh token
+      summary: Exchange authorization code, refresh token, or client credentials
       operationId: token
       security:
         - basicAuth: []
@@ -606,6 +699,165 @@ components:
           enum: [accept, deny]
         return_to:
           type: string
+
+    CreateClientRequest:
+      type: object
+      required:
+        - client_id
+        - client_name
+        - grant_types
+        - scopes
+      properties:
+        client_id:
+          type: string
+          example: demo-web-client
+        client_name:
+          type: string
+          example: Demo Web Client
+        client_secret:
+          type: string
+          format: password
+          example: super-secret-1
+        client_type:
+          type: string
+          enum: [confidential, public]
+          default: confidential
+        token_endpoint_auth_method:
+          type: string
+          enum: [client_secret_basic, none]
+        require_pkce:
+          type: boolean
+          default: true
+        require_consent:
+          type: boolean
+          default: true
+        access_token_ttl_seconds:
+          type: integer
+          format: int32
+          default: 3600
+        refresh_token_ttl_seconds:
+          type: integer
+          format: int32
+          default: 2592000
+        id_token_ttl_seconds:
+          type: integer
+          format: int32
+          default: 3600
+        grant_types:
+          type: array
+          items:
+            type: string
+            enum: [authorization_code, refresh_token, client_credentials]
+        scopes:
+          type: array
+          items:
+            type: string
+        redirect_uris:
+          type: array
+          items:
+            type: string
+            format: uri
+        status:
+          type: string
+          example: active
+
+    CreateClientResponse:
+      type: object
+      required:
+        - client_id
+        - client_name
+        - client_type
+        - token_endpoint_auth_method
+        - require_pkce
+        - require_consent
+        - access_token_ttl_seconds
+        - refresh_token_ttl_seconds
+        - id_token_ttl_seconds
+        - grant_types
+        - auth_methods
+        - scopes
+        - redirect_uris
+        - status
+      properties:
+        client_id:
+          type: string
+        client_name:
+          type: string
+        client_type:
+          type: string
+        token_endpoint_auth_method:
+          type: string
+        require_pkce:
+          type: boolean
+        require_consent:
+          type: boolean
+        access_token_ttl_seconds:
+          type: integer
+          format: int32
+        refresh_token_ttl_seconds:
+          type: integer
+          format: int32
+        id_token_ttl_seconds:
+          type: integer
+          format: int32
+        grant_types:
+          type: array
+          items:
+            type: string
+        auth_methods:
+          type: array
+          items:
+            type: string
+        scopes:
+          type: array
+          items:
+            type: string
+        redirect_uris:
+          type: array
+          items:
+            type: string
+            format: uri
+        status:
+          type: string
+
+    RegisterClientRedirectURIRequest:
+      type: object
+      description: Provide `redirect_uri` or `redirect_uris`.
+      properties:
+        redirect_uri:
+          type: string
+          format: uri
+          example: http://localhost:3000/callback
+        redirect_uris:
+          type: array
+          items:
+            type: string
+            format: uri
+
+    RegisterClientRedirectURIResponse:
+      type: object
+      required:
+        - client_id
+        - client_name
+        - redirect_uris
+        - registered_count
+        - skipped_count
+      properties:
+        client_id:
+          type: string
+        client_name:
+          type: string
+        redirect_uris:
+          type: array
+          items:
+            type: string
+            format: uri
+        registered_count:
+          type: integer
+          format: int32
+        skipped_count:
+          type: integer
+          format: int32
 
     TokenRequest:
       type: object
