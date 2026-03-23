@@ -1,27 +1,55 @@
-name: Makefile CI
+name: Build
 
 on:
   push:
-    branches: [ "main" ]
+    paths:
+      - ".github/workflows/build.yml"
+      - "idp-server/**"
   pull_request:
-    branches: [ "main" ]
+    paths:
+      - ".github/workflows/build.yml"
+      - "idp-server/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
-
+  go-build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: idp-server
 
     steps:
-    - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: configure
-      run: ./configure
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: idp-server/go.mod
+          cache-dependency-path: idp-server/go.sum
 
-    - name: Install dependencies
-      run: make
+      - name: Download dependencies
+        run: go mod download
 
-    - name: Run check
-      run: make check
+      - name: Run tests
+        run: go test ./...
 
-    - name: Run distcheck
-      run: make distcheck
+      - name: Build binary
+        run: go build -o bin/idp-server ./cmd/idp
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: idp-server-linux-amd64
+          path: idp-server/bin/idp-server
+          if-no-files-found: error
+
+      - name: Build Docker image
+        run: docker build -f dockerfile.server -t idp-server:ci .
