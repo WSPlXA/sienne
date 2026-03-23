@@ -7,6 +7,7 @@ import (
 
 	"idp-server/internal/application/authn"
 	"idp-server/internal/interfaces/http/dto"
+	"idp-server/resource"
 
 	"github.com/gin-gonic/gin"
 )
@@ -15,12 +16,25 @@ type LoginHandler struct {
 	authnService authn.Authenticator
 }
 
+type loginPageData struct {
+	Username string
+	ReturnTo string
+	Error    string
+	Success  bool
+}
+
 func NewLoginHandler(authnService authn.Authenticator) *LoginHandler {
 	return &LoginHandler{authnService: authnService}
 }
 
 func (h *LoginHandler) Handle(c *gin.Context) {
 	if c.Request.Method == http.MethodGet {
+		if wantsHTML(c.GetHeader("Accept")) {
+			h.renderLoginPage(c, http.StatusOK, loginPageData{
+				ReturnTo: c.Query("return_to"),
+			})
+			return
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"endpoint":  "login",
 			"message":   "submit username and password to login",
@@ -31,6 +45,14 @@ func (h *LoginHandler) Handle(c *gin.Context) {
 
 	var req dto.LoginRequest
 	if err := c.ShouldBind(&req); err != nil {
+		if wantsHTML(c.GetHeader("Accept")) {
+			h.renderLoginPage(c, http.StatusBadRequest, loginPageData{
+				Username: c.PostForm("username"),
+				ReturnTo: c.PostForm("return_to"),
+				Error:    "please enter both username and password",
+			})
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid login request"})
 		return
 	}
@@ -54,6 +76,15 @@ func (h *LoginHandler) Handle(c *gin.Context) {
 			status = http.StatusInternalServerError
 		}
 
+		if wantsHTML(c.GetHeader("Accept")) {
+			h.renderLoginPage(c, status, loginPageData{
+				Username: req.Username,
+				ReturnTo: req.ReturnTo,
+				Error:    err.Error(),
+			})
+			return
+		}
+
 		c.JSON(status, gin.H{"error": err.Error()})
 		return
 	}
@@ -64,10 +95,23 @@ func (h *LoginHandler) Handle(c *gin.Context) {
 		c.Redirect(http.StatusFound, req.ReturnTo)
 		return
 	}
+	if wantsHTML(c.GetHeader("Accept")) {
+		h.renderLoginPage(c, http.StatusOK, loginPageData{
+			Username: req.Username,
+			Success:  true,
+		})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"session_id": result.SessionID,
 		"user_id":    result.UserID,
 		"subject":    result.Subject,
 		"expires_at": result.ExpiresAt,
 	})
+}
+
+func (h *LoginHandler) renderLoginPage(c *gin.Context, status int, data loginPageData) {
+	c.Header("Content-Type", "text/html; charset=utf-8")
+	c.Status(status)
+	_ = resource.LoginPageTemplate.Execute(c.Writer, data)
 }

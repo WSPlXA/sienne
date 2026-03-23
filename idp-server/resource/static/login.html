@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4efe7;
+      --card: rgba(255, 251, 245, 0.96);
+      --ink: #182126;
+      --muted: #5e6a70;
+      --line: rgba(36, 60, 72, 0.14);
+      --accent: #0f766e;
+      --accent-2: #b45309;
+      --danger: #b91c1c;
+      --success: #166534;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      font-family: Georgia, "Times New Roman", serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(180,83,9,0.14), transparent 30%),
+        radial-gradient(circle at bottom right, rgba(15,118,110,0.14), transparent 32%),
+        linear-gradient(160deg, #f8f3ea, #efe8da 68%, #f9f6ef);
+    }
+    .shell {
+      width: min(100%, 940px);
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: 0 28px 90px rgba(24,33,38,0.14);
+    }
+    .hero {
+      padding: 36px;
+      background:
+        linear-gradient(180deg, rgba(15,118,110,0.08), transparent 42%),
+        linear-gradient(140deg, rgba(180,83,9,0.10), rgba(15,118,110,0.04));
+      border-right: 1px solid var(--line);
+      display: grid;
+      gap: 18px;
+      align-content: start;
+    }
+    .eyebrow {
+      margin: 0;
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent-2);
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(34px, 6vw, 54px);
+      line-height: 0.96;
+      font-weight: 600;
+    }
+    .lead {
+      margin: 0;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.65;
+      max-width: 24ch;
+    }
+    .stack {
+      display: grid;
+      gap: 12px;
+      margin-top: 8px;
+    }
+    .tip {
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.58);
+      border: 1px solid rgba(36,60,72,0.10);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    .form-wrap {
+      padding: 36px 30px;
+      display: grid;
+      align-content: center;
+    }
+    form {
+      display: grid;
+      gap: 16px;
+    }
+    .banner {
+      margin-bottom: 18px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      font-size: 15px;
+      line-height: 1.55;
+    }
+    .banner.error {
+      background: rgba(185,28,28,0.08);
+      border: 1px solid rgba(185,28,28,0.18);
+      color: var(--danger);
+    }
+    .banner.success {
+      background: rgba(22,101,52,0.08);
+      border: 1px solid rgba(22,101,52,0.18);
+      color: var(--success);
+    }
+    label {
+      display: grid;
+      gap: 8px;
+      font-size: 13px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    input {
+      width: 100%;
+      border: 1px solid rgba(36,60,72,0.18);
+      border-radius: 14px;
+      padding: 14px 16px;
+      font-size: 16px;
+      background: white;
+      color: var(--ink);
+    }
+    input:focus {
+      outline: 2px solid rgba(15,118,110,0.20);
+      border-color: rgba(15,118,110,0.45);
+    }
+    button {
+      appearance: none;
+      border: 0;
+      border-radius: 999px;
+      padding: 15px 22px;
+      font-size: 16px;
+      cursor: pointer;
+      background: linear-gradient(135deg, #0f766e, #115e59);
+      color: white;
+      box-shadow: 0 12px 28px rgba(15,118,110,0.24);
+      transition: transform 120ms ease, box-shadow 120ms ease;
+    }
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 16px 34px rgba(15,118,110,0.28);
+    }
+    .meta {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    code {
+      font-family: "Courier New", monospace;
+      font-size: 0.95em;
+    }
+    @media (max-width: 820px) {
+      .shell {
+        grid-template-columns: 1fr;
+      }
+      .hero {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <p class="eyebrow">Identity Gateway</p>
+      <h1>Sign In To Continue</h1>
+      <p class="lead">Authenticate once, receive an <code>idp_session</code> cookie, and continue the OAuth authorization flow.</p>
+      <div class="stack">
+        <div class="tip">This page is the browser-facing entry for local OAuth testing.</div>
+        <div class="tip">If you arrived from <code>/oauth2/authorize</code>, a successful sign-in will send you back automatically.</div>
+      </div>
+    </section>
+    <section class="form-wrap">
+      {{if .Error}}
+      <div class="banner error">{{.Error}}</div>
+      {{end}}
+      {{if .Success}}
+      <div class="banner success">Login succeeded. Your session cookie is set and ready for the next OAuth step.</div>
+      {{end}}
+      <form method="post">
+        <input type="hidden" name="return_to" value="{{.ReturnTo}}">
+        <label>
+          Username
+          <input type="text" name="username" autocomplete="username" value="{{.Username}}" placeholder="alice" required>
+        </label>
+        <label>
+          Password
+          <input type="password" name="password" autocomplete="current-password" placeholder="Enter your password" required>
+        </label>
+        <button type="submit">Sign In</button>
+      </form>
+      <p class="meta">After login, the server writes session data to MySQL and Redis, sets <code>idp_session</code>, then redirects back to <code>return_to</code> when present.</p>
+    </section>
+  </main>
+</body>
+</html>

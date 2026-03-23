@@ -130,42 +130,52 @@ Redis 在这个项目里不是“可有可无的普通缓存”，而是 OAuth2 
 - 用户、client、authorization code、refresh token 的持久化真相仍然主要在 MySQL
 
 ```mermaid
-flowchart TD
-    A[Browser / Client] --> B[POST /login]
-    B --> C[authn service]
-    C --> D[MySQL users]
-    D --> C
-    C --> E[MySQL login_sessions]
-    C --> F[Redis session cache]
-    F --> G[idp_session cookie returned]
+sequenceDiagram
+    autonumber
+    participant B as Browser / Client
+    participant A as authn service
+    participant Z as authz service
+    participant T as token service
+    participant M as MySQL
+    participant R as Redis
 
-    G --> H[GET /oauth2/authorize]
-    H --> I[authz service]
-    I --> J[MySQL oauth_clients]
-    I --> K[MySQL login_sessions]
-    I --> L[MySQL consents]
-    I --> M[MySQL authorization_codes]
-    M --> N[302 redirect with code]
+    Note over B,R: 1. 登录
+    B->>A: POST /login
+    A->>M: 查询 users / 校验密码
+    M-->>A: 用户与密码校验结果
+    A->>M: 写入 login_sessions
+    A->>R: 写入 session cache 与用户 session 索引
+    A-->>B: 返回 idp_session cookie
 
-    N --> O[POST /oauth2/token grant_type=authorization_code]
-    O --> P[token service]
-    P --> J
-    P --> M
-    P --> D
-    P --> Q[MySQL access_tokens]
-    P --> R[MySQL refresh_tokens]
-    P --> S[Redis access token cache]
-    P --> T[Redis refresh token cache]
+    Note over B,R: 2. 授权码
+    B->>Z: GET /oauth2/authorize + idp_session
+    Z->>M: 查询 oauth_clients
+    Z->>M: 查询 login_sessions
+    Z->>M: 查询 consents
+    Z->>M: 写入 authorization_codes
+    Z-->>B: 302 redirect with code
 
-    T --> U[POST /oauth2/token grant_type=refresh_token]
-    U --> V[token service]
-    V --> J
-    V --> R
-    V --> D
-    V --> Q
-    V --> W[MySQL refresh token rotation]
-    V --> X[Redis rotate_token.lua]
-    X --> Y[new refresh token cache + old revoke marker]
+    Note over B,R: 3. 用 code 换 token
+    B->>T: POST /oauth2/token (authorization_code)
+    T->>M: 查询 oauth_clients
+    T->>M: 消费 authorization_codes
+    T->>M: 查询 users
+    T->>M: 写入 access_tokens
+    T->>M: 写入 refresh_tokens
+    T->>R: 写入 access token cache
+    T->>R: 写入 refresh token cache
+    T-->>B: 返回 access_token / refresh_token / id_token
+
+    Note over B,R: 4. refresh token 轮换
+    B->>T: POST /oauth2/token (refresh_token)
+    T->>M: 查询 oauth_clients
+    T->>M: 查询有效 refresh_tokens
+    T->>M: 查询 users
+    T->>M: 写入 access_tokens
+    T->>M: 轮换 refresh_tokens\n旧 token revoked_at + 新 token 写入
+    T->>R: rotate_token.lua 原子轮换
+    R-->>T: 新 refresh token cache + 旧 revoke marker
+    T-->>B: 返回新 access_token / refresh_token
 ```
 
 结合当前代码，三条链路的分工大致是：
@@ -295,7 +305,12 @@ curl -i \
 
 ### 2. 登录
 
-`GET /login` 只是一个提示接口。真正登录使用 `POST /login`。
+`GET /login` 现在同时支持两种模式：
+
+- 浏览器访问时返回一个可直接提交的 HTML 登录页
+- API 调试时继续返回 JSON 提示
+
+真正提交登录仍然使用 `POST /login`。
 
 示例：
 
