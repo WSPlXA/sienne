@@ -1,8 +1,13 @@
 package middleware
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"strings"
+
+	cacheport "idp-server/internal/ports/cache"
 
 	"github.com/gin-gonic/gin"
 )
@@ -23,14 +28,16 @@ type ValidateOptions struct {
 }
 
 type AuthMiddleware struct {
-	tokens tokenValidator
-	issuer string
+	tokens     tokenValidator
+	tokenCache cacheport.TokenCacheRepository
+	issuer     string
 }
 
-func NewAuthMiddleware(tokens tokenValidator, issuer string) *AuthMiddleware {
+func NewAuthMiddleware(tokens tokenValidator, tokenCache cacheport.TokenCacheRepository, issuer string) *AuthMiddleware {
 	return &AuthMiddleware{
-		tokens: tokens,
-		issuer: issuer,
+		tokens:     tokens,
+		tokenCache: tokenCache,
+		issuer:     issuer,
 	}
 }
 
@@ -42,6 +49,22 @@ func (m *AuthMiddleware) RequireBearerToken() gin.HandlerFunc {
 				"error": "missing bearer token",
 			})
 			return
+		}
+
+		if m.tokenCache != nil {
+			revoked, err := m.tokenCache.IsAccessTokenRevoked(c.Request.Context(), sha256Hex(token))
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+					"error": "invalid access token",
+				})
+				return
+			}
+			if revoked {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+					"error": "access token revoked",
+				})
+				return
+			}
 		}
 
 		if m.tokens != nil {
@@ -73,4 +96,13 @@ func extractBearerToken(authorizationHeader string) string {
 		return ""
 	}
 	return strings.TrimSpace(strings.TrimPrefix(authorizationHeader, "Bearer "))
+}
+
+func sha256Hex(value string) string {
+	sum := sha256.Sum256([]byte(value))
+	return hex.EncodeToString(sum[:])
+}
+
+type tokenRevocationChecker interface {
+	IsAccessTokenRevoked(ctx context.Context, tokenSHA256 string) (bool, error)
 }

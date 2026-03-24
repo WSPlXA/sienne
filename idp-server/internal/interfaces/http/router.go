@@ -9,6 +9,7 @@ import (
 	appconsent "idp-server/internal/application/consent"
 	"idp-server/internal/application/oidc"
 	appregister "idp-server/internal/application/register"
+	appsession "idp-server/internal/application/session"
 	"github.com/gin-gonic/gin"
 
 	"idp-server/internal/application/authz"
@@ -17,7 +18,7 @@ import (
 	"idp-server/internal/interfaces/http/middleware"
 )
 
-func NewRouter(authzService authz.Service, consentService appconsent.Manager, registerService appregister.Registrar, clientCreator appclient.Creator, clientRedirectRegistrar appclient.Registrar, authnService authn.Authenticator, tokenService apptoken.Exchanger, oidcService *oidc.Service, authMiddleware *middleware.AuthMiddleware) *gin.Engine {
+func NewRouter(authzService authz.Service, consentService appconsent.Manager, registerService appregister.Registrar, clientCreator appclient.Creator, clientRedirectRegistrar appclient.Registrar, authnService authn.Authenticator, sessionService appsession.Manager, tokenService apptoken.Exchanger, oidcService *oidc.Service, authMiddleware *middleware.AuthMiddleware) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(middleware.NewLoggingMiddleware(log.Default()).Handler())
@@ -28,6 +29,7 @@ func NewRouter(authzService authz.Service, consentService appconsent.Manager, re
 	registerHandler := handler.NewRegisterHandler(registerService)
 	clientRedirectURIHandler := handler.NewClientRedirectURIHandler(clientRedirectRegistrar)
 	loginHandler := handler.NewLoginHandler(authnService)
+	logoutHandler := handler.NewLogoutHandler(sessionService)
 	tokenHandler := handler.NewTokenHandler(tokenService)
 	userInfoHandler := handler.NewUserInfoHandler(oidcService)
 	oidcMetadataHandler := handler.NewOIDCMetadataHandler(oidcService)
@@ -38,6 +40,7 @@ func NewRouter(authzService authz.Service, consentService appconsent.Manager, re
 	router.GET("/.well-known/openid-configuration", oidcMetadataHandler.Discovery)
 	router.GET("/login", loginHandler.Handle)
 	router.POST("/login", loginHandler.Handle)
+	router.POST("/logout", logoutHandler.Handle)
 	router.GET("/register", registerHandler.Handle)
 	router.POST("/register", registerHandler.Handle)
 	router.GET("/consent", consentHandler.Handle)
