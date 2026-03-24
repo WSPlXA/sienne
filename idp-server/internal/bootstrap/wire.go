@@ -14,6 +14,7 @@ import (
 	appconsent "idp-server/internal/application/consent"
 	"idp-server/internal/application/oidc"
 	appregister "idp-server/internal/application/register"
+	appsession "idp-server/internal/application/session"
 	"idp-server/internal/application/authz"
 	apptoken "idp-server/internal/application/token"
 	cacheRedis "idp-server/internal/infrastructure/cache/redis"
@@ -61,10 +62,11 @@ func Wire() (*App, error) {
 	tokenCache := cacheRedis.NewTokenCacheRepository(redisClient, keyBuilder)
 	passwordVerifier := infrasecurity.NewPasswordVerifier()
 	authzService := authz.NewService(clientRepo, sessionRepo, authCodeRepo, consentRepo, 10*time.Minute)
-	consentService := appconsent.NewService(clientRepo, sessionRepo, consentRepo)
+	consentService := appconsent.NewService(clientRepo, sessionRepo, sessionCache, consentRepo)
 	registerService := appregister.NewService(userRepo, passwordVerifier)
 	clientService := appclient.NewService(clientRepo, passwordVerifier)
 	authnService := authn.NewService(userRepo, sessionRepo, sessionCache, passwordVerifier, cfg.SessionTTL)
+	sessionService := appsession.NewService(sessionRepo, sessionCache)
 	rotationConfig := infracrypto.RotationConfig{
 		WorkingDir:    cfg.WorkDir,
 		StorageDir:    cfg.SigningKeyDir,
@@ -97,10 +99,10 @@ func Wire() (*App, error) {
 		cfg.Issuer,
 	)
 	oidcService := oidc.NewService(userRepo, &jwtServiceAdapter{service: jwtService}, keyManagerAdapter{manager: keyManager}, cfg.Issuer)
-	authMiddleware := httpmiddleware.NewAuthMiddleware(&jwtMiddlewareAdapter{service: jwtService}, cfg.Issuer)
+	authMiddleware := httpmiddleware.NewAuthMiddleware(&jwtMiddlewareAdapter{service: jwtService}, tokenCache, cfg.Issuer)
 
 	return &App{
-		Router: interfacehttp.NewRouter(authzService, consentService, registerService, clientService, clientService, authnService, tokenService, oidcService, authMiddleware),
+		Router: interfacehttp.NewRouter(authzService, consentService, registerService, clientService, clientService, authnService, sessionService, tokenService, oidcService, authMiddleware),
 	}, nil
 }
 

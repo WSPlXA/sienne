@@ -273,6 +273,16 @@ func (s *Service) exchangeRefreshToken(ctx context.Context, input ExchangeInput)
 	}
 
 	oldSHA := sha256Hex(input.RefreshToken)
+	if s.tokenCache != nil {
+		revoked, err := s.tokenCache.IsRefreshTokenRevoked(ctx, oldSHA)
+		if err != nil {
+			return nil, err
+		}
+		if revoked {
+			return nil, ErrInvalidRefreshToken
+		}
+	}
+
 	oldRefresh, err := s.tokens.FindActiveRefreshTokenBySHA256(ctx, oldSHA)
 	if err != nil {
 		return nil, err

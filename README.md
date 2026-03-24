@@ -4,6 +4,7 @@ API端点有如下设置
 
 - `POST /register`
 - `POST /login`
+- `POST /logout`
 - `GET /oauth2/authorize`
 - `POST /oauth2/token` 的 `authorization_code`
 - `POST /oauth2/token` 的 `refresh_token`
@@ -108,8 +109,9 @@ Redis 在这个项目里不是“可有可无的普通缓存”，而是 OAuth2 
 当前已经接入主流程的用途包括：
 
 - 登录 session cache：登录成功后会把 session 写入 Redis，同时维护用户到 session 的索引，便于快速校验、查找和删除登录态
-- token cache：缓存 access token / refresh token 的摘要、过期时间、撤销标记和 refresh rotation 状态
+- token cache：缓存 access token / refresh token 的摘要、过期时间、撤销标记和 refresh rotation 状态；`userinfo` bearer 认证和 `refresh_token` 轮换前都会优先检查 Redis revoke marker
 - token revoke / refresh rotation：用 Redis Lua 脚本做原子撤销和 refresh token 轮换，避免并发下状态不一致
+- consent 会话校验：`/consent` 现在会优先读取 Redis session cache，命中时直接用缓存判断登录态
 
 仓库里已经实现、但目前还没有完全接入主流程的能力包括：
 
@@ -311,6 +313,30 @@ curl -i \
 - API 调试时继续返回 JSON 提示
 
 真正提交登录仍然使用 `POST /login`。
+
+### 2.1 登出
+
+`POST /logout` 会执行这些动作：
+
+- 读取 `idp_session` cookie
+- 将 MySQL `login_sessions.logged_out_at` 标记为已登出
+- 删除 Redis session cache 和用户 session 索引
+- 清空浏览器 `idp_session` cookie
+
+直接调用：
+
+```bash
+curl -i -X POST http://localhost:8080/logout \
+  --cookie 'idp_session=aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+```
+
+如果你是浏览器表单流，也可以带 `return_to`，成功后会 `302` 回跳：
+
+```bash
+curl -i -X POST http://localhost:8080/logout \
+  --cookie 'idp_session=aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' \
+  --data-urlencode 'return_to=/login'
+```
 
 示例：
 

@@ -3,11 +3,13 @@ package consent
 import (
 	"context"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
 	clientdomain "idp-server/internal/domain/client"
 	sessiondomain "idp-server/internal/domain/session"
+	"idp-server/internal/ports/cache"
 	"idp-server/internal/ports/repository"
 )
 
@@ -17,21 +19,24 @@ type Manager interface {
 }
 
 type Service struct {
-	clients  repository.ClientRepository
-	sessions repository.SessionRepository
-	consents repository.ConsentRepository
-	now      func() time.Time
+	clients      repository.ClientRepository
+	sessions     repository.SessionRepository
+	sessionCache cache.SessionCacheRepository
+	consents     repository.ConsentRepository
+	now          func() time.Time
 }
 
 func NewService(
 	clients repository.ClientRepository,
 	sessions repository.SessionRepository,
+	sessionCache cache.SessionCacheRepository,
 	consents repository.ConsentRepository,
 ) *Service {
 	return &Service{
-		clients:  clients,
-		sessions: sessions,
-		consents: consents,
+		clients:      clients,
+		sessions:     sessions,
+		sessionCache: sessionCache,
+		consents:     consents,
 		now: func() time.Time {
 			return time.Now().UTC()
 		},
@@ -101,6 +106,43 @@ func (s *Service) loadContext(ctx context.Context, returnTo, sessionID string) (
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
 		return nil, nil, nil, nil, ErrLoginRequired
+	}
+
+	if s.sessionCache != nil {
+		cacheEntry, err := s.sessionCache.Get(ctx, sessionID)
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+		if cacheEntry != nil {
+			if cacheEntry.Status != "active" || !cacheEntry.ExpiresAt.After(s.now()) {
+				return nil, nil, nil, nil, ErrLoginRequired
+			}
+
+			userID, err := strconv.ParseInt(cacheEntry.UserID, 10, 64)
+			if err == nil && userID > 0 {
+				client, err := s.clients.FindByClientID(ctx, parsed.clientID)
+				if err != nil {
+					return nil, nil, nil, nil, err
+				}
+				if client == nil || client.Status != "active" {
+					return nil, nil, nil, nil, ErrInvalidClient
+				}
+				if !contains(client.RedirectURIs, parsed.redirectURI) {
+					return nil, nil, nil, nil, ErrInvalidReturnTo
+				}
+				if !allContained(parsed.scopes, client.Scopes) {
+					return nil, nil, nil, nil, ErrInvalidScope
+				}
+
+				return parsed, &sessiondomain.Model{
+					SessionID:   sessionID,
+					UserID:      userID,
+					Subject:     cacheEntry.Subject,
+					ExpiresAt:   cacheEntry.ExpiresAt,
+					LoggedOutAt: nil,
+				}, client, parsed.scopes, nil
+			}
+		}
 	}
 
 	sessionModel, err := s.sessions.FindBySessionID(ctx, sessionID)

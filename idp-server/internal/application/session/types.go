@@ -1,3 +1,10 @@
 package session
 
-type SessionInput struct{}
+type LogoutInput struct {
+	SessionID string
+}
+
+type LogoutResult struct {
+	SessionID string
+	UserID    string
+}
