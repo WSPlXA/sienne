@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign Out</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f2eee7;
+      --card: rgba(255, 251, 245, 0.97);
+      --ink: #162229;
+      --muted: #5d6970;
+      --line: rgba(25, 49, 61, 0.12);
+      --accent: #0f766e;
+      --accent-2: #9a3412;
+      --danger: #b91c1c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      font-family: Georgia, "Times New Roman", serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top right, rgba(15,118,110,0.12), transparent 28%),
+        radial-gradient(circle at bottom left, rgba(154,52,18,0.12), transparent 30%),
+        linear-gradient(160deg, #f8f4ec, #efe6d9 68%, #fbf8f3);
+    }
+    .shell {
+      width: min(100%, 900px);
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: 0 28px 90px rgba(22,34,41,0.14);
+    }
+    .hero {
+      padding: 36px;
+      border-right: 1px solid var(--line);
+      background:
+        linear-gradient(180deg, rgba(15,118,110,0.08), transparent 42%),
+        linear-gradient(145deg, rgba(154,52,18,0.10), rgba(15,118,110,0.04));
+      display: grid;
+      gap: 18px;
+      align-content: start;
+    }
+    .eyebrow {
+      margin: 0;
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent-2);
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(34px, 6vw, 52px);
+      line-height: 0.96;
+      font-weight: 600;
+    }
+    .lead {
+      margin: 0;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.65;
+      max-width: 25ch;
+    }
+    .tip {
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.58);
+      border: 1px solid rgba(25,49,61,0.10);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    .panel {
+      padding: 36px 30px;
+      display: grid;
+      gap: 18px;
+      align-content: center;
+    }
+    .banner {
+      padding: 14px 16px;
+      border-radius: 16px;
+      font-size: 15px;
+      line-height: 1.55;
+      background: rgba(185,28,28,0.08);
+      border: 1px solid rgba(185,28,28,0.18);
+      color: var(--danger);
+    }
+    .meta {
+      padding: 16px 18px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.58);
+      border: 1px solid rgba(25,49,61,0.10);
+      display: grid;
+      gap: 10px;
+    }
+    .label {
+      font-size: 13px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .value {
+      font-size: 18px;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+    form {
+      display: grid;
+      gap: 12px;
+    }
+    button {
+      appearance: none;
+      border: 0;
+      border-radius: 999px;
+      padding: 15px 22px;
+      font-size: 16px;
+      cursor: pointer;
+      color: white;
+      background: linear-gradient(135deg, #9a3412, #7c2d12);
+      box-shadow: 0 12px 28px rgba(154,52,18,0.22);
+      transition: transform 120ms ease, box-shadow 120ms ease;
+    }
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 16px 34px rgba(154,52,18,0.28);
+    }
+    .helper {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    code {
+      font-family: "Courier New", monospace;
+      font-size: 0.95em;
+    }
+    @media (max-width: 820px) {
+      .shell {
+        grid-template-columns: 1fr;
+      }
+      .hero {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <p class="eyebrow">Identity Gateway</p>
+      <h1>End IdP Session</h1>
+      <p class="lead">This page runs the logout request inside the IdP browser context so the CSRF cookie and session cookie stay aligned.</p>
+      <div class="tip">If the client provided a whitelisted <code>post_logout_redirect_uri</code>, the browser will be sent there after the IdP session is cleared.</div>
+      <div class="tip">Without a redirect target, the browser falls back to <code>/login</code>.</div>
+    </section>
+    <section class="panel">
+      {{if .Error}}
+      <div class="banner">{{.Error}}</div>
+      {{end}}
+      <div class="meta">
+        <span class="label">Client ID</span>
+        <div class="value">{{if .ClientID}}<code>{{.ClientID}}</code>{{else}}Direct browser logout{{end}}</div>
+      </div>
+      <div class="meta">
+        <span class="label">Post Logout Redirect</span>
+        <div class="value">{{if .PostLogoutRedirectURI}}<code>{{.PostLogoutRedirectURI}}</code>{{else}}none{{end}}</div>
+      </div>
+      <form id="logout-form" method="post" action="/connect/logout">
+        <input type="hidden" name="client_id" value="{{.ClientID}}">
+        <input type="hidden" name="post_logout_redirect_uri" value="{{.PostLogoutRedirectURI}}">
+        <input type="hidden" name="state" value="{{.State}}">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <button type="submit">Sign out from IdP</button>
+      </form>
+      <p class="helper">JavaScript clients should navigate the browser to <code>/connect/logout</code>, not try to replay <code>POST /logout</code> from another origin.</p>
+    </section>
+  </main>
+  <script>
+    window.addEventListener("load", function () {
+      var form = document.getElementById("logout-form");
+      if (form) {
+        form.requestSubmit ? form.requestSubmit() : form.submit();
+      }
+    });
+  </script>
+</body>
+</html>

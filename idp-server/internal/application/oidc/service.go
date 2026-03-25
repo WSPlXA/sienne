@@ -107,6 +107,7 @@ func (s *Service) Discovery(ctx context.Context) (*DiscoveryDocument, error) {
 		TokenEndpoint:                             base + "/oauth2/token",
 		UserInfoEndpoint:                          base + "/oauth2/userinfo",
 		IntrospectionEndpoint:                     base + "/oauth2/introspect",
+		EndSessionEndpoint:                        base + "/connect/logout",
 		JWKSURI:                                   base + "/oauth2/jwks",
 		ResponseTypesSupported:                    []string{"code"},
 		SubjectTypesSupported:                     []string{"public"},

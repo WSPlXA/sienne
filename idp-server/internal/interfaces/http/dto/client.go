@@ -14,5 +14,6 @@ type CreateClientRequest struct {
 	GrantTypes              []string `json:"grant_types" form:"grant_types" binding:"required"`
 	Scopes                  []string `json:"scopes" form:"scopes" binding:"required"`
 	RedirectURIs            []string `json:"redirect_uris" form:"redirect_uris"`
+	PostLogoutRedirectURIs  []string `json:"post_logout_redirect_uris" form:"post_logout_redirect_uris"`
 	Status                  string   `json:"status" form:"status"`
 }

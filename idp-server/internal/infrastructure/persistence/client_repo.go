@@ -81,6 +81,9 @@ INSERT INTO oauth_clients (
 	if err := insertRedirectURIsTx(ctx, tx, model.ID, model.RedirectURIs); err != nil {
 		return err
 	}
+	if err := insertPostLogoutRedirectURIsTx(ctx, tx, model.ID, model.PostLogoutRedirectURIs); err != nil {
+		return err
+	}
 
 	if err := tx.Commit(); err != nil {
 		return err
@@ -138,6 +141,10 @@ LIMIT 1`
 
 	var loadErr error
 	model.RedirectURIs, loadErr = r.loadStrings(ctx, `SELECT redirect_uri FROM oauth_client_redirect_uris WHERE client_id = ? ORDER BY id`, model.ID)
+	if loadErr != nil {
+		return nil, loadErr
+	}
+	model.PostLogoutRedirectURIs, loadErr = r.loadStrings(ctx, `SELECT redirect_uri FROM oauth_client_post_logout_redirect_uris WHERE client_id = ? ORDER BY id`, model.ID)
 	if loadErr != nil {
 		return nil, loadErr
 	}
@@ -224,6 +231,51 @@ INSERT IGNORE INTO oauth_client_redirect_uris (
 	return insertedCount, nil
 }
 
+func (r *ClientRepository) RegisterPostLogoutRedirectURIs(ctx context.Context, clientDBID int64, redirectURIs []string) (int, error) {
+	if len(redirectURIs) == 0 {
+		return 0, nil
+	}
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	const query = `
+INSERT IGNORE INTO oauth_client_post_logout_redirect_uris (
+    client_id,
+    redirect_uri,
+    redirect_uri_sha256
+) VALUES (?, ?, ?)`
+
+	insertedCount := 0
+	for _, redirectURI := range redirectURIs {
+		hash := sha256.Sum256([]byte(redirectURI))
+		result, execErr := tx.ExecContext(ctx, query, clientDBID, redirectURI, hex.EncodeToString(hash[:]))
+		if execErr != nil {
+			return 0, execErr
+		}
+
+		affectedRows, rowsErr := result.RowsAffected()
+		if rowsErr != nil {
+			return 0, rowsErr
+		}
+		insertedCount += int(affectedRows)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	tx = nil
+
+	return insertedCount, nil
+}
+
 func insertStringValuesTx(ctx context.Context, tx *sql.Tx, query string, clientDBID int64, values []string) error {
 	for _, value := range values {
 		if _, err := tx.ExecContext(ctx, query, clientDBID, value); err != nil {
@@ -236,6 +288,27 @@ func insertStringValuesTx(ctx context.Context, tx *sql.Tx, query string, clientD
 func insertRedirectURIsTx(ctx context.Context, tx *sql.Tx, clientDBID int64, redirectURIs []string) error {
 	const query = `
 INSERT INTO oauth_client_redirect_uris (
+    client_id,
+    redirect_uri,
+    redirect_uri_sha256
+) VALUES (?, ?, ?)`
+
+	for _, redirectURI := range redirectURIs {
+		hash := sha256.Sum256([]byte(redirectURI))
+		if _, err := tx.ExecContext(ctx, query, clientDBID, redirectURI, hex.EncodeToString(hash[:])); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func insertPostLogoutRedirectURIsTx(ctx context.Context, tx *sql.Tx, clientDBID int64, redirectURIs []string) error {
+	if len(redirectURIs) == 0 {
+		return nil
+	}
+
+	const query = `
+INSERT INTO oauth_client_post_logout_redirect_uris (
     client_id,
     redirect_uri,
     redirect_uri_sha256

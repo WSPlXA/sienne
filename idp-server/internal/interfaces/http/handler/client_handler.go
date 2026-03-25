@@ -39,6 +39,7 @@ func (h *ClientHandler) Create(c *gin.Context) {
 		GrantTypes:              req.GrantTypes,
 		Scopes:                  req.Scopes,
 		RedirectURIs:            req.RedirectURIs,
+		PostLogoutRedirectURIs:  req.PostLogoutRedirectURIs,
 		Status:                  req.Status,
 	})
 	if err != nil {
@@ -79,6 +80,7 @@ func (h *ClientHandler) Create(c *gin.Context) {
 		"auth_methods":               result.AuthMethods,
 		"scopes":                     result.Scopes,
 		"redirect_uris":              result.RedirectURIs,
+		"post_logout_redirect_uris":  result.PostLogoutRedirectURIs,
 		"status":                     result.Status,
 	})
 }

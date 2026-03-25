@@ -34,6 +34,8 @@ DROP TABLE IF EXISTS oauth_client_grant_types;
 
 DROP TABLE IF EXISTS oauth_client_redirect_uris;
 
+DROP TABLE IF EXISTS oauth_client_post_logout_redirect_uris;
+
 DROP TABLE IF EXISTS oauth_clients;
 
 DROP TABLE IF EXISTS users;
@@ -124,6 +126,23 @@ CREATE TABLE oauth_client_redirect_uris (
         redirect_uri_sha256
     ),
     CONSTRAINT fk_client_redirect_uris_client FOREIGN KEY (client_id) REFERENCES oauth_clients (id) ON DELETE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
+
+-- =========================================================
+-- 5. Client grant types
+-- =========================================================
+CREATE TABLE oauth_client_post_logout_redirect_uris (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    client_id BIGINT UNSIGNED NOT NULL,
+    redirect_uri VARCHAR(1024) NOT NULL,
+    redirect_uri_sha256 CHAR(64) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_client_post_logout_redirect_uri_hash (
+        client_id,
+        redirect_uri_sha256
+    ),
+    CONSTRAINT fk_client_post_logout_redirect_uris_client FOREIGN KEY (client_id) REFERENCES oauth_clients (id) ON DELETE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
 
 -- =========================================================
@@ -449,6 +468,19 @@ INSERT INTO
         redirect_uri,
         redirect_uri_sha256
     )
+SELECT id, 'http://localhost:8081/callback', SHA2(
+        'http://localhost:8081/callback', 256
+    )
+FROM oauth_clients
+WHERE
+    client_id = 'web-client';
+
+INSERT INTO
+    oauth_client_redirect_uris (
+        client_id,
+        redirect_uri,
+        redirect_uri_sha256
+    )
 SELECT id, 'http://127.0.0.1:3060/callback', SHA2(
         'http://127.0.0.1:3060/callback', 256
     )
@@ -466,6 +498,33 @@ SELECT id, 'myapp://callback', SHA2('myapp://callback', 256)
 FROM oauth_clients
 WHERE
     client_id = 'mobile-public-client';
+
+-- Post logout redirect URIs
+INSERT INTO
+    oauth_client_post_logout_redirect_uris (
+        client_id,
+        redirect_uri,
+        redirect_uri_sha256
+    )
+SELECT id, 'http://localhost:8081/', SHA2(
+        'http://localhost:8081/', 256
+    )
+FROM oauth_clients
+WHERE
+    client_id = 'web-client';
+
+INSERT INTO
+    oauth_client_post_logout_redirect_uris (
+        client_id,
+        redirect_uri,
+        redirect_uri_sha256
+    )
+SELECT id, 'http://127.0.0.1:8081/', SHA2(
+        'http://127.0.0.1:8081/', 256
+    )
+FROM oauth_clients
+WHERE
+    client_id = 'web-client';
 
 -- Grant types
 INSERT INTO

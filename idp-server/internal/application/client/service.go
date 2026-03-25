@@ -24,6 +24,10 @@ type Registrar interface {
 	RegisterRedirectURIs(ctx context.Context, input RegisterRedirectURIsInput) (*RegisterRedirectURIsResult, error)
 }
 
+type PostLogoutRegistrar interface {
+	RegisterPostLogoutRedirectURIs(ctx context.Context, input RegisterPostLogoutRedirectURIsInput) (*RegisterPostLogoutRedirectURIsResult, error)
+}
+
 type Creator interface {
 	CreateClient(ctx context.Context, input CreateClientInput) (*CreateClientResult, error)
 }
@@ -79,6 +83,10 @@ func (s *Service) CreateClient(ctx context.Context, input CreateClientInput) (*C
 	if err != nil {
 		return nil, err
 	}
+	postLogoutRedirectURIs, err := normalizeOptionalRedirectURIs(input.PostLogoutRedirectURIs)
+	if err != nil {
+		return nil, err
+	}
 
 	secretHash, err := s.normalizeClientSecret(clientType, authMethod, strings.TrimSpace(input.ClientSecret))
 	if err != nil {
@@ -98,6 +106,7 @@ func (s *Service) CreateClient(ctx context.Context, input CreateClientInput) (*C
 		IDTokenTTLSeconds:       normalizeIDTokenTTL(input.IDTokenTTLSeconds, grantTypes),
 		Status:                  normalizeStatus(input.Status),
 		RedirectURIs:            redirectURIs,
+		PostLogoutRedirectURIs:  postLogoutRedirectURIs,
 		GrantTypes:              grantTypes,
 		AuthMethods:             []string{authMethod},
 		Scopes:                  scopes,
@@ -121,6 +130,7 @@ func (s *Service) CreateClient(ctx context.Context, input CreateClientInput) (*C
 		AuthMethods:             append([]string(nil), model.AuthMethods...),
 		Scopes:                  append([]string(nil), model.Scopes...),
 		RedirectURIs:            append([]string(nil), model.RedirectURIs...),
+		PostLogoutRedirectURIs:  append([]string(nil), model.PostLogoutRedirectURIs...),
 		Status:                  model.Status,
 	}, nil
 }
@@ -155,6 +165,64 @@ func (s *Service) RegisterRedirectURIs(ctx context.Context, input RegisterRedire
 		RedirectURIs:    redirectURIs,
 		RegisteredCount: insertedCount,
 		SkippedCount:    len(redirectURIs) - insertedCount,
+	}, nil
+}
+
+func (s *Service) RegisterPostLogoutRedirectURIs(ctx context.Context, input RegisterPostLogoutRedirectURIsInput) (*RegisterPostLogoutRedirectURIsResult, error) {
+	clientID := strings.TrimSpace(input.ClientID)
+	if clientID == "" {
+		return nil, ErrInvalidClientID
+	}
+
+	redirectURIs, err := normalizeRedirectURIs(input.RedirectURIs)
+	if err != nil {
+		return nil, err
+	}
+
+	model, err := s.clients.FindByClientID(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+	if model == nil {
+		return nil, ErrClientNotFound
+	}
+
+	insertedCount, err := s.clients.RegisterPostLogoutRedirectURIs(ctx, model.ID, redirectURIs)
+	if err != nil {
+		return nil, err
+	}
+
+	return &RegisterPostLogoutRedirectURIsResult{
+		ClientID:        model.ClientID,
+		ClientName:      model.ClientName,
+		RedirectURIs:    redirectURIs,
+		RegisteredCount: insertedCount,
+		SkippedCount:    len(redirectURIs) - insertedCount,
+	}, nil
+}
+
+func (s *Service) ValidatePostLogoutRedirectURI(ctx context.Context, input ValidatePostLogoutRedirectURIInput) (*ValidatePostLogoutRedirectURIResult, error) {
+	clientID := strings.TrimSpace(input.ClientID)
+	redirectURI := strings.TrimSpace(input.RedirectURI)
+	if clientID == "" || redirectURI == "" {
+		return nil, ErrInvalidRedirectURI
+	}
+
+	model, err := s.clients.FindByClientID(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+	if model == nil || model.Status != "active" {
+		return nil, ErrClientNotFound
+	}
+	if !containsString(model.PostLogoutRedirectURIs, redirectURI) {
+		return nil, ErrInvalidRedirectURI
+	}
+
+	return &ValidatePostLogoutRedirectURIResult{
+		ClientID:    model.ClientID,
+		ClientName:  model.ClientName,
+		RedirectURI: redirectURI,
 	}, nil
 }
 
@@ -330,6 +398,13 @@ func normalizeRedirectURIs(values []string) ([]string, error) {
 	}
 
 	return result, nil
+}
+
+func normalizeOptionalRedirectURIs(values []string) ([]string, error) {
+	if len(values) == 0 {
+		return nil, nil
+	}
+	return normalizeRedirectURIs(values)
 }
 
 func normalizeTTL(value, fallback int) int {

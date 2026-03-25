@@ -361,6 +361,118 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /connect/logout:
+    get:
+      tags: [oidc]
+      summary: Browser-facing RP initiated logout entrypoint
+      description: |
+        Prepares an IdP logout request inside the IdP browser context. When
+        `client_id` and `post_logout_redirect_uri` are supplied, the redirect
+        target must be pre-registered in `post_logout_redirect_uris`.
+      operationId: getEndSession
+      parameters:
+        - name: client_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: post_logout_redirect_uri
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uri
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Logout page metadata
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: Sets the `idp_csrf_token` cookie when needed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EndSessionInfoResponse'
+        '400':
+          description: Invalid end session request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to generate CSRF token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [oidc]
+      summary: End current IdP browser session and redirect back to the client
+      description: |
+        Clears the current `idp_session` in the IdP browser context. This is
+        the browser-safe logout flow for relying parties. The CSRF token may be
+        provided in the form body as `csrf_token` or in the `X-CSRF-Token`
+        header, and must match the `idp_csrf_token` cookie.
+      operationId: endSession
+      parameters:
+        - $ref: '#/components/parameters/XCSRFToken'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EndSessionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EndSessionRequest'
+      responses:
+        '200':
+          description: Session ended without redirect
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: Clears the `idp_session` cookie
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutResponse'
+        '302':
+          description: Session ended and browser redirected to the whitelisted post logout target
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+            Set-Cookie:
+              schema:
+                type: string
+              description: Clears the `idp_session` cookie
+        '400':
+          description: Invalid client id or post logout redirect URI
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: CSRF validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Logout failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /consent:
     get:
       tags: [authz]
@@ -595,6 +707,57 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RegisterClientRedirectURIResponse'
+        '400':
+          description: Invalid client id or redirect URI payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Client not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Registration failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /oauth2/clients/{client_id}/post-logout-redirect-uris:
+    post:
+      tags: [authz]
+      summary: Register post logout redirect URIs for an OAuth client
+      description: |
+        Adds one or more browser logout return targets into
+        `oauth_client_post_logout_redirect_uris`. Re-registering the same URI
+        is idempotent.
+      operationId: registerClientPostLogoutRedirectUris
+      parameters:
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: web-client
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterClientRedirectURIRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RegisterClientRedirectURIRequest'
+      responses:
+        '201':
+          description: Post logout redirect URIs registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterClientPostLogoutRedirectURIResponse'
         '400':
           description: Invalid client id or redirect URI payload
           content:
@@ -975,6 +1138,42 @@ components:
           type: boolean
           example: true
 
+    EndSessionRequest:
+      type: object
+      properties:
+        client_id:
+          type: string
+        post_logout_redirect_uri:
+          type: string
+          format: uri
+        state:
+          type: string
+        csrf_token:
+          type: string
+
+    EndSessionInfoResponse:
+      type: object
+      required: [endpoint, action, csrf_token, message]
+      properties:
+        endpoint:
+          type: string
+          example: end_session
+        action:
+          type: string
+          example: /connect/logout
+        client_id:
+          type: string
+        post_logout_redirect_uri:
+          type: string
+          format: uri
+        state:
+          type: string
+        csrf_token:
+          type: string
+        message:
+          type: string
+          example: submit POST /connect/logout from the browser context to end the IdP session
+
     ConsentInfoResponse:
       type: object
       required: [endpoint, client_id, client_name, scopes, return_to, message, csrf_token]
@@ -1067,6 +1266,11 @@ components:
           items:
             type: string
             format: uri
+        post_logout_redirect_uris:
+          type: array
+          items:
+            type: string
+            format: uri
         status:
           type: string
           example: active
@@ -1127,6 +1331,11 @@ components:
           items:
             type: string
             format: uri
+        post_logout_redirect_uris:
+          type: array
+          items:
+            type: string
+            format: uri
         status:
           type: string
 
@@ -1158,6 +1367,31 @@ components:
         client_name:
           type: string
         redirect_uris:
+          type: array
+          items:
+            type: string
+            format: uri
+        registered_count:
+          type: integer
+          format: int32
+        skipped_count:
+          type: integer
+          format: int32
+
+    RegisterClientPostLogoutRedirectURIResponse:
+      type: object
+      required:
+        - client_id
+        - client_name
+        - post_logout_redirect_uris
+        - registered_count
+        - skipped_count
+      properties:
+        client_id:
+          type: string
+        client_name:
+          type: string
+        post_logout_redirect_uris:
           type: array
           items:
             type: string
@@ -1294,6 +1528,7 @@ components:
         - token_endpoint
         - userinfo_endpoint
         - introspection_endpoint
+        - end_session_endpoint
         - jwks_uri
         - response_types_supported
         - subject_types_supported
@@ -1317,6 +1552,9 @@ components:
           type: string
           format: uri
         introspection_endpoint:
+          type: string
+          format: uri
+        end_session_endpoint:
           type: string
           format: uri
         jwks_uri:

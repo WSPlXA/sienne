@@ -16,6 +16,7 @@ type Model struct {
 	IDTokenTTLSeconds       int
 	Status                  string
 	RedirectURIs            []string
+	PostLogoutRedirectURIs  []string
 	GrantTypes              []string
 	AuthMethods             []string
 	Scopes                  []string

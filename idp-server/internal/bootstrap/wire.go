@@ -138,7 +138,7 @@ func Wire() (*App, error) {
 	authMiddleware := httpmiddleware.NewAuthMiddleware(&jwtMiddlewareAdapter{service: jwtService}, tokenCache, cfg.Issuer)
 
 	return &App{
-		Router: interfacehttp.NewRouter(authzService, consentService, registerService, clientService, clientService, authnService, federatedOIDCProvider != nil, sessionService, clientAuthenticator, grantRegistry, oidcService, authMiddleware),
+		Router: interfacehttp.NewRouter(authzService, consentService, registerService, clientService, clientService, clientService, clientService, authnService, federatedOIDCProvider != nil, sessionService, clientAuthenticator, grantRegistry, oidcService, authMiddleware),
 	}, nil
 }
 
