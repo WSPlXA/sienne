@@ -2,10 +2,14 @@ name: Build
 
 on:
   push:
+    branches:
+      - main
     paths:
       - ".github/workflows/makefile.yml"
       - "idp-server/**"
   pull_request:
+    branches:
+      - main
     paths:
       - ".github/workflows/makefile.yml"
       - "idp-server/**"
