@@ -95,6 +95,15 @@
       background: rgba(255,255,255,0.58);
       border: 1px solid rgba(36,60,72,0.10);
     }
+    .banner {
+      padding: 14px 16px;
+      border-radius: 16px;
+      font-size: 15px;
+      line-height: 1.55;
+      background: rgba(185,28,28,0.08);
+      border: 1px solid rgba(185,28,28,0.18);
+      color: var(--danger);
+    }
     .label {
       display: block;
       margin-bottom: 8px;
@@ -186,6 +195,9 @@
       </div>
     </section>
     <section class="form-wrap">
+      {{if .Error}}
+      <div class="banner">{{.Error}}</div>
+      {{end}}
       <div class="panel">
         <span class="label">Client</span>
         <div class="value">{{.ClientName}}</div>
@@ -198,6 +210,7 @@
         </ul>
       </div>
       <form method="post">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
         <input type="hidden" name="return_to" value="{{.ReturnTo}}">
         <button class="accept" type="submit" name="action" value="accept">Allow Access</button>
         <button class="deny" type="submit" name="action" value="deny">Deny</button>

@@ -24,6 +24,16 @@ func (h *LogoutHandler) Handle(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid logout request"})
 		return
 	}
+	validatedReturnTo, err := validateLocalRedirectTarget(req.ReturnTo)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": errInvalidLocalRedirectTarget.Error()})
+		return
+	}
+	req.ReturnTo = validatedReturnTo
+	if err := validateCSRFToken(c, req.CSRFToken); err != nil {
+		writeCSRFError(c)
+		return
+	}
 
 	sessionID, _ := c.Cookie("idp_session")
 	if h.service != nil {

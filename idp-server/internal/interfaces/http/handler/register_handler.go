@@ -20,9 +20,15 @@ func NewRegisterHandler(service register.Registrar) *RegisterHandler {
 
 func (h *RegisterHandler) Handle(c *gin.Context) {
 	if c.Request.Method == http.MethodGet {
+		csrfToken, err := ensureCSRFToken(c)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate csrf token"})
+			return
+		}
 		c.JSON(http.StatusOK, gin.H{
-			"endpoint": "register",
-			"message":  "submit username, email, display_name and password to register",
+			"endpoint":   "register",
+			"message":    "submit username, email, display_name and password to register",
+			"csrf_token": csrfToken,
 		})
 		return
 	}
@@ -30,6 +36,10 @@ func (h *RegisterHandler) Handle(c *gin.Context) {
 	var req dto.RegisterRequest
 	if err := c.ShouldBind(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid register request"})
+		return
+	}
+	if err := validateCSRFToken(c, req.CSRFToken); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": errInvalidCSRFToken.Error()})
 		return
 	}
 
@@ -60,13 +70,13 @@ func (h *RegisterHandler) Handle(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"user_id":         result.UserID,
-		"user_uuid":       result.UserUUID,
-		"username":        result.Username,
-		"email":           result.Email,
-		"email_verified":  result.EmailVerified,
-		"display_name":    result.DisplayName,
-		"status":          result.Status,
-		"created_at":      result.CreatedAt,
+		"user_id":        result.UserID,
+		"user_uuid":      result.UserUUID,
+		"username":       result.Username,
+		"email":          result.Email,
+		"email_verified": result.EmailVerified,
+		"display_name":   result.DisplayName,
+		"status":         result.Status,
+		"created_at":     result.CreatedAt,
 	})
 }

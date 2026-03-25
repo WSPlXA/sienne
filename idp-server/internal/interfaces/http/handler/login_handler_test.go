@@ -50,6 +50,12 @@ func TestLoginHandlerHandleGetHTML(t *testing.T) {
 	if !strings.Contains(body, `name="return_to" value="/oauth2/authorize?client_id=demo"`) {
 		t.Fatalf("body did not preserve return_to: %s", body)
 	}
+	if !strings.Contains(body, `name="csrf_token" value="`) {
+		t.Fatalf("body did not contain csrf token field: %s", body)
+	}
+	if cookie := findCookie(recorder.Result().Cookies(), csrfCookieName); cookie == nil || cookie.Value == "" {
+		t.Fatalf("csrf cookie was not issued")
+	}
 }
 
 func TestLoginHandlerHandlePostSuccessRedirects(t *testing.T) {
@@ -70,10 +76,13 @@ func TestLoginHandlerHandlePostSuccessRedirects(t *testing.T) {
 	form.Set("username", "alice")
 	form.Set("password", "alice123")
 	form.Set("return_to", "/oauth2/authorize?client_id=demo")
+	csrfCookie, csrfToken := mustNewCSRFCookie(t)
+	form.Set("csrf_token", csrfToken)
 
 	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "text/html")
+	req.AddCookie(csrfCookie)
 	recorder := httptest.NewRecorder()
 
 	router.ServeHTTP(recorder, req)
@@ -84,11 +93,83 @@ func TestLoginHandlerHandlePostSuccessRedirects(t *testing.T) {
 	if got := recorder.Header().Get("Location"); got != "/oauth2/authorize?client_id=demo" {
 		t.Fatalf("location = %q, want /oauth2/authorize?client_id=demo", got)
 	}
-	if got := recorder.Header().Get("Set-Cookie"); !strings.Contains(got, "idp_session=session-123") {
-		t.Fatalf("set-cookie = %q, want idp_session=session-123", got)
+	if cookie := findCookie(recorder.Result().Cookies(), "idp_session"); cookie == nil || cookie.Value != "session-123" {
+		t.Fatalf("idp_session cookie = %#v, want session-123", cookie)
 	}
 	if service.input.Username != "alice" {
 		t.Fatalf("username = %q, want alice", service.input.Username)
+	}
+}
+
+func TestLoginHandlerHandlePostRejectsMissingCSRFToken(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	service := &stubAuthenticator{
+		result: &authn.AuthenticateResult{
+			SessionID: "session-123",
+			UserID:    1,
+			Subject:   "user-123",
+			ExpiresAt: time.Now().Add(30 * time.Minute),
+		},
+	}
+	router := gin.New()
+	router.POST("/login", NewLoginHandler(service, false).Handle)
+
+	form := url.Values{}
+	form.Set("username", "alice")
+	form.Set("password", "alice123")
+	form.Set("return_to", "/oauth2/authorize?client_id=demo")
+
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status code = %d, want %d", recorder.Code, http.StatusForbidden)
+	}
+	if service.input.Username != "" {
+		t.Fatalf("authenticate should not have been called: %#v", service.input)
+	}
+}
+
+func TestLoginHandlerHandlePostRejectsExternalReturnTo(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	service := &stubAuthenticator{
+		result: &authn.AuthenticateResult{
+			SessionID: "session-123",
+			UserID:    1,
+			Subject:   "user-123",
+			ExpiresAt: time.Now().Add(30 * time.Minute),
+		},
+	}
+	router := gin.New()
+	router.POST("/login", NewLoginHandler(service, false).Handle)
+
+	form := url.Values{}
+	form.Set("username", "alice")
+	form.Set("password", "alice123")
+	form.Set("return_to", "https://evil.example/phish")
+	csrfCookie, csrfToken := mustNewCSRFCookie(t)
+	form.Set("csrf_token", csrfToken)
+
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(csrfCookie)
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status code = %d, want %d", recorder.Code, http.StatusBadRequest)
+	}
+	if got := recorder.Header().Get("Location"); got != "" {
+		t.Fatalf("location = %q, want empty", got)
+	}
+	if service.input.ReturnTo != "" {
+		t.Fatalf("return_to = %q, want empty", service.input.ReturnTo)
 	}
 }
 
@@ -102,10 +183,13 @@ func TestLoginHandlerHandlePostErrorRendersHTML(t *testing.T) {
 	form.Set("username", "alice")
 	form.Set("password", "wrong-password")
 	form.Set("return_to", "/oauth2/authorize?client_id=demo")
+	csrfCookie, csrfToken := mustNewCSRFCookie(t)
+	form.Set("csrf_token", csrfToken)
 
 	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "text/html")
+	req.AddCookie(csrfCookie)
 	recorder := httptest.NewRecorder()
 
 	router.ServeHTTP(recorder, req)
@@ -129,13 +213,21 @@ func TestLoginHandlerHandleGetFederatedRedirect(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	router := gin.New()
-	router.GET("/login", NewLoginHandler(&stubAuthenticator{
+	router.POST("/login", NewLoginHandler(&stubAuthenticator{
 		result: &authn.AuthenticateResult{
 			RedirectURI: "https://issuer.example.com/authorize?state=demo",
 		},
 	}, true).Handle)
 
-	req := httptest.NewRequest(http.MethodGet, "/login?method=federated_oidc&return_to=%2Foauth2%2Fauthorize%3Fclient_id%3Ddemo", nil)
+	form := url.Values{}
+	form.Set("method", "federated_oidc")
+	form.Set("return_to", "/oauth2/authorize?client_id=demo")
+	csrfCookie, csrfToken := mustNewCSRFCookie(t)
+	form.Set("csrf_token", csrfToken)
+
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(csrfCookie)
 	recorder := httptest.NewRecorder()
 
 	router.ServeHTTP(recorder, req)
@@ -173,8 +265,54 @@ func TestLoginHandlerHandleGetFederatedCallbackSetsSessionAndRedirects(t *testin
 	if got := recorder.Header().Get("Location"); got != "/oauth2/authorize?client_id=demo" {
 		t.Fatalf("location = %q", got)
 	}
-	if got := recorder.Header().Get("Set-Cookie"); !strings.Contains(got, "idp_session=session-456") {
-		t.Fatalf("set-cookie = %q, want idp_session=session-456", got)
+	if cookie := findCookie(recorder.Result().Cookies(), "idp_session"); cookie == nil || cookie.Value != "session-456" {
+		t.Fatalf("idp_session cookie = %#v, want session-456", cookie)
+	}
+	if cookie := findCookie(recorder.Result().Cookies(), csrfCookieName); cookie == nil || cookie.Value == "" {
+		t.Fatalf("csrf cookie was not issued")
+	}
+}
+
+func TestLoginHandlerHandleGetFederatedCallbackRejectsExternalRedirect(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := gin.New()
+	router.GET("/login", NewLoginHandler(&stubAuthenticator{
+		result: &authn.AuthenticateResult{
+			SessionID:   "session-456",
+			UserID:      9,
+			Subject:     "subject-9",
+			RedirectURI: "https://evil.example/phish",
+			ExpiresAt:   time.Now().Add(30 * time.Minute),
+		},
+	}, true).Handle)
+
+	req := httptest.NewRequest(http.MethodGet, "/login?code=code-123&state=state-123", nil)
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status code = %d, want %d", recorder.Code, http.StatusBadRequest)
+	}
+	if got := recorder.Header().Get("Location"); got != "" {
+		t.Fatalf("location = %q, want empty", got)
+	}
+}
+
+func TestLoginHandlerHandleGetRejectsExternalReturnTo(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := gin.New()
+	router.GET("/login", NewLoginHandler(&stubAuthenticator{}, false).Handle)
+
+	req := httptest.NewRequest(http.MethodGet, "/login?return_to=https://evil.example/phish", nil)
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status code = %d, want %d", recorder.Code, http.StatusBadRequest)
 	}
 }
 
@@ -194,7 +332,7 @@ func TestLoginHandlerHandleGetHTMLShowsFederatedOIDCButton(t *testing.T) {
 	if !strings.Contains(body, "OpenID Connect でログイン") {
 		t.Fatalf("body did not contain federated oidc button: %s", body)
 	}
-	if !strings.Contains(body, "/login?method=federated_oidc&amp;return_to=") {
-		t.Fatalf("body did not contain federated login url: %s", body)
+	if !strings.Contains(body, `name="method" value="federated_oidc"`) {
+		t.Fatalf("body did not contain federated login method field: %s", body)
 	}
 }

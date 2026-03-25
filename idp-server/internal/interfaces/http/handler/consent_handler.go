@@ -21,6 +21,8 @@ type consentPageData struct {
 	ClientName string
 	Scopes     []string
 	ReturnTo   string
+	CSRFToken  string
+	Error      string
 }
 
 func NewConsentHandler(service appconsent.Manager) *ConsentHandler {
@@ -41,12 +43,19 @@ func (h *ConsentHandler) Handle(c *gin.Context) {
 			return
 		}
 
+		csrfToken, err := ensureCSRFToken(c)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate csrf token"})
+			return
+		}
+
 		if wantsHTML(c.GetHeader("Accept")) {
 			h.renderConsentPage(c, http.StatusOK, consentPageData{
 				ClientID:   result.ClientID,
 				ClientName: result.ClientName,
 				Scopes:     result.Scopes,
 				ReturnTo:   result.ReturnTo,
+				CSRFToken:  csrfToken,
 			})
 			return
 		}
@@ -56,6 +65,7 @@ func (h *ConsentHandler) Handle(c *gin.Context) {
 			"client_id":   result.ClientID,
 			"client_name": result.ClientName,
 			"scopes":      result.Scopes,
+			"csrf_token":  csrfToken,
 			"return_to":   result.ReturnTo,
 			"message":     "submit action=accept or action=deny",
 		})
@@ -65,6 +75,10 @@ func (h *ConsentHandler) Handle(c *gin.Context) {
 	var req dto.ConsentDecisionRequest
 	if err := c.ShouldBind(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid consent request"})
+		return
+	}
+	if err := validateCSRFToken(c, req.CSRFToken); err != nil {
+		h.writeCSRFFailure(c, req.ReturnTo, sessionID)
 		return
 	}
 
@@ -87,6 +101,14 @@ func wantsHTML(accept string) bool {
 }
 
 func (h *ConsentHandler) renderConsentPage(c *gin.Context, status int, data consentPageData) {
+	if data.CSRFToken == "" {
+		csrfToken, err := ensureCSRFToken(c)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate csrf token"})
+			return
+		}
+		data.CSRFToken = csrfToken
+	}
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	c.Status(status)
 	_ = resource.ConsentPageTemplate.Execute(c.Writer, data)
@@ -105,4 +127,28 @@ func (h *ConsentHandler) writeError(c *gin.Context, err error, returnTo string) 
 	default:
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "consent processing failed"})
 	}
+}
+
+func (h *ConsentHandler) writeCSRFFailure(c *gin.Context, returnTo, sessionID string) {
+	if wantsHTML(c.GetHeader("Accept")) {
+		data := consentPageData{
+			ReturnTo: returnTo,
+			Error:    "リクエストの整合性検証に失敗しました。",
+		}
+		if h.service != nil {
+			result, err := h.service.Prepare(c.Request.Context(), appconsent.PrepareInput{
+				ReturnTo:  returnTo,
+				SessionID: sessionID,
+			})
+			if err == nil && result != nil {
+				data.ClientID = result.ClientID
+				data.ClientName = result.ClientName
+				data.Scopes = result.Scopes
+				data.ReturnTo = result.ReturnTo
+			}
+		}
+		h.renderConsentPage(c, http.StatusForbidden, data)
+		return
+	}
+	c.JSON(http.StatusForbidden, gin.H{"error": errInvalidCSRFToken.Error(), "return_to": returnTo})
 }

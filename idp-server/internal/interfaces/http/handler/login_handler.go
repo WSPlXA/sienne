@@ -20,6 +20,7 @@ type LoginHandler struct {
 type loginPageData struct {
 	Username             string
 	ReturnTo             string
+	CSRFToken            string
 	Error                string
 	Success              bool
 	FederatedOIDCEnabled bool
@@ -42,14 +43,27 @@ func (h *LoginHandler) Handle(c *gin.Context) {
 			Code:        c.Query("code"),
 			Nonce:       c.Query("nonce"),
 		}
+		validatedReturnTo, err := validateLocalRedirectTarget(req.ReturnTo)
+		if err != nil {
+			h.writeInvalidReturnTo(c)
+			return
+		}
+		req.ReturnTo = validatedReturnTo
 		if shouldProcessLoginGET(req) {
 			h.handleAuthenticate(c, req)
 			return
 		}
 
+		csrfToken, err := ensureCSRFToken(c)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate csrf token"})
+			return
+		}
+
 		if wantsHTML(c.GetHeader("Accept")) {
 			h.renderLoginPage(c, http.StatusOK, loginPageData{
-				ReturnTo:             c.Query("return_to"),
+				CSRFToken:            csrfToken,
+				ReturnTo:             req.ReturnTo,
 				FederatedOIDCEnabled: h.federatedOIDCEnabled,
 			})
 			return
@@ -57,9 +71,11 @@ func (h *LoginHandler) Handle(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"endpoint":                "login",
 			"message":                 "submit username and password to login",
-			"return_to":               c.Query("return_to"),
+			"csrf_token":              csrfToken,
+			"return_to":               req.ReturnTo,
 			"federated_oidc_enabled":  h.federatedOIDCEnabled,
-			"federated_oidc_endpoint": "/login?method=federated_oidc",
+			"federated_oidc_endpoint": "/login",
+			"federated_oidc_method":   http.MethodPost,
 		})
 		return
 	}
@@ -76,6 +92,17 @@ func (h *LoginHandler) Handle(c *gin.Context) {
 			return
 		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid login request"})
+		return
+	}
+
+	validatedReturnTo, err := validateLocalRedirectTarget(req.ReturnTo)
+	if err != nil {
+		h.writeInvalidReturnTo(c)
+		return
+	}
+	req.ReturnTo = validatedReturnTo
+	if err := validateCSRFToken(c, req.CSRFToken); err != nil {
+		h.writeInvalidCSRF(c, req)
 		return
 	}
 
@@ -129,12 +156,21 @@ func (h *LoginHandler) handleAuthenticate(c *gin.Context, req dto.LoginRequest) 
 		return
 	}
 
-	maxAge := int(time.Until(result.ExpiresAt).Seconds())
-	c.SetCookie("idp_session", result.SessionID, maxAge, "/", "", false, true)
 	redirectURI := req.ReturnTo
 	if redirectURI == "" {
 		redirectURI = result.RedirectURI
 	}
+	redirectURI, err = validateLocalRedirectTarget(redirectURI)
+	if err != nil {
+		h.writeInvalidReturnTo(c)
+		return
+	}
+	if _, err := ensureCSRFToken(c); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate csrf token"})
+		return
+	}
+	maxAge := int(time.Until(result.ExpiresAt).Seconds())
+	c.SetCookie("idp_session", result.SessionID, maxAge, "/", "", false, true)
 	if redirectURI != "" {
 		c.Redirect(http.StatusFound, redirectURI)
 		return
@@ -156,13 +192,8 @@ func (h *LoginHandler) handleAuthenticate(c *gin.Context, req dto.LoginRequest) 
 }
 
 func shouldProcessLoginGET(req dto.LoginRequest) bool {
-	if req.Method == string(authnMethodFederatedOIDC) {
-		return true
-	}
 	return req.Code != "" || req.State != ""
 }
-
-const authnMethodFederatedOIDC = "federated_oidc"
 
 func localizeLoginError(err error) string {
 	switch {
@@ -179,7 +210,39 @@ func localizeLoginError(err error) string {
 	}
 }
 
+func (h *LoginHandler) writeInvalidReturnTo(c *gin.Context) {
+	if wantsHTML(c.GetHeader("Accept")) {
+		h.renderLoginPage(c, http.StatusBadRequest, loginPageData{
+			Error:                "遷移先が不正です。",
+			FederatedOIDCEnabled: h.federatedOIDCEnabled,
+		})
+		return
+	}
+	c.JSON(http.StatusBadRequest, gin.H{"error": errInvalidLocalRedirectTarget.Error()})
+}
+
+func (h *LoginHandler) writeInvalidCSRF(c *gin.Context, req dto.LoginRequest) {
+	if wantsHTML(c.GetHeader("Accept")) {
+		h.renderLoginPage(c, http.StatusForbidden, loginPageData{
+			Username:             req.Username,
+			ReturnTo:             req.ReturnTo,
+			Error:                "リクエストの整合性検証に失敗しました。",
+			FederatedOIDCEnabled: h.federatedOIDCEnabled,
+		})
+		return
+	}
+	c.JSON(http.StatusForbidden, gin.H{"error": errInvalidCSRFToken.Error()})
+}
+
 func (h *LoginHandler) renderLoginPage(c *gin.Context, status int, data loginPageData) {
+	if data.CSRFToken == "" {
+		csrfToken, err := ensureCSRFToken(c)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate csrf token"})
+			return
+		}
+		data.CSRFToken = csrfToken
+	}
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	c.Status(status)
 	_ = resource.LoginPageTemplate.Execute(c.Writer, data)
