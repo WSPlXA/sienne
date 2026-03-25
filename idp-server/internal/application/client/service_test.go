@@ -8,11 +8,12 @@ import (
 )
 
 type stubClientRepository struct {
-	model                *clientdomain.Model
-	insertedCount        int
-	receivedClientDBID   int64
-	receivedRedirectURIs []string
-	createdModel         *clientdomain.Model
+	model                          *clientdomain.Model
+	insertedCount                  int
+	receivedClientDBID             int64
+	receivedRedirectURIs           []string
+	receivedPostLogoutRedirectURIs []string
+	createdModel                   *clientdomain.Model
 }
 
 func (s *stubClientRepository) FindByClientID(_ context.Context, clientID string) (*clientdomain.Model, error) {
@@ -28,6 +29,7 @@ func (s *stubClientRepository) CreateClient(_ context.Context, model *clientdoma
 	copyModel.AuthMethods = append([]string(nil), model.AuthMethods...)
 	copyModel.Scopes = append([]string(nil), model.Scopes...)
 	copyModel.RedirectURIs = append([]string(nil), model.RedirectURIs...)
+	copyModel.PostLogoutRedirectURIs = append([]string(nil), model.PostLogoutRedirectURIs...)
 	s.createdModel = &copyModel
 	return nil
 }
@@ -35,6 +37,12 @@ func (s *stubClientRepository) CreateClient(_ context.Context, model *clientdoma
 func (s *stubClientRepository) RegisterRedirectURIs(_ context.Context, clientDBID int64, redirectURIs []string) (int, error) {
 	s.receivedClientDBID = clientDBID
 	s.receivedRedirectURIs = append([]string(nil), redirectURIs...)
+	return s.insertedCount, nil
+}
+
+func (s *stubClientRepository) RegisterPostLogoutRedirectURIs(_ context.Context, clientDBID int64, redirectURIs []string) (int, error) {
+	s.receivedClientDBID = clientDBID
+	s.receivedPostLogoutRedirectURIs = append([]string(nil), redirectURIs...)
 	return s.insertedCount, nil
 }
 

@@ -30,6 +30,10 @@ func (s *stubTokenClientRepository) RegisterRedirectURIs(_ context.Context, _ in
 	return 0, nil
 }
 
+func (s *stubTokenClientRepository) RegisterPostLogoutRedirectURIs(_ context.Context, _ int64, _ []string) (int, error) {
+	return 0, nil
+}
+
 type stubTokenRepository struct {
 	accessModel *tokendomain.AccessToken
 }
