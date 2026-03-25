@@ -90,6 +90,14 @@ func (r *RateLimitRepository) GetLoginFailByIP(ctx context.Context, ip string) (
 	return parseInt64(value), nil
 }
 
+func (r *RateLimitRepository) ResetLoginFailByUser(ctx context.Context, username string) error {
+	return r.rdb.Del(ctx, r.key.LoginFailUser(username)).Err()
+}
+
+func (r *RateLimitRepository) ResetLoginFailByIP(ctx context.Context, ip string) error {
+	return r.rdb.Del(ctx, r.key.LoginFailIP(ip)).Err()
+}
+
 func (r *RateLimitRepository) SetUserLock(ctx context.Context, userID string, ttl time.Duration) error {
 	return r.rdb.Set(ctx, r.key.UserLock(userID), "1", ttl).Err()
 }

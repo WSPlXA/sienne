@@ -73,6 +73,7 @@ func Wire() (*App, error) {
 	sessionCache := cacheRedis.NewSessionCacheRepository(redisClient, keyBuilder)
 	tokenCache := cacheRedis.NewTokenCacheRepository(redisClient, keyBuilder)
 	replayProtectionRepo := cacheRedis.NewReplayProtectionRepository(redisClient, keyBuilder)
+	rateLimitRepo := cacheRedis.NewRateLimitRepository(redisClient, keyBuilder)
 	passwordVerifier := infrasecurity.NewPasswordVerifier()
 	authzService := authz.NewService(clientRepo, sessionRepo, authCodeRepo, consentRepo, 10*time.Minute)
 	consentService := appconsent.NewService(clientRepo, sessionRepo, sessionCache, consentRepo)
@@ -83,7 +84,13 @@ func Wire() (*App, error) {
 		authnpassword.NewMethod(userRepo, passwordVerifier),
 		authnfederatedoidc.NewMethod(federatedOIDCProvider),
 	)
-	authnService := authn.NewService(userRepo, sessionRepo, sessionCache, authnRegistry, cfg.SessionTTL)
+	authnService := authn.NewService(userRepo, sessionRepo, sessionCache, rateLimitRepo, authnRegistry, cfg.SessionTTL, authn.RateLimitPolicy{
+		FailureWindow:      cfg.LoginFailureWindow,
+		MaxFailuresPerIP:   int64(cfg.LoginMaxFailuresPerIP),
+		MaxFailuresPerUser: int64(cfg.LoginMaxFailuresPerUser),
+		UserLockThreshold:  int64(cfg.LoginUserLockThreshold),
+		UserLockTTL:        cfg.LoginUserLockTTL,
+	})
 	sessionService := appsession.NewService(sessionRepo, sessionCache)
 	rotationConfig := infracrypto.RotationConfig{
 		WorkingDir:    cfg.WorkDir,
@@ -161,6 +168,11 @@ type config struct {
 	FederatedOIDCEmailClaim       string
 	FederatedOIDCScopes           []string
 	FederatedOIDCStateTTL         time.Duration
+	LoginFailureWindow            time.Duration
+	LoginMaxFailuresPerIP         int
+	LoginMaxFailuresPerUser       int
+	LoginUserLockThreshold        int
+	LoginUserLockTTL              time.Duration
 }
 
 func loadConfigFromEnv() (*config, error) {
@@ -190,6 +202,11 @@ func loadConfigFromEnv() (*config, error) {
 		FederatedOIDCEmailClaim:       getEnvString("FEDERATED_OIDC_EMAIL_CLAIM", "email"),
 		FederatedOIDCScopes:           getEnvFields("FEDERATED_OIDC_SCOPES", []string{"openid", "profile", "email"}),
 		FederatedOIDCStateTTL:         getEnvDuration("FEDERATED_OIDC_STATE_TTL", 10*time.Minute),
+		LoginFailureWindow:            getEnvDuration("LOGIN_FAILURE_WINDOW", 15*time.Minute),
+		LoginMaxFailuresPerIP:         getEnvInt("LOGIN_MAX_FAILURES_PER_IP", 20),
+		LoginMaxFailuresPerUser:       getEnvInt("LOGIN_MAX_FAILURES_PER_USER", 5),
+		LoginUserLockThreshold:        getEnvInt("LOGIN_USER_LOCK_THRESHOLD", 5),
+		LoginUserLockTTL:              getEnvDuration("LOGIN_USER_LOCK_TTL", 30*time.Minute),
 	}
 
 	if cfg.MySQLDSN == "" {

@@ -127,6 +127,8 @@ func (h *LoginHandler) handleAuthenticate(c *gin.Context, req dto.LoginRequest) 
 		switch {
 		case errors.Is(err, authn.ErrUnsupportedMethod):
 			status = http.StatusBadRequest
+		case errors.Is(err, authn.ErrRateLimited):
+			status = http.StatusTooManyRequests
 		case errors.Is(err, authn.ErrUserLocked):
 			status = http.StatusLocked
 		case errors.Is(err, authn.ErrUserDisabled):
@@ -203,6 +205,8 @@ func localizeLoginError(err error) string {
 		return "アカウントはロックされています。"
 	case errors.Is(err, authn.ErrUserDisabled):
 		return "アカウントは無効化されています。"
+	case errors.Is(err, authn.ErrRateLimited):
+		return "試行回数が多すぎます。しばらく待ってから再試行してください。"
 	case errors.Is(err, authn.ErrUnsupportedMethod):
 		return "この認証方式は現在利用できません。"
 	default:
