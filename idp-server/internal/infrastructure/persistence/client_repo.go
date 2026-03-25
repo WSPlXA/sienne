@@ -144,10 +144,6 @@ LIMIT 1`
 	if loadErr != nil {
 		return nil, loadErr
 	}
-	model.PostLogoutRedirectURIs, loadErr = r.loadStrings(ctx, `SELECT redirect_uri FROM oauth_client_post_logout_redirect_uris WHERE client_id = ? ORDER BY id`, model.ID)
-	if loadErr != nil {
-		return nil, loadErr
-	}
 	model.GrantTypes, loadErr = r.loadStrings(ctx, `SELECT grant_type FROM oauth_client_grant_types WHERE client_id = ? ORDER BY id`, model.ID)
 	if loadErr != nil {
 		return nil, loadErr
@@ -229,6 +225,25 @@ INSERT IGNORE INTO oauth_client_redirect_uris (
 	tx = nil
 
 	return insertedCount, nil
+}
+
+func (r *ClientRepository) HasPostLogoutRedirectURI(ctx context.Context, clientDBID int64, redirectURI string) (bool, error) {
+	const query = `
+SELECT 1
+FROM oauth_client_post_logout_redirect_uris
+WHERE client_id = ? AND redirect_uri_sha256 = ?
+LIMIT 1`
+
+	hash := sha256.Sum256([]byte(redirectURI))
+	var matched int
+	err := r.db.QueryRowContext(ctx, query, clientDBID, hex.EncodeToString(hash[:])).Scan(&matched)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return matched == 1, nil
 }
 
 func (r *ClientRepository) RegisterPostLogoutRedirectURIs(ctx context.Context, clientDBID int64, redirectURIs []string) (int, error) {

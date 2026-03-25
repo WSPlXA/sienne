@@ -13,6 +13,7 @@ type stubClientRepository struct {
 	receivedClientDBID             int64
 	receivedRedirectURIs           []string
 	receivedPostLogoutRedirectURIs []string
+	hasPostLogoutRedirectURI       bool
 	createdModel                   *clientdomain.Model
 }
 
@@ -44,6 +45,10 @@ func (s *stubClientRepository) RegisterPostLogoutRedirectURIs(_ context.Context,
 	s.receivedClientDBID = clientDBID
 	s.receivedPostLogoutRedirectURIs = append([]string(nil), redirectURIs...)
 	return s.insertedCount, nil
+}
+
+func (s *stubClientRepository) HasPostLogoutRedirectURI(_ context.Context, _ int64, _ string) (bool, error) {
+	return s.hasPostLogoutRedirectURI, nil
 }
 
 type stubPasswordVerifier struct {

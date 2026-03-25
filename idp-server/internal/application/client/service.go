@@ -215,7 +215,11 @@ func (s *Service) ValidatePostLogoutRedirectURI(ctx context.Context, input Valid
 	if model == nil || model.Status != "active" {
 		return nil, ErrClientNotFound
 	}
-	if !containsString(model.PostLogoutRedirectURIs, redirectURI) {
+	registered, err := s.clients.HasPostLogoutRedirectURI(ctx, model.ID, redirectURI)
+	if err != nil {
+		return nil, err
+	}
+	if !registered {
 		return nil, ErrInvalidRedirectURI
 	}
 
