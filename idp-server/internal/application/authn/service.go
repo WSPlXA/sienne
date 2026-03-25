@@ -73,8 +73,10 @@ func (s *Service) Authenticate(ctx context.Context, input AuthenticateInput) (*A
 	if !ok || method == nil {
 		return nil, ErrUnsupportedMethod
 	}
+	var passwordUser *userdomain.Model
 	if methodType == pluginport.AuthnMethodTypePassword {
-		if err := s.enforcePasswordRateLimit(ctx, input.Username, input.IPAddress); err != nil {
+		passwordUser, err = s.preparePasswordAuthentication(ctx, input.Username, input.IPAddress)
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -87,10 +89,11 @@ func (s *Service) Authenticate(ctx context.Context, input AuthenticateInput) (*A
 		State:       input.State,
 		Code:        input.Code,
 		Nonce:       input.Nonce,
+		User:        passwordUser,
 	})
 	if err != nil {
 		if methodType == pluginport.AuthnMethodTypePassword && errors.Is(err, ErrInvalidCredentials) {
-			return nil, s.registerPasswordFailure(ctx, input.Username, input.IPAddress)
+			return nil, s.registerPasswordFailure(ctx, input.Username, input.IPAddress, passwordUser)
 		}
 		return nil, err
 	}
@@ -100,6 +103,9 @@ func (s *Service) Authenticate(ctx context.Context, input AuthenticateInput) (*A
 		}, nil
 	}
 	if authnResult == nil || !authnResult.Handled || !authnResult.Authenticated {
+		if methodType == pluginport.AuthnMethodTypePassword {
+			return nil, s.registerPasswordFailure(ctx, input.Username, input.IPAddress, passwordUser)
+		}
 		return nil, ErrInvalidCredentials
 	}
 
@@ -198,6 +204,16 @@ func (s *Service) resolveUser(ctx context.Context, result *pluginport.Authentica
 	if result == nil {
 		return nil, nil
 	}
+	if result.UserID > 0 {
+		return &userdomain.Model{
+			ID:          result.UserID,
+			UserUUID:    strings.TrimSpace(result.Subject),
+			Username:    strings.TrimSpace(result.Username),
+			Email:       strings.TrimSpace(result.Email),
+			DisplayName: strings.TrimSpace(result.DisplayName),
+			Status:      strings.TrimSpace(result.UserStatus),
+		}, nil
+	}
 
 	if subject := strings.TrimSpace(result.Subject); subject != "" {
 		user, err := s.userRepo.FindByUserUUID(ctx, subject)
@@ -232,52 +248,48 @@ func sessionAuthContext(methodType pluginport.AuthnMethodType) (string, string) 
 	}
 }
 
-func (s *Service) enforcePasswordRateLimit(ctx context.Context, username, ipAddress string) error {
-	if s.rateLimits == nil {
-		return nil
-	}
-
+func (s *Service) preparePasswordAuthentication(ctx context.Context, username, ipAddress string) (*userdomain.Model, error) {
 	username = strings.TrimSpace(username)
 	ipAddress = strings.TrimSpace(ipAddress)
 
-	if s.ratePolicy.MaxFailuresPerIP > 0 && ipAddress != "" {
+	if s.rateLimits != nil && s.ratePolicy.MaxFailuresPerIP > 0 && ipAddress != "" {
 		failures, err := s.rateLimits.GetLoginFailByIP(ctx, ipAddress)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if failures >= s.ratePolicy.MaxFailuresPerIP {
-			return ErrRateLimited
+			return nil, ErrRateLimited
 		}
 	}
 
 	user, err := s.lookupUserByUsername(ctx, username)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if user != nil {
+	if user != nil && s.rateLimits != nil {
 		locked, err := s.rateLimits.IsUserLocked(ctx, strconv.FormatInt(user.ID, 10))
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if locked {
-			return ErrUserLocked
+			return nil, ErrUserLocked
 		}
 	}
 
-	if s.ratePolicy.MaxFailuresPerUser > 0 && username != "" {
+	if s.rateLimits != nil && s.ratePolicy.MaxFailuresPerUser > 0 && username != "" {
 		failures, err := s.rateLimits.GetLoginFailByUser(ctx, username)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if failures >= s.ratePolicy.MaxFailuresPerUser {
-			return ErrRateLimited
+			return nil, ErrRateLimited
 		}
 	}
 
-	return nil
+	return user, nil
 }
 
-func (s *Service) registerPasswordFailure(ctx context.Context, username, ipAddress string) error {
+func (s *Service) registerPasswordFailure(ctx context.Context, username, ipAddress string, user *userdomain.Model) error {
 	username = strings.TrimSpace(username)
 	ipAddress = strings.TrimSpace(ipAddress)
 
@@ -303,9 +315,12 @@ func (s *Service) registerPasswordFailure(ctx context.Context, username, ipAddre
 		}
 	}
 
-	user, err := s.lookupUserByUsername(ctx, username)
-	if err != nil {
-		return err
+	if user == nil {
+		var err error
+		user, err = s.lookupUserByUsername(ctx, username)
+		if err != nil {
+			return err
+		}
 	}
 	if user != nil {
 		failures, err := s.userRepo.IncrementFailedLogin(ctx, user.ID)

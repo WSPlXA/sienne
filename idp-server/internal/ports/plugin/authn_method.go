@@ -1,6 +1,10 @@
 package plugin
 
-import "context"
+import (
+	"context"
+
+	userdomain "idp-server/internal/domain/user"
+)
 
 type AuthnMethodType string
 
@@ -17,11 +21,14 @@ type AuthenticateInput struct {
 	State       string
 	Code        string
 	Nonce       string
+	User        *userdomain.Model
 }
 
 type AuthenticateResult struct {
 	Handled          bool
 	Authenticated    bool
+	UserID           int64
+	UserStatus       string
 	Subject          string
 	IdentityProvider string
 	Username         string

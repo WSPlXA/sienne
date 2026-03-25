@@ -38,9 +38,13 @@ func (m *Method) Authenticate(ctx context.Context, input pluginport.Authenticate
 		return nil, appauthn.ErrInvalidCredentials
 	}
 
-	user, err := m.users.FindByUsername(ctx, username)
-	if err != nil {
-		return nil, err
+	user := input.User
+	if user == nil {
+		var err error
+		user, err = m.users.FindByUsername(ctx, username)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if user == nil {
 		return nil, appauthn.ErrInvalidCredentials
@@ -59,6 +63,8 @@ func (m *Method) Authenticate(ctx context.Context, input pluginport.Authenticate
 	return &pluginport.AuthenticateResult{
 		Handled:       true,
 		Authenticated: true,
+		UserID:        user.ID,
+		UserStatus:    user.Status,
 		Subject:       user.UserUUID,
 		Username:      user.Username,
 		DisplayName:   user.DisplayName,
