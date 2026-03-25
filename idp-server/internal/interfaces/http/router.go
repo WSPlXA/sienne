@@ -32,6 +32,7 @@ func NewRouter(authzService authz.Service, consentService appconsent.Manager, re
 	loginHandler := handler.NewLoginHandler(authnService, federatedOIDCEnabled)
 	logoutHandler := handler.NewLogoutHandler(sessionService)
 	tokenHandler := handler.NewTokenHandler(clientAuthenticator, grantRegistry)
+	introspectionHandler := handler.NewIntrospectionHandler(clientAuthenticator, oidcService)
 	userInfoHandler := handler.NewUserInfoHandler(oidcService)
 	oidcMetadataHandler := handler.NewOIDCMetadataHandler(oidcService)
 
@@ -54,6 +55,7 @@ func NewRouter(authzService authz.Service, consentService appconsent.Manager, re
 		oauth2.POST("/clients", clientHandler.Create)
 		oauth2.POST("/clients/:client_id/redirect-uris", clientRedirectURIHandler.Handle)
 		oauth2.POST("/token", tokenHandler.Handle)
+		oauth2.POST("/introspect", introspectionHandler.Handle)
 		if authMiddleware != nil {
 			oauth2.GET("/userinfo", authMiddleware.RequireBearerToken(), userInfoHandler.Handle)
 		} else {

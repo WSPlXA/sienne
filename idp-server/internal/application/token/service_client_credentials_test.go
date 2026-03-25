@@ -44,6 +44,10 @@ func (s *stubTokenRepository) CreateRefreshToken(_ context.Context, _ *tokendoma
 	return nil
 }
 
+func (s *stubTokenRepository) FindActiveAccessTokenBySHA256(_ context.Context, _ string) (*tokendomain.AccessToken, error) {
+	return nil, nil
+}
+
 func (s *stubTokenRepository) FindActiveRefreshTokenBySHA256(_ context.Context, _ string) (*tokendomain.RefreshToken, error) {
 	return nil, nil
 }
@@ -74,13 +78,13 @@ func (s *stubSigner) Mint(claims map[string]any) (string, error) {
 func TestExchangeClientCredentials(t *testing.T) {
 	clientRepo := &stubTokenClientRepository{
 		model: &clientdomain.Model{
-			ID:                     7,
-			ClientID:               "service-client",
-			ClientSecretHash:       "hashed:service-secret",
-			GrantTypes:             []string{"client_credentials"},
-			Scopes:                 []string{"internal.api.read", "internal.api.write"},
-			AccessTokenTTLSeconds:  3600,
-			Status:                 "active",
+			ID:                    7,
+			ClientID:              "service-client",
+			ClientSecretHash:      "hashed:service-secret",
+			GrantTypes:            []string{"client_credentials"},
+			Scopes:                []string{"internal.api.read", "internal.api.write"},
+			AccessTokenTTLSeconds: 3600,
+			Status:                "active",
 		},
 	}
 	tokenRepo := &stubTokenRepository{}

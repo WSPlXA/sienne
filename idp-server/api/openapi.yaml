@@ -1,12 +1,11 @@
 openapi: 3.0.3
 info:
   title: IDP Server API
-  version: 0.1.0
+  version: 0.2.0
   description: |
     OpenAPI contract for the current Go IdP / OAuth2 / OIDC server.
-    This document reflects the implemented HTTP endpoints, including login,
-    registration, OAuth2 authorization code flow, consent, token exchange,
-    userinfo, discovery, and JWKS.
+    This document is aligned with the implemented routes and handlers under
+    `internal/interfaces/http`.
 
 servers:
   - url: http://localhost:8080
@@ -58,15 +57,32 @@ paths:
       operationId: getRegisterInfo
       responses:
         '200':
-          description: Registration usage hint
+          description: Registration usage hint and CSRF token
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: Sets the `idp_csrf_token` cookie when needed
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/RegisterInfoResponse'
+        '500':
+          description: Failed to generate CSRF token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     post:
       tags: [authn]
       summary: Register a new user
+      description: |
+        Submit registration data with a CSRF token. The CSRF token may be
+        provided in the body as `csrf_token` or in the `X-CSRF-Token` header,
+        and must match the `idp_csrf_token` cookie set by `GET /register`.
       operationId: registerUser
+      parameters:
+        - $ref: '#/components/parameters/XCSRFToken'
       requestBody:
         required: true
         content:
@@ -89,6 +105,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Invalid CSRF token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '409':
           description: Username or email already exists
           content:
@@ -105,48 +127,62 @@ paths:
   /login:
     get:
       tags: [authn]
-      summary: Login endpoint description
-      operationId: getLoginInfo
+      summary: Login page, login metadata, or federated OIDC callback
+      description: |
+        When called without `code`/`state`, this endpoint returns either HTML
+        or JSON login metadata depending on the `Accept` header. When called
+        with federated OIDC callback parameters, it may authenticate the user
+        and redirect to the original `return_to` path.
+      operationId: getLogin
       parameters:
+        - name: method
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [password, federated_oidc]
         - name: return_to
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: redirect_uri
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: code
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: nonce
           in: query
           required: false
           schema:
             type: string
       responses:
         '200':
-          description: Login usage hint
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/LoginInfoResponse'
-    post:
-      tags: [authn]
-      summary: Login with username and password
-      operationId: login
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/LoginRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/LoginRequest'
-      responses:
-        '200':
-          description: Login successful
+          description: Login page or JSON login metadata
           headers:
             Set-Cookie:
               schema:
                 type: string
-              description: Sets the `idp_session` cookie
+              description: May set `idp_csrf_token` and, after successful authentication, `idp_session`
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LoginResponse'
+                $ref: '#/components/schemas/LoginInfoResponse'
+            text/html:
+              schema:
+                type: string
         '302':
-          description: Login successful and redirected to `return_to`
+          description: Redirect after successful login or federated OIDC flow
           headers:
             Location:
               schema:
@@ -155,7 +191,7 @@ paths:
               schema:
                 type: string
         '400':
-          description: Invalid login request
+          description: Invalid request or invalid `return_to`
           content:
             application/json:
               schema:
@@ -184,12 +220,98 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [authn]
+      summary: Login with password or start federated OIDC
+      description: |
+        Submit username/password for local login, or set `method=federated_oidc`
+        to start external OIDC login. The CSRF token may be provided in the
+        body as `csrf_token` or in the `X-CSRF-Token` header, and must match
+        the `idp_csrf_token` cookie set by `GET /login`.
+      operationId: login
+      parameters:
+        - $ref: '#/components/parameters/XCSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful and returns session information
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: Sets the `idp_session` cookie
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+            text/html:
+              schema:
+                type: string
+        '302':
+          description: Redirect to `return_to`, `/login`, or upstream OIDC provider
+          headers:
+            Location:
+              schema:
+                type: string
+            Set-Cookie:
+              schema:
+                type: string
+        '400':
+          description: Invalid login request or unsupported authentication method
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: User disabled or invalid CSRF token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '423':
+          description: User locked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Login rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Login failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /logout:
     post:
       tags: [authn]
       summary: Logout current browser session
+      description: |
+        Clears the current `idp_session` cookie and marks the session as logged
+        out. The CSRF token may be provided in the body as `csrf_token` or in
+        the `X-CSRF-Token` header, and must match the `idp_csrf_token` cookie.
       operationId: logout
+      parameters:
+        - $ref: '#/components/parameters/XCSRFToken'
       requestBody:
         required: false
         content:
@@ -221,7 +343,13 @@ paths:
               schema:
                 type: string
         '400':
-          description: Invalid logout request
+          description: Invalid logout request or invalid `return_to`
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Invalid CSRF token
           content:
             application/json:
               schema:
@@ -247,6 +375,11 @@ paths:
       responses:
         '200':
           description: Consent page or JSON consent summary
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: Sets the `idp_csrf_token` cookie when needed
           content:
             application/json:
               schema:
@@ -275,7 +408,13 @@ paths:
     post:
       tags: [authz]
       summary: Accept or deny consent
+      description: |
+        Submit `action=accept` or `action=deny`. The CSRF token may be provided
+        in the body as `csrf_token` or in the `X-CSRF-Token` header, and must
+        match the `idp_csrf_token` cookie set by `GET /consent`.
       operationId: submitConsent
+      parameters:
+        - $ref: '#/components/parameters/XCSRFToken'
       requestBody:
         required: true
         content:
@@ -298,6 +437,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ConsentErrorResponse'
+        '403':
+          description: Invalid CSRF token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Consent processing failed
           content:
@@ -312,7 +457,9 @@ paths:
       description: |
         Starts the authorization code flow. On success it redirects to the
         client redirect URI with `code` and optional `state`. If login or
-        consent is required, it redirects to `/login` or `/consent`.
+        consent is required, it redirects to `/login` or `/consent`. When the
+        request is invalid and a redirect URI is available, the server redirects
+        back to the client with OAuth error parameters.
       operationId: authorize
       parameters:
         - name: response_type
@@ -471,6 +618,11 @@ paths:
     post:
       tags: [authz]
       summary: Exchange authorization code, refresh token, or client credentials
+      description: |
+        Supports `authorization_code`, `refresh_token`, and `client_credentials`.
+        Client authentication can be supplied via HTTP Basic auth or through
+        `client_id` and `client_secret` form fields when the client uses
+        `client_secret_post`. Public clients may use `none`.
       operationId: token
       security:
         - basicAuth: []
@@ -509,6 +661,52 @@ paths:
               schema:
                 $ref: '#/components/schemas/OAuthError'
 
+  /oauth2/introspect:
+    post:
+      tags: [oidc]
+      summary: OAuth2 token introspection
+      description: |
+        Introspects an access token issued by this server. Client authentication
+        is required and may be supplied via HTTP Basic auth or through
+        `client_id` and `client_secret` request fields.
+      operationId: introspect
+      security:
+        - basicAuth: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/IntrospectRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IntrospectRequest'
+      responses:
+        '200':
+          description: Token introspection result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntrospectionResponse'
+        '400':
+          description: Invalid introspection request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthError'
+        '401':
+          description: Client authentication is required or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthError'
+        '500':
+          description: Introspection failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthError'
+
   /oauth2/userinfo:
     get:
       tags: [oidc]
@@ -524,7 +722,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/UserInfoResponse'
         '401':
-          description: Missing or invalid access token
+          description: Missing, revoked, or invalid access token
           content:
             application/json:
               schema:
@@ -571,6 +769,18 @@ components:
       scheme: bearer
       bearerFormat: JWT
 
+  parameters:
+    XCSRFToken:
+      name: X-CSRF-Token
+      in: header
+      required: false
+      description: |
+        Optional CSRF token header. If omitted, the same token may be supplied
+        in the request body as `csrf_token`. In both cases it must match the
+        `idp_csrf_token` cookie.
+      schema:
+        type: string
+
   schemas:
     HealthResponse:
       type: object
@@ -609,7 +819,7 @@ components:
 
     RegisterInfoResponse:
       type: object
-      required: [endpoint, message]
+      required: [endpoint, message, csrf_token]
       properties:
         endpoint:
           type: string
@@ -617,6 +827,8 @@ components:
         message:
           type: string
           example: submit username, email, display_name and password to register
+        csrf_token:
+          type: string
 
     RegisterRequest:
       type: object
@@ -636,6 +848,8 @@ components:
           type: string
           format: password
           example: alice123
+        csrf_token:
+          type: string
         email_verified:
           type: boolean
           default: false
@@ -676,7 +890,13 @@ components:
 
     LoginInfoResponse:
       type: object
-      required: [endpoint, message, return_to]
+      required:
+        - endpoint
+        - message
+        - csrf_token
+        - federated_oidc_enabled
+        - federated_oidc_endpoint
+        - federated_oidc_method
       properties:
         endpoint:
           type: string
@@ -684,20 +904,42 @@ components:
         message:
           type: string
           example: submit username and password to login
+        csrf_token:
+          type: string
         return_to:
           type: string
           nullable: true
+        federated_oidc_enabled:
+          type: boolean
+        federated_oidc_endpoint:
+          type: string
+          example: /login
+        federated_oidc_method:
+          type: string
+          example: POST
 
     LoginRequest:
       type: object
-      required: [username, password]
       properties:
+        method:
+          type: string
+          enum: [password, federated_oidc]
         username:
           type: string
         password:
           type: string
           format: password
+        csrf_token:
+          type: string
         return_to:
+          type: string
+        redirect_uri:
+          type: string
+        state:
+          type: string
+        code:
+          type: string
+        nonce:
           type: string
 
     LoginResponse:
@@ -722,6 +964,8 @@ components:
       properties:
         return_to:
           type: string
+        csrf_token:
+          type: string
 
     LogoutResponse:
       type: object
@@ -733,7 +977,7 @@ components:
 
     ConsentInfoResponse:
       type: object
-      required: [endpoint, client_id, client_name, scopes, return_to, message]
+      required: [endpoint, client_id, client_name, scopes, return_to, message, csrf_token]
       properties:
         endpoint:
           type: string
@@ -746,6 +990,8 @@ components:
           type: array
           items:
             type: string
+        csrf_token:
+          type: string
         return_to:
           type: string
         message:
@@ -760,6 +1006,8 @@ components:
           type: string
           enum: [accept, deny]
         return_to:
+          type: string
+        csrf_token:
           type: string
 
     CreateClientRequest:
@@ -786,7 +1034,7 @@ components:
           default: confidential
         token_endpoint_auth_method:
           type: string
-          enum: [client_secret_basic, none]
+          enum: [client_secret_basic, client_secret_post, none]
         require_pkce:
           type: boolean
           default: true
@@ -969,6 +1217,58 @@ components:
           type: string
           description: Returned when the request includes the `openid` scope
 
+    IntrospectRequest:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+        token_type_hint:
+          type: string
+          example: access_token
+        client_id:
+          type: string
+        client_secret:
+          type: string
+
+    IntrospectionResponse:
+      type: object
+      required: [active]
+      properties:
+        active:
+          type: boolean
+        scope:
+          type: string
+        client_id:
+          type: string
+        token_type:
+          type: string
+          example: Bearer
+        exp:
+          type: integer
+          format: int64
+        iat:
+          type: integer
+          format: int64
+        nbf:
+          type: integer
+          format: int64
+        sub:
+          type: string
+        aud:
+          type: array
+          items:
+            type: string
+        iss:
+          type: string
+        jti:
+          type: string
+        username:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+
     UserInfoResponse:
       type: object
       required: [sub]
@@ -993,12 +1293,14 @@ components:
         - authorization_endpoint
         - token_endpoint
         - userinfo_endpoint
+        - introspection_endpoint
         - jwks_uri
         - response_types_supported
         - subject_types_supported
         - id_token_signing_alg_values_supported
         - scopes_supported
         - token_endpoint_auth_methods_supported
+        - introspection_endpoint_auth_methods_supported
         - grant_types_supported
         - code_challenge_methods_supported
       properties:
@@ -1012,6 +1314,9 @@ components:
           type: string
           format: uri
         userinfo_endpoint:
+          type: string
+          format: uri
+        introspection_endpoint:
           type: string
           format: uri
         jwks_uri:
@@ -1034,6 +1339,10 @@ components:
           items:
             type: string
         token_endpoint_auth_methods_supported:
+          type: array
+          items:
+            type: string
+        introspection_endpoint_auth_methods_supported:
           type: array
           items:
             type: string

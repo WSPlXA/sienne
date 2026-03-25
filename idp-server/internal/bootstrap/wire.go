@@ -134,7 +134,7 @@ func Wire() (*App, error) {
 		clientauthnone.NewAuthenticator(),
 	)
 	clientAuthenticator := appclientauth.NewService(clientRepo, clientAuthRegistry)
-	oidcService := oidc.NewService(userRepo, &jwtServiceAdapter{service: jwtService}, keyManagerAdapter{manager: keyManager}, cfg.Issuer)
+	oidcService := oidc.NewService(userRepo, tokenRepo, tokenCache, &jwtServiceAdapter{service: jwtService}, keyManagerAdapter{manager: keyManager}, cfg.Issuer)
 	authMiddleware := httpmiddleware.NewAuthMiddleware(&jwtMiddlewareAdapter{service: jwtService}, tokenCache, cfg.Issuer)
 
 	return &App{

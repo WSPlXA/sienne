@@ -101,6 +101,40 @@ INSERT INTO oauth_refresh_tokens (
 	return nil
 }
 
+func (r *TokenRepository) FindActiveAccessTokenBySHA256(ctx context.Context, tokenSHA256 string) (*tokendomain.AccessToken, error) {
+	const query = `
+SELECT
+    id,
+    token_value,
+    token_sha256,
+    client_id,
+    user_id,
+    subject,
+    audience_json,
+    scopes_json,
+    token_type,
+    token_format,
+    issued_at,
+    expires_at,
+    revoked_at,
+    created_at
+FROM oauth_access_tokens
+WHERE token_sha256 = ?
+  AND revoked_at IS NULL
+  AND expires_at > CURRENT_TIMESTAMP
+LIMIT 1`
+
+	row := r.db.QueryRowContext(ctx, query, tokenSHA256)
+	model, err := scanAccessToken(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return model, nil
+}
+
 func (r *TokenRepository) FindActiveRefreshTokenBySHA256(ctx context.Context, tokenSHA256 string) (*tokendomain.RefreshToken, error) {
 	const query = `
 SELECT
@@ -246,6 +280,44 @@ func scanRefreshToken(row scanner) (*tokendomain.RefreshToken, error) {
 	if replacedBy.Valid {
 		value := replacedBy.Int64
 		model.ReplacedByTokenID = &value
+	}
+	return &model, nil
+}
+
+func scanAccessToken(row scanner) (*tokendomain.AccessToken, error) {
+	var model tokendomain.AccessToken
+	var userID sql.NullInt64
+	var revokedAt sql.NullTime
+	var audienceJSON sql.NullString
+	err := row.Scan(
+		&model.ID,
+		&model.TokenValue,
+		&model.TokenSHA256,
+		&model.ClientID,
+		&userID,
+		&model.Subject,
+		&audienceJSON,
+		&model.ScopesJSON,
+		&model.TokenType,
+		&model.TokenFormat,
+		&model.IssuedAt,
+		&model.ExpiresAt,
+		&revokedAt,
+		&model.CreatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if userID.Valid {
+		value := userID.Int64
+		model.UserID = &value
+	}
+	if revokedAt.Valid {
+		value := revokedAt.Time
+		model.RevokedAt = &value
+	}
+	if audienceJSON.Valid {
+		model.AudienceJSON = audienceJSON.String
 	}
 	return &model, nil
 }
