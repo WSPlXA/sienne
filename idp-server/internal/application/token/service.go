@@ -51,14 +51,14 @@ func NewService(
 	issuer string,
 ) *Service {
 	return &Service{
-		authCodes: authCodes,
-		clients:   clients,
-		users:     users,
-		tokens:    tokens,
+		authCodes:  authCodes,
+		clients:    clients,
+		users:      users,
+		tokens:     tokens,
 		tokenCache: tokenCache,
-		passwords: passwords,
-		signer:    signer,
-		issuer:    issuer,
+		passwords:  passwords,
+		signer:     signer,
+		issuer:     issuer,
 		now: func() time.Time {
 			return time.Now().UTC()
 		},
@@ -193,7 +193,7 @@ func (s *Service) exchangeAuthorizationCode(ctx context.Context, input ExchangeI
 		result.IDToken = idToken
 	}
 
-	if client.RefreshTokenTTLSeconds > 0 {
+	if shouldIssueRefreshToken(client, scopes) {
 		refreshToken := uuid.NewString() + "." + uuid.NewString()
 		refreshExpiresAt := now.Add(time.Duration(client.RefreshTokenTTLSeconds) * time.Second)
 		refreshModel := &tokendomain.RefreshToken{
@@ -547,6 +547,19 @@ func normalizeScopes(scopes []string) []string {
 		result = append(result, scope)
 	}
 	return result
+}
+
+func shouldIssueRefreshToken(client *clientdomain.Model, scopes []string) bool {
+	if client == nil {
+		return false
+	}
+	if client.RefreshTokenTTLSeconds <= 0 {
+		return false
+	}
+	if !contains(client.GrantTypes, string(pkgoauth2.GrantTypeRefreshToken)) {
+		return false
+	}
+	return contains(scopes, "offline_access")
 }
 
 func contains(values []string, expected string) bool {
