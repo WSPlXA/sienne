@@ -1,138 +1,263 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ログアウト — Sienne IDP</title>
+  <title>ログアウト</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap');
+
     :root {
-      --bg-cream: #fbfaf8;
-      --glass-bg: rgba(255, 255, 255, 0.7);
-      --glass-border: rgba(0, 0, 0, 0.06);
-      --glass-shadow: 0 10px 40px rgba(0, 0, 0, 0.04);
-      --accent-orange: #ea580c;
-      --text-main: #0f172a;
-      --text-muted: #64748b;
+      --bg: #f4eee6;
+      --surface: rgba(255, 250, 244, 0.88);
+      --line: rgba(65, 46, 18, 0.12);
+      --text: #201914;
+      --muted: #6d6459;
+      --danger: #c2410c;
+      --danger-strong: #9a3412;
+      --danger-soft: rgba(194, 65, 12, 0.10);
+      --shadow: 0 26px 86px rgba(46, 31, 16, 0.14);
     }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
 
     body {
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: 'Inter', -apple-system, sans-serif;
-      background: var(--bg-cream);
+      font-family: "Noto Sans JP", sans-serif;
+      color: var(--text);
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background:
+        radial-gradient(circle at 18% 18%, rgba(217, 119, 6, 0.15), transparent 26%),
+        radial-gradient(circle at 85% 80%, rgba(194, 65, 12, 0.12), transparent 24%),
+        linear-gradient(135deg, #f8f2eb 0%, #f2eadf 52%, #eee3d6 100%);
+    }
+
+    .wrap {
+      width: min(100%, 980px);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(340px, 400px);
+      gap: 26px;
+    }
+
+    .info,
+    .panel {
+      border-radius: 30px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      box-shadow: var(--shadow);
       overflow: hidden;
-      color: var(--text-main);
     }
 
-    .mesh-background {
-      position: fixed;
-      top: 0; left: 0; width: 100%; height: 100%;
-      z-index: -1;
-      background: var(--bg-cream);
-      background-image: 
-        radial-gradient(at 0% 0%, #fff 0px, transparent 50%),
-        radial-gradient(at 100% 0%, #f1efe9 0px, transparent 50%),
-        radial-gradient(at 100% 100%, #ffffff 0px, transparent 50%),
-        radial-gradient(at 0% 100%, #ece9e2 0px, transparent 50%);
-      filter: blur(40px);
-      animation: mesh-drift 15s ease-in-out infinite alternate;
+    .info {
+      padding: 34px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.68), rgba(255,247,240,0.76)),
+        linear-gradient(135deg, rgba(194,65,12,0.08), rgba(217,119,6,0.08));
     }
 
-    @keyframes mesh-drift { 0% { transform: scale(1); } 100% { transform: scale(1.1); } }
+    .panel {
+      padding: 30px 26px;
+      display: flex;
+      flex-direction: column;
+    }
 
-    .container { width: 100%; max-width: 440px; padding: 20px; }
+    .eyebrow,
+    .label {
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+    }
 
-    .card {
-      background: var(--glass-bg);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid var(--glass-border);
-      border-radius: 28px;
-      padding: 48px 40px;
-      box-shadow: var(--glass-shadow);
-      opacity: 0;
-      transform: translateY(30px);
-      animation: card-enter 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    h1, h2 {
+      margin: 0;
+      font-family: "Space Grotesk", sans-serif;
+      letter-spacing: -0.04em;
+    }
+
+    h1 {
+      margin-top: 14px;
+      font-size: clamp(38px, 5vw, 60px);
+      line-height: 0.96;
+      max-width: 10ch;
+    }
+
+    h2 {
+      margin-top: 10px;
+      font-size: 30px;
+    }
+
+    .copy,
+    .subtitle {
+      margin-top: 14px;
+      color: #544c42;
+      font-size: 14px;
+      line-height: 1.75;
+    }
+
+    .signal-list {
+      margin: 28px 0 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 14px;
+    }
+
+    .signal-item {
+      padding: 16px 18px;
+      border-radius: 20px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.62);
+    }
+
+    .signal-title {
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .signal-copy {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.65;
+    }
+
+    .logout-mark {
+      width: 58px;
+      height: 58px;
+      display: grid;
+      place-items: center;
+      border-radius: 18px;
+      background: var(--danger-soft);
+      color: var(--danger);
+      border: 1px solid rgba(194,65,12,0.14);
+    }
+
+    .panel-block {
+      padding: 18px;
+      border-radius: 20px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.84);
+      margin-top: 22px;
+    }
+
+    .return-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 12px;
+      max-width: 100%;
+      padding: 10px 12px;
+      border-radius: 999px;
+      background: rgba(194,65,12,0.08);
+      color: var(--danger-strong);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+      word-break: break-all;
+    }
+
+    .btn {
+      margin-top: 22px;
+      width: 100%;
+      border: 0;
+      border-radius: 999px;
+      padding: 15px 18px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      color: #fff;
+      background: linear-gradient(135deg, var(--danger) 0%, var(--danger-strong) 100%);
+      box-shadow: 0 14px 28px rgba(194,65,12,0.24);
+      transition: transform 0.18s ease, filter 0.18s ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.02);
+    }
+
+    .footer {
+      margin-top: auto;
+      padding-top: 18px;
       text-align: center;
+      color: var(--muted);
+      font-size: 11px;
     }
 
-    @keyframes card-enter { to { opacity: 1; transform: translateY(0); } }
-
-    .icon-box {
-      width: 64px; height: 64px; margin: 0 auto 24px;
-      color: var(--accent-orange); background: #fff7ed;
-      border-radius: 50%; display: flex; align-items: center; justify-content: center;
-      border: 1px solid #ffedd5;
+    @media (max-width: 920px) {
+      .wrap { grid-template-columns: 1fr; }
     }
 
-    h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 12px; color: #1e293b; }
-    .status-text { color: var(--text-muted); font-size: 14px; margin-bottom: 32px; line-height: 1.6; }
-
-    .session-info {
-      background: rgba(255, 255, 255, 0.5); border: 1px solid #e2e8f0;
-      border-radius: 18px; padding: 16px; margin-bottom: 24px; text-align: left;
+    @media (max-width: 520px) {
+      body { padding: 14px; }
+      .info,
+      .panel { border-radius: 24px; }
+      .info { padding: 24px; }
+      .panel { padding: 24px 18px; }
     }
-
-    .info-label { font-size: 10px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; }
-    .info-value { font-size: 13px; font-family: monospace; color: var(--text-main); word-break: break-all; }
-
-    .btn-logout {
-      width: 100%; background: var(--accent-orange); color: white; border: none;
-      border-radius: 14px; padding: 16px; font-size: 16px; font-weight: 600;
-      cursor: pointer; transition: all 0.2s ease; box-shadow: 0 4px 12px rgba(234, 88, 12, 0.2);
-    }
-
-    .btn-logout:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(234, 88, 12, 0.3); }
-
-    .footer { margin-top: 32px; color: var(--text-muted); font-size: 11px; }
-
-    .stagger { opacity: 0; transform: translateY(10px); animation: stagger-in 0.5s ease-out forwards; }
-    @keyframes stagger-in { to { opacity: 1; transform: translateY(0); } }
-    .s1 { animation-delay: 0.3s; } .s2 { animation-delay: 0.4s; }
   </style>
 </head>
 <body>
-  <div class="mesh-background"></div>
-  <main class="container">
-    <div class="card">
-      <div class="icon-box stagger s1">
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+  <main class="wrap">
+    <section class="info" aria-label="ログアウト概要">
+      <div class="eyebrow">Session Exit</div>
+      <h1>セッションを安全に閉じる。</h1>
+      <p class="copy">
+        ログアウトは単に cookie を消すだけではない。現在のブラウザ文脈を終わらせ、
+        必要なら次の遷移先へ制御を戻す境界処理だ。
+      </p>
+
+      <ul class="signal-list">
+        <li class="signal-item">
+          <div class="label">Action</div>
+          <div class="signal-title">Cookie Clear</div>
+          <div class="signal-copy">`idp_session` を破棄し、以後のリクエストで認証状態を継続させない。</div>
+        </li>
+        <li class="signal-item">
+          <div class="label">Guard</div>
+          <div class="signal-title">CSRF Bound</div>
+          <div class="signal-copy">破壊的操作なので hidden token を使ってブラウザ起点の送信かを検証する。</div>
+        </li>
+        <li class="signal-item">
+          <div class="label">Return</div>
+          <div class="signal-title">{{if .ReturnTo}}Redirect{{else}}Login Fallback{{end}}</div>
+          <div class="signal-copy">指定があれば local redirect へ、なければログイン導線へ戻す。</div>
+        </li>
+      </ul>
+    </section>
+
+    <section class="panel" aria-labelledby="logout-heading">
+      <div class="logout-mark" aria-hidden="true">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+          <polyline points="16 17 21 12 16 7"></polyline>
+          <line x1="21" y1="12" x2="9" y2="12"></line>
         </svg>
       </div>
-      <h1 class="stagger s1">ログアウト</h1>
-      <p class="status-text stagger s1">アカウントからサインアウトし、セッションを終了します。</p>
 
-      {{if .ClientID}}
-      <div class="session-info stagger s2">
-        <div class="info-label">クライアント ID</div>
-        <div class="info-value">{{.ClientID}}</div>
+      <div class="eyebrow">Controlled Logout</div>
+      <h2 id="logout-heading">ログアウト</h2>
+      <p class="subtitle">現在のサインイン状態を終了します。必要であれば完了後に指定された導線へ戻ります。</p>
+
+      <div class="panel-block">
+        <div class="label">Return To</div>
+        <div class="return-chip">{{if .ReturnTo}}{{.ReturnTo}}{{else}}/login{{end}}</div>
       </div>
-      {{end}}
 
-      <form id="logout-form" method="post" action="/connect/logout" class="stagger s2">
-        <input type="hidden" name="client_id" value="{{.ClientID}}">
-        <input type="hidden" name="post_logout_redirect_uri" value="{{.PostLogoutRedirectURI}}">
-        <input type="hidden" name="state" value="{{.State}}">
+      <form method="post">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-        <button type="submit" class="btn-logout">ログアウトを実行</button>
+        <input type="hidden" name="return_to" value="{{.ReturnTo}}">
+        <button type="submit" class="btn">ログアウトを実行</button>
       </form>
-      <div class="footer stagger s2">Sienne IDP &bull; セッション管理</div>
-    </div>
+
+      <div class="footer">Sienne IDP / Session Shutdown</div>
+    </section>
   </main>
-  <script>
-    window.addEventListener("load", function () {
-      setTimeout(function() {
-        var form = document.getElementById("logout-form");
-        if (form) { form.requestSubmit ? form.requestSubmit() : form.submit(); }
-      }, 1500);
-    });
-  </script>
 </body>
 </html>

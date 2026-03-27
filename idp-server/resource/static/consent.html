@@ -1,151 +1,373 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>アクセス許可 — Sienne IDP</title>
+  <title>アクセス許可</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap');
+
     :root {
-      --bg-cream: #fbfaf8;
-      --glass-bg: rgba(255, 255, 255, 0.7);
-      --glass-border: rgba(0, 0, 0, 0.06);
-      --glass-shadow: 0 10px 40px rgba(0, 0, 0, 0.04);
-      --accent-emerald: #059669;
-      --accent-gold: #d97706;
-      --text-main: #0f172a;
-      --text-muted: #64748b;
-      --danger: #dc2626;
+      --bg: #f6f0e4;
+      --surface: rgba(255, 251, 245, 0.86);
+      --surface-strong: rgba(255, 255, 255, 0.94);
+      --line: rgba(61, 46, 24, 0.12);
+      --text: #201b15;
+      --muted: #6c6358;
+      --accent: #0f766e;
+      --accent-soft: rgba(15, 118, 110, 0.10);
+      --deny: #b42318;
+      --deny-soft: rgba(180, 35, 24, 0.08);
+      --shadow: 0 28px 84px rgba(41, 31, 18, 0.14);
     }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
 
     body {
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: 'Inter', -apple-system, sans-serif;
-      background: var(--bg-cream);
+      font-family: "Noto Sans JP", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 15% 15%, rgba(217, 119, 6, 0.14), transparent 26%),
+        radial-gradient(circle at 85% 20%, rgba(15, 118, 110, 0.16), transparent 26%),
+        linear-gradient(135deg, #f7f1e6 0%, #f2eadb 50%, #efe5d3 100%);
+      padding: 24px;
+      display: grid;
+      place-items: center;
+    }
+
+    .shell {
+      width: min(100%, 960px);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(340px, 400px);
+      gap: 26px;
+    }
+
+    .summary,
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 30px;
+      background: var(--surface);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      box-shadow: var(--shadow);
       overflow: hidden;
-      color: var(--text-main);
     }
 
-    .mesh-background {
-      position: fixed;
-      top: 0; left: 0; width: 100%; height: 100%;
-      z-index: -1;
-      background: var(--bg-cream);
-      background-image: 
-        radial-gradient(at 0% 0%, #fff 0px, transparent 50%),
-        radial-gradient(at 100% 0%, #f1efe9 0px, transparent 50%),
-        radial-gradient(at 100% 100%, #ffffff 0px, transparent 50%),
-        radial-gradient(at 0% 100%, #ece9e2 0px, transparent 50%);
-      filter: blur(40px);
-      animation: mesh-drift 15s ease-in-out infinite alternate;
+    .summary {
+      padding: 34px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.68), rgba(255,247,236,0.76)),
+        linear-gradient(135deg, rgba(217,119,6,0.06), rgba(15,118,110,0.09));
     }
 
-    @keyframes mesh-drift { 0% { transform: scale(1); } 100% { transform: scale(1.1); } }
-
-    .container { width: 100%; max-width: 480px; padding: 20px; }
-
-    .card {
-      background: var(--glass-bg);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid var(--glass-border);
-      border-radius: 28px;
-      padding: 48px 40px;
-      box-shadow: var(--glass-shadow);
-      opacity: 0;
-      transform: translateY(30px);
-      animation: card-enter 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    .panel {
+      padding: 30px 26px;
+      display: flex;
+      flex-direction: column;
     }
 
-    @keyframes card-enter { to { opacity: 1; transform: translateY(0); } }
-
-    .header { text-align: center; margin-bottom: 32px; }
-
-    .app-icon {
-      width: 64px; height: 64px; margin: 0 auto 16px;
-      background: #ffffff; border: 1px solid #e2e8f0; border-radius: 18px;
-      display: flex; align-items: center; justify-content: center; color: var(--accent-gold);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+    .eyebrow,
+    .mini-label {
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
     }
 
-    h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 8px; color: #1e293b; }
-    .subtitle { color: var(--text-muted); font-size: 14px; }
-    .app-name { color: var(--accent-gold); font-weight: 600; }
-
-    .info-panel {
-      background: rgba(255, 255, 255, 0.5); border: 1px solid #e2e8f0;
-      border-radius: 18px; padding: 24px; margin-bottom: 24px;
+    h1, h2 {
+      margin: 0;
+      font-family: "Space Grotesk", sans-serif;
+      letter-spacing: -0.04em;
     }
 
-    .panel-label {
-      font-size: 11px; font-weight: 600; text-transform: uppercase;
-      letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 12px;
+    h1 {
+      margin-top: 14px;
+      font-size: clamp(36px, 5vw, 58px);
+      line-height: 0.96;
+      max-width: 10ch;
     }
 
-    .scope-list { list-style: none; }
-    .scope-item { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; font-size: 14px; }
-    .scope-item svg { color: var(--accent-emerald); }
+    h2 {
+      font-size: 30px;
+    }
 
-    .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 32px; }
+    .lead,
+    .subtitle {
+      color: #544d44;
+      line-height: 1.75;
+      font-size: 14px;
+    }
+
+    .lead { margin: 16px 0 0; max-width: 42ch; }
+    .subtitle { margin: 10px 0 0; }
+
+    .app-badge {
+      margin-top: 26px;
+      border-radius: 22px;
+      padding: 18px 20px;
+      background: rgba(255,255,255,0.64);
+      border: 1px solid var(--line);
+    }
+
+    .app-name {
+      margin-top: 10px;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 28px;
+      font-weight: 700;
+      color: #8a4b08;
+      word-break: break-word;
+    }
+
+    .scope-grid {
+      margin-top: 28px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .scope-card {
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.58);
+      border-radius: 20px;
+      padding: 16px;
+      min-height: 118px;
+    }
+
+    .scope-title {
+      margin-top: 10px;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 20px;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+
+    .scope-copy {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.65;
+    }
+
+    .card-icon {
+      width: 44px;
+      height: 44px;
+      display: grid;
+      place-items: center;
+      border-radius: 14px;
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+
+    .panel-top {
+      margin-bottom: 22px;
+    }
+
+    .banner {
+      margin-bottom: 18px;
+      padding: 13px 15px;
+      border-radius: 16px;
+      background: #fff1f1;
+      border: 1px solid rgba(180, 35, 24, 0.16);
+      color: var(--deny);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .decision-box {
+      padding: 18px;
+      border-radius: 22px;
+      background: var(--surface-strong);
+      border: 1px solid var(--line);
+    }
+
+    .decision-list {
+      list-style: none;
+      margin: 16px 0 0;
+      padding: 0;
+      display: grid;
+      gap: 12px;
+    }
+
+    .decision-item {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 12px;
+      align-items: start;
+      padding: 14px;
+      border-radius: 16px;
+      background: rgba(15,118,110,0.05);
+    }
+
+    .decision-item svg {
+      margin-top: 2px;
+      color: var(--accent);
+      flex: 0 0 auto;
+    }
+
+    .decision-item strong {
+      display: block;
+      font-size: 14px;
+    }
+
+    .decision-item span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+      overflow-wrap: anywhere;
+    }
+
+    .btn-row {
+      margin-top: 22px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
 
     .btn {
-      padding: 14px; border-radius: 14px; font-size: 15px; font-weight: 600;
-      cursor: pointer; transition: all 0.2s ease; border: none; outline: none; text-align: center;
+      width: 100%;
+      border-radius: 999px;
+      padding: 14px 16px;
+      border: 0;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
     }
 
-    .btn-allow { background: var(--accent-emerald); color: white; box-shadow: 0 4px 12px rgba(5, 150, 105, 0.2); }
-    .btn-allow:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(5, 150, 105, 0.3); }
+    .btn:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.01);
+    }
 
-    .btn-deny { background: #f8fafc; border: 1px solid #e2e8f0; color: var(--text-muted); }
-    .btn-deny:hover { background: #fef2f2; border-color: #fee2e2; color: var(--danger); }
+    .btn-allow {
+      background: linear-gradient(135deg, #0f766e 0%, #115e59 100%);
+      color: #fff;
+      box-shadow: 0 14px 28px rgba(15,118,110,0.24);
+    }
 
-    .footer { text-align: center; margin-top: 32px; color: var(--text-muted); font-size: 11px; }
+    .btn-deny {
+      background: var(--deny-soft);
+      color: var(--deny);
+      border: 1px solid rgba(180,35,24,0.14);
+    }
 
-    .stagger { opacity: 0; transform: translateY(10px); animation: stagger-in 0.4s ease-out forwards; }
-    @keyframes stagger-in { to { opacity: 1; transform: translateY(0); } }
-    .s1 { animation-delay: 0.3s; } .s2 { animation-delay: 0.4s; } .s3 { animation-delay: 0.5s; }
+    .footer {
+      margin-top: auto;
+      padding-top: 18px;
+      color: var(--muted);
+      font-size: 11px;
+      text-align: center;
+    }
+
+    @media (max-width: 920px) {
+      .shell { grid-template-columns: 1fr; }
+      .scope-grid { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 520px) {
+      body { padding: 14px; }
+      .summary,
+      .panel { border-radius: 24px; }
+      .summary { padding: 24px; }
+      .panel { padding: 24px 18px; }
+      .btn-row { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
-  <div class="mesh-background"></div>
-  <main class="container">
-    <div class="card">
-      <div class="header">
-        <div class="app-icon">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/>
-          </svg>
-        </div>
-        <h1>アクセス許可の確認</h1>
-        <p class="subtitle"><span class="app-name">{{.ClientName}}</span> がアカウントへのアクセスを求めています</p>
+  <main class="shell">
+    <section class="summary" aria-label="認可概要">
+      <div class="eyebrow">Authorization Review</div>
+      <h1>アクセス許可の確認</h1>
+      <p class="lead">
+        同意画面は単なる Yes/No ではない。誰が、どの範囲を、どの遷移先へ要求しているかを短い視線移動で判断できる必要がある。
+      </p>
+
+      <div class="app-badge">
+        <div class="mini-label">Client Application</div>
+        <div class="app-name">{{.ClientName}}</div>
+        <p class="subtitle">このアプリケーションがあなたのアカウント情報と認可済みスコープへのアクセスを要求しています。</p>
       </div>
 
-      <div class="info-panel stagger s1">
-        <div class="panel-label">要求されている権限</div>
-        <ul class="scope-list">
-          {{range .Scopes}}<li class="scope-item">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            {{.}}
-          </li>{{end}}
+      <div class="scope-grid">
+        {{range .Scopes}}
+        <article class="scope-card">
+          <div class="card-icon" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </div>
+          <div class="scope-title">{{.}}</div>
+          <div class="scope-copy">要求スコープ。認可後はこの権限名が認可コード交換以降の判定に使われる。</div>
+        </article>
+        {{else}}
+        <article class="scope-card">
+          <div class="card-icon" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="8"></circle>
+              <path d="M12 8v4"></path>
+              <path d="M12 16h.01"></path>
+            </svg>
+          </div>
+          <div class="scope-title">No Scope Details</div>
+          <div class="scope-copy">要求スコープ情報が空です。通常系なら upstream request を確認するべき状態だ。</div>
+        </article>
+        {{end}}
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="consent-heading">
+      <div class="panel-top">
+        <div class="eyebrow">Decision Gate</div>
+        <h2 id="consent-heading">この要求を許可しますか</h2>
+        <p class="subtitle">許可すると `return_to` に保持された認可フローへ復帰し、拒否すると deny として終了します。</p>
+      </div>
+
+      {{if .Error}}
+      <div class="banner">{{.Error}}</div>
+      {{end}}
+
+      <div class="decision-box">
+        <div class="mini-label">What Happens Next</div>
+        <ul class="decision-list">
+          <li class="decision-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 12h14"></path>
+              <path d="m12 5 7 7-7 7"></path>
+            </svg>
+            <div>
+              <strong>許可</strong>
+              <span>セッションと要求内容を突き合わせたうえで、認可結果を持ってクライアントへ戻る。</span>
+            </div>
+          </li>
+          <li class="decision-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m18 6-12 12"></path>
+              <path d="m6 6 12 12"></path>
+            </svg>
+            <div>
+              <strong>拒否</strong>
+              <span>認可は発行されず、クライアントは denial として処理を受ける。</span>
+            </div>
+          </li>
         </ul>
       </div>
 
       <form method="post">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
         <input type="hidden" name="return_to" value="{{.ReturnTo}}">
-        <div class="btn-group stagger s2">
+        <div class="btn-row">
           <button type="submit" name="action" value="accept" class="btn btn-allow">許可する</button>
           <button type="submit" name="action" value="deny" class="btn btn-deny">拒否する</button>
         </div>
       </form>
-      <div class="footer stagger s3">Sienne IDP &bull; セキュアな認証</div>
-    </div>
+
+      <div class="footer">Sienne IDP / Consent Boundary</div>
+    </section>
   </main>
 </body>
 </html>

@@ -3,260 +3,512 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ログイン — Sienne IDP</title>
+  <title>ログイン</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap');
+
     :root {
-      --bg-cream: #fbfaf8;
-      --glass-bg: rgba(255, 255, 255, 0.7);
-      --glass-border: rgba(0, 0, 0, 0.06);
-      --glass-shadow: 0 10px 40px rgba(0, 0, 0, 0.04);
-      --accent-emerald: #059669;
-      --text-main: #0f172a;
-      --text-muted: #64748b;
-      --input-bg: #ffffff;
-      --danger: #dc2626;
-      --success: #16a34a;
+      --bg: #f4efe6;
+      --bg-panel: rgba(255, 252, 247, 0.84);
+      --line: rgba(71, 57, 33, 0.12);
+      --line-strong: rgba(71, 57, 33, 0.22);
+      --text: #1c1a17;
+      --muted: #6d655a;
+      --accent: #0f766e;
+      --accent-strong: #115e59;
+      --accent-soft: rgba(15, 118, 110, 0.12);
+      --warn-bg: #fff1f1;
+      --warn-text: #b42318;
+      --ok-bg: #edfdf4;
+      --ok-text: #166534;
+      --shadow: 0 28px 90px rgba(39, 31, 18, 0.14);
+      --radius-xl: 30px;
+      --radius-lg: 18px;
+      --radius-md: 14px;
     }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    * { box-sizing: border-box; }
+
+    html, body { margin: 0; min-height: 100%; }
 
     body {
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: 'Inter', -apple-system, sans-serif;
-      background: var(--bg-cream);
-      overflow: hidden;
-      color: var(--text-main);
+      font-family: "Noto Sans JP", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(234, 179, 8, 0.16), transparent 32%),
+        radial-gradient(circle at bottom right, rgba(15, 118, 110, 0.20), transparent 30%),
+        linear-gradient(135deg, #f7f1e7 0%, #f4efe6 45%, #efe7da 100%);
+      display: grid;
+      place-items: center;
+      padding: 24px;
     }
 
-    /* Soft Mesh Background */
-    .mesh-background {
+    .noise,
+    .noise::before,
+    .noise::after {
       position: fixed;
-      top: 0; left: 0; width: 100%; height: 100%;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .noise {
+      background-image:
+        linear-gradient(rgba(255,255,255,0.07) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
+      background-size: 26px 26px;
+      opacity: 0.3;
+    }
+
+    .noise::before,
+    .noise::after {
+      content: "";
       z-index: -1;
-      background: var(--bg-cream);
-      background-image: 
-        radial-gradient(at 0% 0%, #fff 0px, transparent 50%),
-        radial-gradient(at 100% 0%, #f1efe9 0px, transparent 50%),
-        radial-gradient(at 100% 100%, #ffffff 0px, transparent 50%),
-        radial-gradient(at 0% 100%, #ece9e2 0px, transparent 50%);
+    }
+
+    .noise::before {
+      background: radial-gradient(circle at 20% 20%, rgba(255,255,255,0.55), transparent 26%);
+      filter: blur(28px);
+      animation: drift 16s ease-in-out infinite alternate;
+    }
+
+    .noise::after {
+      background: radial-gradient(circle at 75% 78%, rgba(15,118,110,0.16), transparent 28%);
       filter: blur(40px);
-      animation: mesh-drift 15s ease-in-out infinite alternate;
+      animation: drift 22s ease-in-out infinite alternate-reverse;
     }
 
-    @keyframes mesh-drift {
-      0% { transform: scale(1); }
-      100% { transform: scale(1.1); }
+    @keyframes drift {
+      from { transform: translate3d(-2%, -1%, 0) scale(1); }
+      to { transform: translate3d(2%, 2%, 0) scale(1.08); }
     }
 
-    .container {
-      width: 100%;
-      max-width: 440px;
-      padding: 20px;
+    .layout {
+      width: min(100%, 1120px);
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(360px, 460px);
+      gap: 28px;
+      align-items: stretch;
     }
 
-    .card {
-      background: var(--glass-bg);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid var(--glass-border);
-      border-radius: 28px;
-      padding: 48px 40px;
-      box-shadow: var(--glass-shadow);
+    .hero,
+    .panel {
+      border: 1px solid var(--line);
+      background: var(--bg-panel);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      box-shadow: var(--shadow);
+      border-radius: var(--radius-xl);
+      overflow: hidden;
       opacity: 0;
-      transform: translateY(30px);
-      animation: card-enter 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      transform: translateY(18px);
+      animation: enter 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
     }
 
-    @keyframes card-enter {
-      to { opacity: 1; transform: translateY(0); }
+    .hero {
+      position: relative;
+      padding: 40px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 660px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.66), rgba(255,248,238,0.76)),
+        linear-gradient(135deg, rgba(15,118,110,0.08), rgba(234,179,8,0.08));
     }
 
-    .header {
-      text-align: center;
-      margin-bottom: 32px;
+    .hero::after {
+      content: "";
+      position: absolute;
+      right: -80px;
+      bottom: -80px;
+      width: 240px;
+      height: 240px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(15,118,110,0.24), transparent 70%);
+      filter: blur(12px);
     }
 
-    .shield-icon {
-      width: 56px;
-      height: 56px;
-      margin: 0 auto 16px;
-      color: var(--accent-emerald);
-      filter: drop-shadow(0 4px 10px rgba(5, 150, 105, 0.15));
-    }
+    .hero-top,
+    .hero-bottom,
+    .panel-inner { position: relative; z-index: 1; }
 
-    h1 {
-      font-size: 28px;
+    .eyebrow,
+    .meta-label,
+    label {
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      font-size: 11px;
       font-weight: 700;
-      letter-spacing: -0.03em;
-      margin-bottom: 8px;
-      color: #1e293b;
+      color: var(--muted);
     }
 
-    .subtitle {
-      color: var(--text-muted);
+    .brand-mark {
+      width: 68px;
+      height: 68px;
+      border-radius: 22px;
+      display: grid;
+      place-items: center;
+      margin-bottom: 24px;
+      color: var(--accent);
+      background: rgba(255,255,255,0.84);
+      border: 1px solid rgba(15,118,110,0.16);
+      box-shadow: 0 10px 28px rgba(15,118,110,0.12);
+    }
+
+    h1, h2 {
+      margin: 0;
+      font-family: "Space Grotesk", sans-serif;
+      letter-spacing: -0.04em;
+    }
+
+    .hero h1 {
+      font-size: clamp(42px, 6vw, 72px);
+      line-height: 0.94;
+      max-width: 9ch;
+      margin-top: 18px;
+    }
+
+    .hero-copy {
+      margin: 18px 0 0;
+      max-width: 44ch;
+      font-size: 15px;
+      line-height: 1.8;
+      color: #4f493f;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .meta-card {
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.58);
+      padding: 16px;
+      min-height: 108px;
+    }
+
+    .meta-value {
+      margin-top: 10px;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 23px;
+      font-weight: 700;
+      line-height: 1.05;
+    }
+
+    .meta-copy {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .panel {
+      animation-delay: 0.08s;
+    }
+
+    .panel-inner {
+      padding: 34px 32px 28px;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .panel-header {
+      margin-bottom: 26px;
+    }
+
+    .panel-header h2 {
+      font-size: 34px;
+      margin-top: 10px;
+    }
+
+    .panel-subtitle {
+      margin: 10px 0 0;
+      color: var(--muted);
       font-size: 14px;
+      line-height: 1.7;
     }
 
-    .form-group { margin-bottom: 20px; }
+    .banner {
+      margin-bottom: 18px;
+      padding: 14px 16px;
+      border-radius: var(--radius-lg);
+      border: 1px solid transparent;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .banner-error {
+      background: var(--warn-bg);
+      color: var(--warn-text);
+      border-color: rgba(180, 35, 24, 0.16);
+    }
+
+    .banner-success {
+      background: var(--ok-bg);
+      color: var(--ok-text);
+      border-color: rgba(22, 101, 52, 0.16);
+    }
+
+    .form-group {
+      margin-bottom: 18px;
+    }
 
     label {
       display: block;
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: var(--text-muted);
-      margin-bottom: 6px;
-      margin-left: 4px;
+      margin: 0 0 8px 2px;
+    }
+
+    .input-shell {
+      position: relative;
     }
 
     input[type="text"],
     input[type="password"] {
       width: 100%;
-      background: var(--input-bg);
-      border: 1px solid #e2e8f0;
-      border-radius: 14px;
-      padding: 14px 16px;
-      color: var(--text-main);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      padding: 16px 18px;
+      background: rgba(255,255,255,0.92);
+      color: var(--text);
       font-size: 15px;
       outline: none;
-      transition: all 0.2s ease;
+      transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
     }
+
+    input::placeholder { color: #938777; }
 
     input:focus {
-      border-color: var(--accent-emerald);
-      box-shadow: 0 0 0 4px rgba(5, 150, 105, 0.08);
+      border-color: rgba(15,118,110,0.58);
+      box-shadow: 0 0 0 4px rgba(15,118,110,0.10);
+      transform: translateY(-1px);
     }
 
-    .btn-submit {
+    .stack {
+      display: grid;
+      gap: 14px;
+    }
+
+    .btn {
       width: 100%;
-      background: var(--accent-emerald);
-      color: white;
-      border: none;
-      border-radius: 14px;
-      padding: 16px;
-      font-size: 16px;
-      font-weight: 600;
+      border: 0;
+      border-radius: 999px;
+      padding: 15px 18px;
+      font-size: 15px;
+      font-weight: 700;
       cursor: pointer;
-      transition: all 0.2s ease;
-      margin-top: 12px;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
     }
 
-    .btn-submit:hover {
-      filter: brightness(1.05);
-      transform: scale(1.01);
-      box-shadow: 0 10px 20px rgba(5, 150, 105, 0.2);
+    .btn:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.01);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
+      color: #fff;
+      box-shadow: 0 14px 30px rgba(15,118,110,0.24);
+    }
+
+    .btn-secondary {
+      background: rgba(255,255,255,0.76);
+      color: var(--text);
+      border: 1px solid var(--line-strong);
     }
 
     .divider {
-      display: flex;
-      align-items: center;
-      margin: 24px 0;
-      color: var(--text-muted);
-      font-size: 11px;
-    }
-
-    .divider::before, .divider::after {
-      content: "";
-      flex: 1;
-      height: 1px;
-      background: #e2e8f0;
-    }
-    .divider span { padding: 0 16px; }
-
-    .btn-secondary {
-      width: 100%;
-      background: #f8fafc;
-      color: var(--text-main);
-      border: 1px solid #e2e8f0;
-      border-radius: 14px;
-      padding: 14px;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      transition: all 0.2s ease;
-      text-decoration: none;
-    }
-
-    .banner {
-      padding: 12px 16px;
-      border-radius: 14px;
-      font-size: 13px;
-      margin-bottom: 24px;
-      display: flex;
-      align-items: center;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
       gap: 12px;
+      align-items: center;
+      margin: 22px 0 18px;
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
     }
 
-    .banner-error { background: #fef2f2; border: 1px solid #fee2e2; color: var(--danger); }
-    .banner-success { background: #f0fdf4; border: 1px solid #dcfce7; color: var(--success); }
+    .divider::before,
+    .divider::after {
+      content: "";
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(71,57,33,0.18), transparent);
+    }
 
-    .footer { text-align: center; margin-top: 40px; color: var(--text-muted); font-size: 11px; }
+    .notes {
+      margin-top: auto;
+      padding-top: 22px;
+      display: grid;
+      gap: 10px;
+    }
 
-    .stagger { opacity: 0; transform: translateY(10px); animation: stagger-in 0.5s ease-out forwards; }
-    @keyframes stagger-in { to { opacity: 1; transform: translateY(0); } }
-    .s1 { animation-delay: 0.3s; } .s2 { animation-delay: 0.4s; } .s3 { animation-delay: 0.5s; } .s4 { animation-delay: 0.6s; }
+    .note-item {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.7;
+    }
+
+    .note-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-top: 7px;
+      flex: 0 0 auto;
+      background: linear-gradient(135deg, #d97706, var(--accent));
+    }
+
+    .footer {
+      margin-top: 22px;
+      font-size: 11px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    @keyframes enter {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (max-width: 960px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .hero {
+        min-height: auto;
+        padding: 28px;
+      }
+
+      .hero-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .panel-inner {
+        padding: 28px 22px 24px;
+      }
+    }
+
+    @media (max-width: 520px) {
+      body { padding: 14px; }
+      .hero,
+      .panel { border-radius: 24px; }
+      .hero h1 { font-size: 40px; }
+      .panel-header h2 { font-size: 28px; }
+    }
   </style>
 </head>
 <body>
-  <div class="mesh-background"></div>
-  <main class="container">
-    <div class="card">
-      <div class="header">
-        <div class="shield-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+  <div class="noise"></div>
+  <main class="layout">
+    <section class="hero" aria-label="認証案内">
+      <div class="hero-top">
+        <div class="brand-mark" aria-hidden="true">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            <path d="M9.5 12.5l1.7 1.7 3.8-4.2"></path>
           </svg>
         </div>
-        <h1>ログイン</h1>
-        <p class="subtitle">Sienne 認証サービスへようこそ</p>
+        <div class="eyebrow">Sienne Identity Control Plane</div>
+        <h1>静かに速く、正しく認証する。</h1>
+        <p class="hero-copy">
+          フロントは装飾ではなく誘導面だ。誤入力、CSRF、遷移先の不整合をここで減らす。
+          サインイン後はそのまま認可フローへ復帰する。
+        </p>
       </div>
 
-      {{if .Error}}
-      <div class="banner banner-error stagger s1">
-        <span>{{.Error}}</span>
+      <div class="hero-bottom">
+        <div class="hero-grid">
+          <div class="meta-card">
+            <div class="meta-label">Return Path</div>
+            <div class="meta-value">{{if .ReturnTo}}Bound{{else}}Direct{{end}}</div>
+            <div class="meta-copy">`return_to` を hidden field に固定し、認証完了後の再遷移を維持する。</div>
+          </div>
+          <div class="meta-card">
+            <div class="meta-label">Validation</div>
+            <div class="meta-value">CSRF</div>
+            <div class="meta-copy">フォーム送信ごとにトークンを保持し、ブラウザ文脈を継続的に検証する。</div>
+          </div>
+          <div class="meta-card">
+            <div class="meta-label">Mode</div>
+            <div class="meta-value">{{if .FederatedOIDCEnabled}}Hybrid{{else}}Local{{end}}</div>
+            <div class="meta-copy">ローカル認証と federated OIDC を同一面で切り替えられる。</div>
+          </div>
+        </div>
       </div>
-      {{end}}
+    </section>
 
-      <form method="post">
-        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-        <input type="hidden" name="return_to" value="{{.ReturnTo}}">
-        <div class="form-group stagger s2">
-          <label for="username">ユーザー名</label>
-          <input type="text" id="username" name="username" value="{{.Username}}" placeholder="username" required>
+    <section class="panel" aria-labelledby="login-heading">
+      <div class="panel-inner">
+        <div class="panel-header">
+          <div class="eyebrow">Authentication</div>
+          <h2 id="login-heading">ログイン</h2>
+          <p class="panel-subtitle">ユーザー名とパスワードを入力してセッションを開始します。</p>
         </div>
-        <div class="form-group stagger s3">
-          <label for="password">パスワード</label>
-          <input type="password" id="password" name="password" placeholder="••••••••" required>
-        </div>
-        <div class="stagger s4">
-          <button type="submit" class="btn-submit">サインイン</button>
-        </div>
-      </form>
 
-      {{if .FederatedOIDCEnabled}}
-      <div class="divider stagger s4"><span>または</span></div>
-      <div class="stagger s4">
+        {{if .Error}}
+        <div class="banner banner-error">{{.Error}}</div>
+        {{end}}
+
+        {{if .Success}}
+        <div class="banner banner-success">認証に成功しました。次の処理へ遷移します。</div>
+        {{end}}
+
+        <form method="post">
+          <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+          <input type="hidden" name="return_to" value="{{.ReturnTo}}">
+
+          <div class="form-group">
+            <label for="username">User Name</label>
+            <div class="input-shell">
+              <input type="text" id="username" name="username" value="{{.Username}}" placeholder="username" autocomplete="username" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="password">Password</label>
+            <div class="input-shell">
+              <input type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password" required>
+            </div>
+          </div>
+
+          <div class="stack">
+            <button type="submit" class="btn btn-primary">サインイン</button>
+          </div>
+        </form>
+
+        {{if .FederatedOIDCEnabled}}
+        <div class="divider"><span>Orchestrated Path</span></div>
         <form method="post">
           <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
           <input type="hidden" name="return_to" value="{{.ReturnTo}}">
           <input type="hidden" name="method" value="federated_oidc">
-          <button type="submit" class="btn-secondary">OpenID Connect でサインイン</button>
+          <button type="submit" class="btn btn-secondary">OpenID Connect でログイン</button>
         </form>
-      </div>
-      {{end}}
+        {{end}}
 
-      <div class="footer stagger s4">&copy; 2026 Sienne Identity System</div>
-    </div>
+        <div class="notes">
+          <div class="note-item">
+            <span class="note-dot" aria-hidden="true"></span>
+            <span>この画面は認証後に元の認可フローへ戻る前提で設計している。`return_to` はそのための経路情報だ。</span>
+          </div>
+          <div class="note-item">
+            <span class="note-dot" aria-hidden="true"></span>
+            <span>失敗時はユーザー名だけ保持し、秘密情報は DOM に戻さない。不要なメモリ複製を増やさないためでもある。</span>
+          </div>
+        </div>
+
+        <div class="footer">Sienne IDP / Session Entry</div>
+      </div>
+    </section>
   </main>
 </body>
 </html>
