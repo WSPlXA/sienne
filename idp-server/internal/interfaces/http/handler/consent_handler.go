@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 
@@ -39,15 +40,18 @@ func (h *ConsentHandler) Handle(c *gin.Context) {
 			SessionID: sessionID,
 		})
 		if err != nil {
+			log.Printf("consent prepare_failed ip=%s session_present=%t return_to=%q err=%v", c.ClientIP(), sessionID != "", returnTo, err)
 			h.writeError(c, err, returnTo)
 			return
 		}
 
 		csrfToken, err := ensureCSRFToken(c)
 		if err != nil {
+			log.Printf("consent csrf_issue_failed ip=%s session_present=%t err=%v", c.ClientIP(), sessionID != "", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate csrf token"})
 			return
 		}
+		log.Printf("consent prepare_succeeded ip=%s session_present=%t client_id=%q scopes=%d", c.ClientIP(), sessionID != "", result.ClientID, len(result.Scopes))
 
 		if wantsHTML(c.GetHeader("Accept")) {
 			h.renderConsentPage(c, http.StatusOK, consentPageData{
@@ -74,10 +78,12 @@ func (h *ConsentHandler) Handle(c *gin.Context) {
 
 	var req dto.ConsentDecisionRequest
 	if err := c.ShouldBind(&req); err != nil {
+		log.Printf("consent bind_failed ip=%s session_present=%t err=%v", c.ClientIP(), sessionID != "", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid consent request"})
 		return
 	}
 	if err := validateCSRFToken(c, req.CSRFToken); err != nil {
+		log.Printf("consent csrf_validation_failed ip=%s session_present=%t action=%q return_to=%q", c.ClientIP(), sessionID != "", req.Action, req.ReturnTo)
 		h.writeCSRFFailure(c, req.ReturnTo, sessionID)
 		return
 	}
@@ -88,10 +94,12 @@ func (h *ConsentHandler) Handle(c *gin.Context) {
 		Action:    req.Action,
 	})
 	if err != nil {
+		log.Printf("consent decide_failed ip=%s session_present=%t action=%q return_to=%q err=%v", c.ClientIP(), sessionID != "", req.Action, req.ReturnTo, err)
 		h.writeError(c, err, req.ReturnTo)
 		return
 	}
 
+	log.Printf("consent decide_succeeded ip=%s session_present=%t action=%q redirect_uri=%q", c.ClientIP(), sessionID != "", req.Action, result.RedirectURI)
 	c.Redirect(http.StatusFound, result.RedirectURI)
 }
 
@@ -104,6 +112,7 @@ func (h *ConsentHandler) renderConsentPage(c *gin.Context, status int, data cons
 	if data.CSRFToken == "" {
 		csrfToken, err := ensureCSRFToken(c)
 		if err != nil {
+			log.Printf("consent render_failed ip=%s err=%v", c.ClientIP(), err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate csrf token"})
 			return
 		}

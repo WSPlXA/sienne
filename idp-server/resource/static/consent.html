@@ -283,14 +283,12 @@
     <section class="summary" aria-label="認可概要">
       <div class="eyebrow">Authorization Review</div>
       <h1>アクセス許可の確認</h1>
-      <p class="lead">
-        同意画面は単なる Yes/No ではない。誰が、どの範囲を、どの遷移先へ要求しているかを短い視線移動で判断できる必要がある。
-      </p>
+      <p class="lead"></p>
 
       <div class="app-badge">
         <div class="mini-label">Client Application</div>
         <div class="app-name">{{.ClientName}}</div>
-        <p class="subtitle">このアプリケーションがあなたのアカウント情報と認可済みスコープへのアクセスを要求しています。</p>
+        <p class="subtitle"></p>
       </div>
 
       <div class="scope-grid">
@@ -302,7 +300,7 @@
             </svg>
           </div>
           <div class="scope-title">{{.}}</div>
-          <div class="scope-copy">要求スコープ。認可後はこの権限名が認可コード交換以降の判定に使われる。</div>
+          <div class="scope-copy"></div>
         </article>
         {{else}}
         <article class="scope-card">
@@ -314,7 +312,7 @@
             </svg>
           </div>
           <div class="scope-title">No Scope Details</div>
-          <div class="scope-copy">要求スコープ情報が空です。通常系なら upstream request を確認するべき状態だ。</div>
+          <div class="scope-copy"></div>
         </article>
         {{end}}
       </div>
@@ -324,7 +322,7 @@
       <div class="panel-top">
         <div class="eyebrow">Decision Gate</div>
         <h2 id="consent-heading">この要求を許可しますか</h2>
-        <p class="subtitle">許可すると `return_to` に保持された認可フローへ復帰し、拒否すると deny として終了します。</p>
+        <p class="subtitle"></p>
       </div>
 
       {{if .Error}}
@@ -341,7 +339,7 @@
             </svg>
             <div>
               <strong>許可</strong>
-              <span>セッションと要求内容を突き合わせたうえで、認可結果を持ってクライアントへ戻る。</span>
+              <span></span>
             </div>
           </li>
           <li class="decision-item">
@@ -351,7 +349,7 @@
             </svg>
             <div>
               <strong>拒否</strong>
-              <span>認可は発行されず、クライアントは denial として処理を受ける。</span>
+              <span></span>
             </div>
           </li>
         </ul>
@@ -366,7 +364,7 @@
         </div>
       </form>
 
-      <div class="footer">Sienne IDP / Consent Boundary</div>
+      <div class="footer">Sienne IDP</div>
     </section>
   </main>
 </body>

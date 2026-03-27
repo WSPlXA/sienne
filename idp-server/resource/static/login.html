@@ -419,10 +419,7 @@
         </div>
         <div class="eyebrow">Sienne Identity Control Plane</div>
         <h1>静かに速く、正しく認証する。</h1>
-        <p class="hero-copy">
-          フロントは装飾ではなく誘導面だ。誤入力、CSRF、遷移先の不整合をここで減らす。
-          サインイン後はそのまま認可フローへ復帰する。
-        </p>
+        <p class="hero-copy">Sienne IDP</p>
       </div>
 
       <div class="hero-bottom">
@@ -430,17 +427,17 @@
           <div class="meta-card">
             <div class="meta-label">Return Path</div>
             <div class="meta-value">{{if .ReturnTo}}Bound{{else}}Direct{{end}}</div>
-            <div class="meta-copy">`return_to` を hidden field に固定し、認証完了後の再遷移を維持する。</div>
+            <div class="meta-copy"></div>
           </div>
           <div class="meta-card">
             <div class="meta-label">Validation</div>
             <div class="meta-value">CSRF</div>
-            <div class="meta-copy">フォーム送信ごとにトークンを保持し、ブラウザ文脈を継続的に検証する。</div>
+            <div class="meta-copy"></div>
           </div>
           <div class="meta-card">
             <div class="meta-label">Mode</div>
             <div class="meta-value">{{if .FederatedOIDCEnabled}}Hybrid{{else}}Local{{end}}</div>
-            <div class="meta-copy">ローカル認証と federated OIDC を同一面で切り替えられる。</div>
+            <div class="meta-copy"></div>
           </div>
         </div>
       </div>
@@ -451,7 +448,7 @@
         <div class="panel-header">
           <div class="eyebrow">Authentication</div>
           <h2 id="login-heading">ログイン</h2>
-          <p class="panel-subtitle">ユーザー名とパスワードを入力してセッションを開始します。</p>
+          <p class="panel-subtitle"></p>
         </div>
 
         {{if .Error}}
@@ -486,7 +483,7 @@
         </form>
 
         {{if .FederatedOIDCEnabled}}
-        <div class="divider"><span>Orchestrated Path</span></div>
+        <div class="divider"><span>OIDC</span></div>
         <form method="post">
           <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
           <input type="hidden" name="return_to" value="{{.ReturnTo}}">
@@ -498,15 +495,15 @@
         <div class="notes">
           <div class="note-item">
             <span class="note-dot" aria-hidden="true"></span>
-            <span>この画面は認証後に元の認可フローへ戻る前提で設計している。`return_to` はそのための経路情報だ。</span>
+            <span></span>
           </div>
           <div class="note-item">
             <span class="note-dot" aria-hidden="true"></span>
-            <span>失敗時はユーザー名だけ保持し、秘密情報は DOM に戻さない。不要なメモリ複製を増やさないためでもある。</span>
+            <span></span>
           </div>
         </div>
 
-        <div class="footer">Sienne IDP / Session Entry</div>
+        <div class="footer">Sienne IDP</div>
       </div>
     </section>
   </main>

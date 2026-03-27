@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"time"
 
@@ -45,6 +46,7 @@ func (h *LoginHandler) Handle(c *gin.Context) {
 		}
 		validatedReturnTo, err := validateLocalRedirectTarget(req.ReturnTo)
 		if err != nil {
+			log.Printf("login invalid_return_to method=GET ip=%s return_to=%q", c.ClientIP(), req.ReturnTo)
 			h.writeInvalidReturnTo(c)
 			return
 		}
@@ -56,6 +58,7 @@ func (h *LoginHandler) Handle(c *gin.Context) {
 
 		csrfToken, err := ensureCSRFToken(c)
 		if err != nil {
+			log.Printf("login csrf_issue_failed method=GET ip=%s err=%v", c.ClientIP(), err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate csrf token"})
 			return
 		}
@@ -82,6 +85,7 @@ func (h *LoginHandler) Handle(c *gin.Context) {
 
 	var req dto.LoginRequest
 	if err := c.ShouldBind(&req); err != nil {
+		log.Printf("login bind_failed method=%s ip=%s err=%v", c.Request.Method, c.ClientIP(), err)
 		if wantsHTML(c.GetHeader("Accept")) {
 			h.renderLoginPage(c, http.StatusBadRequest, loginPageData{
 				Username:             c.PostForm("username"),
@@ -97,11 +101,13 @@ func (h *LoginHandler) Handle(c *gin.Context) {
 
 	validatedReturnTo, err := validateLocalRedirectTarget(req.ReturnTo)
 	if err != nil {
+		log.Printf("login invalid_return_to method=POST ip=%s username=%q return_to=%q", c.ClientIP(), req.Username, req.ReturnTo)
 		h.writeInvalidReturnTo(c)
 		return
 	}
 	req.ReturnTo = validatedReturnTo
 	if err := validateCSRFToken(c, req.CSRFToken); err != nil {
+		log.Printf("login csrf_validation_failed method=POST ip=%s username=%q", c.ClientIP(), req.Username)
 		h.writeInvalidCSRF(c, req)
 		return
 	}
@@ -123,6 +129,7 @@ func (h *LoginHandler) handleAuthenticate(c *gin.Context, req dto.LoginRequest) 
 		UserAgent:   c.GetHeader("User-Agent"),
 	})
 	if err != nil {
+		log.Printf("login authenticate_failed method=%q ip=%s username=%q err=%v", req.Method, c.ClientIP(), req.Username, err)
 		status := http.StatusUnauthorized
 		switch {
 		case errors.Is(err, authn.ErrUnsupportedMethod):
@@ -154,6 +161,7 @@ func (h *LoginHandler) handleAuthenticate(c *gin.Context, req dto.LoginRequest) 
 	}
 
 	if result != nil && result.SessionID == "" && result.RedirectURI != "" {
+		log.Printf("login federated_redirect ip=%s redirect_uri=%q", c.ClientIP(), result.RedirectURI)
 		c.Redirect(http.StatusFound, result.RedirectURI)
 		return
 	}
@@ -164,15 +172,18 @@ func (h *LoginHandler) handleAuthenticate(c *gin.Context, req dto.LoginRequest) 
 	}
 	redirectURI, err = validateLocalRedirectTarget(redirectURI)
 	if err != nil {
+		log.Printf("login invalid_redirect_after_auth ip=%s username=%q redirect_uri=%q", c.ClientIP(), req.Username, redirectURI)
 		h.writeInvalidReturnTo(c)
 		return
 	}
 	if _, err := ensureCSRFToken(c); err != nil {
+		log.Printf("login csrf_issue_failed method=POST ip=%s username=%q err=%v", c.ClientIP(), req.Username, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate csrf token"})
 		return
 	}
 	maxAge := int(time.Until(result.ExpiresAt).Seconds())
 	c.SetCookie("idp_session", result.SessionID, maxAge, "/", "", false, true)
+	log.Printf("login authenticate_succeeded method=%q ip=%s username=%q user_id=%d redirect_uri=%q", req.Method, c.ClientIP(), req.Username, result.UserID, redirectURI)
 	if redirectURI != "" {
 		c.Redirect(http.StatusFound, redirectURI)
 		return
@@ -242,6 +253,7 @@ func (h *LoginHandler) renderLoginPage(c *gin.Context, status int, data loginPag
 	if data.CSRFToken == "" {
 		csrfToken, err := ensureCSRFToken(c)
 		if err != nil {
+			log.Printf("login render_failed ip=%s err=%v", c.ClientIP(), err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate csrf token"})
 			return
 		}

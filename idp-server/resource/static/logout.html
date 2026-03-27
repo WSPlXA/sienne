@@ -208,26 +208,23 @@
     <section class="info" aria-label="ログアウト概要">
       <div class="eyebrow">Session Exit</div>
       <h1>セッションを安全に閉じる。</h1>
-      <p class="copy">
-        ログアウトは単に cookie を消すだけではない。現在のブラウザ文脈を終わらせ、
-        必要なら次の遷移先へ制御を戻す境界処理だ。
-      </p>
+      <p class="copy">Sienne IDP</p>
 
       <ul class="signal-list">
         <li class="signal-item">
           <div class="label">Action</div>
           <div class="signal-title">Cookie Clear</div>
-          <div class="signal-copy">`idp_session` を破棄し、以後のリクエストで認証状態を継続させない。</div>
+          <div class="signal-copy"></div>
         </li>
         <li class="signal-item">
           <div class="label">Guard</div>
           <div class="signal-title">CSRF Bound</div>
-          <div class="signal-copy">破壊的操作なので hidden token を使ってブラウザ起点の送信かを検証する。</div>
+          <div class="signal-copy"></div>
         </li>
         <li class="signal-item">
           <div class="label">Return</div>
           <div class="signal-title">{{if .ReturnTo}}Redirect{{else}}Login Fallback{{end}}</div>
-          <div class="signal-copy">指定があれば local redirect へ、なければログイン導線へ戻す。</div>
+          <div class="signal-copy"></div>
         </li>
       </ul>
     </section>
@@ -243,7 +240,7 @@
 
       <div class="eyebrow">Controlled Logout</div>
       <h2 id="logout-heading">ログアウト</h2>
-      <p class="subtitle">現在のサインイン状態を終了します。必要であれば完了後に指定された導線へ戻ります。</p>
+      <p class="subtitle"></p>
 
       <div class="panel-block">
         <div class="label">Return To</div>
@@ -256,7 +253,7 @@
         <button type="submit" class="btn">ログアウトを実行</button>
       </form>
 
-      <div class="footer">Sienne IDP / Session Shutdown</div>
+      <div class="footer">Sienne IDP</div>
     </section>
   </main>
 </body>

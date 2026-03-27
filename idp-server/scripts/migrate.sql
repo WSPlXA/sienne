@@ -506,9 +506,7 @@ INSERT INTO
         redirect_uri,
         redirect_uri_sha256
     )
-SELECT id, 'http://localhost:8081/', SHA2(
-        'http://localhost:8081/', 256
-    )
+SELECT id, 'http://localhost:8081/', SHA2('http://localhost:8081/', 256)
 FROM oauth_clients
 WHERE
     client_id = 'web-client';
@@ -519,8 +517,8 @@ INSERT INTO
         redirect_uri,
         redirect_uri_sha256
     )
-SELECT id, 'http://127.0.0.1:8081/', SHA2(
-        'http://127.0.0.1:8081/', 256
+SELECT id, 'http://localhost:8081/logout/callback', SHA2(
+        'http://localhost:8081/logout/callback', 256
     )
 FROM oauth_clients
 WHERE
