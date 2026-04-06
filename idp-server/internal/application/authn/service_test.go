@@ -247,6 +247,7 @@ func TestAuthenticatePasswordRejectsRateLimitedIPBeforeLookup(t *testing.T) {
 		nil,
 		8*time.Hour,
 		5*time.Minute,
+		false,
 		RateLimitPolicy{FailureWindow: 15 * time.Minute, MaxFailuresPerIP: 20},
 	)
 
@@ -297,6 +298,7 @@ func TestAuthenticatePasswordSuccessfulPathUsesSingleUserLookup(t *testing.T) {
 		nil,
 		8*time.Hour,
 		5*time.Minute,
+		false,
 		DefaultRateLimitPolicy(),
 	)
 	service.now = func() time.Time { return now }
@@ -361,6 +363,7 @@ func TestAuthenticatePasswordFailureLocksUserAtThreshold(t *testing.T) {
 		nil,
 		8*time.Hour,
 		5*time.Minute,
+		false,
 		RateLimitPolicy{
 			FailureWindow:      15 * time.Minute,
 			MaxFailuresPerIP:   20,
@@ -395,5 +398,65 @@ func TestAuthenticatePasswordFailureLocksUserAtThreshold(t *testing.T) {
 	}
 	if rateLimits.lastLockedUserTTL != 30*time.Minute {
 		t.Fatalf("locked ttl = %s, want 30m", rateLimits.lastLockedUserTTL)
+	}
+}
+
+func TestAuthenticatePasswordRequiresEnrollmentWhenForcedAndNoTOTP(t *testing.T) {
+	now := time.Date(2026, 4, 6, 9, 0, 0, 0, time.UTC)
+	user := &userdomain.Model{
+		ID:           42,
+		UserUUID:     "user-42",
+		Username:     "alice",
+		Email:        "alice@example.com",
+		DisplayName:  "Alice",
+		PasswordHash: "hashed:secret",
+		Status:       "active",
+	}
+	userRepo := &stubAuthnUserRepository{
+		usersByUsername: map[string]*userdomain.Model{"alice": user},
+		usersByUUID:     map[string]*userdomain.Model{"user-42": user},
+		usersByEmail:    map[string]*userdomain.Model{"alice@example.com": user},
+	}
+	sessionRepo := &stubAuthnSessionRepository{}
+	sessionCache := &stubAuthnSessionCache{}
+	rateLimits := &stubAuthnRateLimitRepository{
+		userFailures: map[string]int64{},
+		ipFailures:   map[string]int64{},
+		lockedUsers:  map[string]bool{},
+	}
+	service := NewService(
+		userRepo,
+		sessionRepo,
+		sessionCache,
+		rateLimits,
+		nil,
+		pluginregistry.NewAuthnRegistry(&stubPasswordAuthnMethod{users: userRepo, passwords: &stubAuthnPasswordVerifier{}}),
+		nil,
+		nil,
+		8*time.Hour,
+		5*time.Minute,
+		true,
+		DefaultRateLimitPolicy(),
+	)
+	service.now = func() time.Time { return now }
+
+	result, err := service.Authenticate(context.Background(), AuthenticateInput{
+		Username:  "alice",
+		Password:  "secret",
+		IPAddress: "203.0.113.10",
+		UserAgent: "test-agent",
+		ReturnTo:  "/oauth2/authorize?client_id=demo",
+	})
+	if !errors.Is(err, ErrMFAEnrollmentRequired) {
+		t.Fatalf("Authenticate() error = %v, want %v", err, ErrMFAEnrollmentRequired)
+	}
+	if result == nil || result.SessionID == "" {
+		t.Fatalf("result session = %#v, want non-empty session", result)
+	}
+	if !result.MFAEnrollmentRequired {
+		t.Fatalf("MFAEnrollmentRequired = %v, want true", result.MFAEnrollmentRequired)
+	}
+	if sessionRepo.createCalls != 1 {
+		t.Fatalf("session create calls = %d, want 1", sessionRepo.createCalls)
 	}
 }

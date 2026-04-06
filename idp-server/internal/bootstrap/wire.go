@@ -93,7 +93,7 @@ func Wire() (*App, error) {
 		authnpassword.NewMethod(userRepo, passwordVerifier),
 		authnfederatedoidc.NewMethod(federatedOIDCProvider),
 	)
-	authnService := authn.NewService(userRepo, sessionRepo, sessionCache, rateLimitRepo, mfaCache, authnRegistry, totpRepo, totpProvider, cfg.SessionTTL, 5*time.Minute, authn.RateLimitPolicy{
+	authnService := authn.NewService(userRepo, sessionRepo, sessionCache, rateLimitRepo, mfaCache, authnRegistry, totpRepo, totpProvider, cfg.SessionTTL, 5*time.Minute, cfg.ForceMFAEnrollment, authn.RateLimitPolicy{
 		FailureWindow:      cfg.LoginFailureWindow,
 		MaxFailuresPerIP:   int64(cfg.LoginMaxFailuresPerIP),
 		MaxFailuresPerUser: int64(cfg.LoginMaxFailuresPerUser),
@@ -187,6 +187,7 @@ type config struct {
 	LoginMaxFailuresPerUser       int
 	LoginUserLockThreshold        int
 	LoginUserLockTTL              time.Duration
+	ForceMFAEnrollment            bool
 }
 
 func loadConfigFromEnv() (*config, error) {
@@ -221,6 +222,7 @@ func loadConfigFromEnv() (*config, error) {
 		LoginMaxFailuresPerUser:       getEnvInt("LOGIN_MAX_FAILURES_PER_USER", 5),
 		LoginUserLockThreshold:        getEnvInt("LOGIN_USER_LOCK_THRESHOLD", 5),
 		LoginUserLockTTL:              getEnvDuration("LOGIN_USER_LOCK_TTL", 30*time.Minute),
+		ForceMFAEnrollment:            getEnvBool("FORCE_MFA_ENROLLMENT", true),
 	}
 
 	if cfg.MySQLDSN == "" {
@@ -305,6 +307,18 @@ func getEnvDuration(key string, fallback time.Duration) time.Duration {
 	}
 
 	value, err := time.ParseDuration(raw)
+	if err != nil {
+		return fallback
+	}
+	return value
+}
+
+func getEnvBool(key string, fallback bool) bool {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+	value, err := strconv.ParseBool(raw)
 	if err != nil {
 		return fallback
 	}

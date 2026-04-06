@@ -25,18 +25,19 @@ type Authenticator interface {
 }
 
 type Service struct {
-	sessionRepo  repository.SessionRepository
-	sessionCache cache.SessionCacheRepository
-	rateLimits   cache.RateLimitRepository
-	mfaCache     cache.MFARepository
-	userRepo     repository.UserRepository
-	totpRepo     repository.TOTPRepository
-	registry     *pluginregistry.AuthnRegistry
-	totp        securityport.TOTPProvider
-	sessionTTL   time.Duration
-	mfaTTL       time.Duration
-	ratePolicy   RateLimitPolicy
-	now          func() time.Time
+	sessionRepo        repository.SessionRepository
+	sessionCache       cache.SessionCacheRepository
+	rateLimits         cache.RateLimitRepository
+	mfaCache           cache.MFARepository
+	userRepo           repository.UserRepository
+	totpRepo           repository.TOTPRepository
+	registry           *pluginregistry.AuthnRegistry
+	totp               securityport.TOTPProvider
+	sessionTTL         time.Duration
+	mfaTTL             time.Duration
+	forceMFAEnrollment bool
+	ratePolicy         RateLimitPolicy
+	now                func() time.Time
 }
 
 func NewService(
@@ -50,6 +51,7 @@ func NewService(
 	totp securityport.TOTPProvider,
 	sessionTTL time.Duration,
 	mfaTTL time.Duration,
+	forceMFAEnrollment bool,
 	ratePolicy RateLimitPolicy,
 ) *Service {
 	if ratePolicy.FailureWindow <= 0 && ratePolicy.MaxFailuresPerIP == 0 && ratePolicy.MaxFailuresPerUser == 0 && ratePolicy.UserLockThreshold == 0 && ratePolicy.UserLockTTL == 0 {
@@ -57,17 +59,18 @@ func NewService(
 	}
 
 	return &Service{
-		sessionRepo:  sessionRepo,
-		sessionCache: sessionCache,
-		rateLimits:   rateLimits,
-		mfaCache:     mfaCache,
-		userRepo:     userRepo,
-		totpRepo:     totpRepo,
-		registry:     registry,
-		totp:         totp,
-		sessionTTL:   sessionTTL,
-		mfaTTL:       mfaTTL,
-		ratePolicy:   ratePolicy,
+		sessionRepo:        sessionRepo,
+		sessionCache:       sessionCache,
+		rateLimits:         rateLimits,
+		mfaCache:           mfaCache,
+		userRepo:           userRepo,
+		totpRepo:           totpRepo,
+		registry:           registry,
+		totp:               totp,
+		sessionTTL:         sessionTTL,
+		mfaTTL:             mfaTTL,
+		forceMFAEnrollment: forceMFAEnrollment,
+		ratePolicy:         ratePolicy,
 		now: func() time.Time {
 			return time.Now().UTC()
 		},
@@ -166,6 +169,14 @@ func (s *Service) Authenticate(ctx context.Context, input AuthenticateInput) (*A
 				MFARequired:    true,
 				MFAChallengeID: challengeID,
 			}, ErrMFARequired
+		}
+		if s.forceMFAEnrollment {
+			result, err := s.createSession(ctx, user, methodType, input.IPAddress, input.UserAgent, authnResult.RedirectURI, input.ReturnTo, now)
+			if err != nil {
+				return nil, err
+			}
+			result.MFAEnrollmentRequired = true
+			return result, ErrMFAEnrollmentRequired
 		}
 	}
 

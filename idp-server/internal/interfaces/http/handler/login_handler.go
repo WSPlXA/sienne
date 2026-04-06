@@ -134,6 +134,8 @@ func (h *LoginHandler) handleAuthenticate(c *gin.Context, req dto.LoginRequest) 
 		switch {
 		case errors.Is(err, authn.ErrMFARequired):
 			status = http.StatusUnauthorized
+		case errors.Is(err, authn.ErrMFAEnrollmentRequired):
+			status = http.StatusForbidden
 		case errors.Is(err, authn.ErrUnsupportedMethod):
 			status = http.StatusBadRequest
 		case errors.Is(err, authn.ErrRateLimited):
@@ -148,6 +150,23 @@ func (h *LoginHandler) handleAuthenticate(c *gin.Context, req dto.LoginRequest) 
 			status = http.StatusInternalServerError
 		}
 
+		if errors.Is(err, authn.ErrMFAEnrollmentRequired) && result != nil && result.SessionID != "" {
+			maxAge := int(time.Until(result.ExpiresAt).Seconds())
+			c.SetCookie("idp_session", result.SessionID, maxAge, "/", "", false, true)
+			setupURI := buildMFASetupURI(req.ReturnTo)
+			if wantsHTML(c.GetHeader("Accept")) {
+				c.Redirect(http.StatusFound, setupURI)
+				return
+			}
+			c.JSON(status, gin.H{
+				"error":                   err.Error(),
+				"mfa_enrollment_required": true,
+				"redirect_uri":            setupURI,
+				"return_to":               req.ReturnTo,
+			})
+			return
+		}
+
 		if errors.Is(err, authn.ErrMFARequired) && result != nil && result.MFAChallengeID != "" {
 			c.SetCookie(mfaChallengeCookieName, result.MFAChallengeID, 300, "/", "", false, true)
 			if wantsHTML(c.GetHeader("Accept")) {
@@ -155,11 +174,11 @@ func (h *LoginHandler) handleAuthenticate(c *gin.Context, req dto.LoginRequest) 
 				return
 			}
 			c.JSON(status, gin.H{
-				"error":          err.Error(),
-				"mfa_required":   true,
-				"challenge_id":   result.MFAChallengeID,
-				"redirect_uri":   "/login/totp",
-				"return_to":      req.ReturnTo,
+				"error":        err.Error(),
+				"mfa_required": true,
+				"challenge_id": result.MFAChallengeID,
+				"redirect_uri": "/login/totp",
+				"return_to":    req.ReturnTo,
 			})
 			return
 		}
@@ -220,6 +239,13 @@ func (h *LoginHandler) handleAuthenticate(c *gin.Context, req dto.LoginRequest) 
 		"subject":    result.Subject,
 		"expires_at": result.ExpiresAt,
 	})
+}
+
+func buildMFASetupURI(returnTo string) string {
+	if returnTo == "" {
+		return "/mfa/totp/setup"
+	}
+	return withReturnTo("/mfa/totp/setup", returnTo)
 }
 
 func shouldProcessLoginGET(req dto.LoginRequest) bool {

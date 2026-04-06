@@ -483,6 +483,7 @@
 
           <form method="post">
             <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <input type="hidden" name="return_to" value="{{.ReturnTo}}">
             <div class="form-group">
               <label for="code">Authenticator Code</label>
               <input id="code" name="code" autocomplete="one-time-code" inputmode="numeric" placeholder="123456">

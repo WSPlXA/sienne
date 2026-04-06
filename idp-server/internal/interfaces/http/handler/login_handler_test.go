@@ -105,6 +105,48 @@ func TestLoginHandlerHandlePostSuccessRedirects(t *testing.T) {
 	}
 }
 
+func TestLoginHandlerHandlePostRedirectsToMFASetupWhenEnrollmentRequired(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	service := &stubAuthenticator{
+		result: &authn.AuthenticateResult{
+			SessionID:             "session-enroll-1",
+			UserID:                1,
+			Subject:               "user-123",
+			MFAEnrollmentRequired: true,
+			ExpiresAt:             time.Now().Add(30 * time.Minute),
+		},
+		err: authn.ErrMFAEnrollmentRequired,
+	}
+	router := gin.New()
+	router.POST("/login", NewLoginHandler(service, false).Handle)
+
+	form := url.Values{}
+	form.Set("username", "alice")
+	form.Set("password", "alice123")
+	form.Set("return_to", "/oauth2/authorize?client_id=demo")
+	csrfCookie, csrfToken := mustNewCSRFCookie(t)
+	form.Set("csrf_token", csrfToken)
+
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "text/html")
+	req.AddCookie(csrfCookie)
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusFound {
+		t.Fatalf("status code = %d, want %d", recorder.Code, http.StatusFound)
+	}
+	if got := recorder.Header().Get("Location"); got != "/mfa/totp/setup?return_to=%2Foauth2%2Fauthorize%3Fclient_id%3Ddemo" {
+		t.Fatalf("location = %q, want mfa setup with return_to", got)
+	}
+	if cookie := findCookie(recorder.Result().Cookies(), "idp_session"); cookie == nil || cookie.Value != "session-enroll-1" {
+		t.Fatalf("idp_session cookie = %#v, want session-enroll-1", cookie)
+	}
+}
+
 func TestLoginHandlerHandlePostRejectsMissingCSRFToken(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

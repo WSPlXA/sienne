@@ -14,6 +14,7 @@ servers:
 tags:
   - name: system
   - name: authn
+  - name: mfa
   - name: authz
   - name: oidc
 
@@ -256,7 +257,7 @@ paths:
               schema:
                 type: string
         '302':
-          description: Redirect to `return_to`, `/login`, or upstream OIDC provider
+          description: Redirect to `return_to`, `/login`, `/login/totp`, or upstream OIDC provider
           headers:
             Location:
               schema:
@@ -271,11 +272,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '401':
-          description: Invalid credentials
+          description: Invalid credentials or password accepted but MFA(TOTP) challenge required
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: May set the `idp_mfa_challenge` cookie when MFA challenge is required
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+                  - $ref: '#/components/schemas/LoginMFARequiredResponse'
         '403':
           description: User disabled or invalid CSRF token
           content:
@@ -300,6 +308,234 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+
+  /login/totp:
+    get:
+      tags: [mfa]
+      summary: Render or inspect the MFA TOTP verification step
+      description: |
+        Returns the TOTP verification page (HTML) or JSON payload containing a
+        CSRF token. This endpoint is used after `/login` reports
+        `mfa_required=true` (JSON) or redirects to `/login/totp` (HTML).
+      operationId: getLoginTOTP
+      responses:
+        '200':
+          description: TOTP verification page or JSON metadata
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: May set the `idp_csrf_token` cookie when needed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginTOTPViewResponse'
+            text/html:
+              schema:
+                type: string
+    post:
+      tags: [mfa]
+      summary: Verify login MFA TOTP code and finalize session creation
+      description: |
+        Validates the TOTP code with the challenge stored in the
+        `idp_mfa_challenge` cookie. CSRF token can be supplied in body
+        `csrf_token` or `X-CSRF-Token` header, and must match
+        `idp_csrf_token` cookie.
+      operationId: verifyLoginTOTP
+      parameters:
+        - $ref: '#/components/parameters/XCSRFToken'
+        - $ref: '#/components/parameters/IdpMFAChallengeCookie'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginTOTPRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LoginTOTPRequest'
+      responses:
+        '200':
+          description: TOTP verification succeeded and session created
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: Clears `idp_mfa_challenge` and sets `idp_session`
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+            text/html:
+              schema:
+                type: string
+        '302':
+          description: TOTP verification succeeded and browser redirected to return target
+          headers:
+            Location:
+              schema:
+                type: string
+            Set-Cookie:
+              schema:
+                type: string
+              description: Clears `idp_mfa_challenge` and sets `idp_session`
+        '400':
+          description: Invalid TOTP request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Invalid TOTP code or expired/missing MFA challenge
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: May clear `idp_mfa_challenge` when challenge expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginTOTPViewResponse'
+            text/html:
+              schema:
+                type: string
+        '403':
+          description: Invalid CSRF token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginTOTPViewResponse'
+            text/html:
+              schema:
+                type: string
+        '500':
+          description: TOTP verification failed due to server-side error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginTOTPViewResponse'
+            text/html:
+              schema:
+                type: string
+
+  /mfa/totp/setup:
+    get:
+      tags: [mfa]
+      summary: Begin TOTP enrollment for the current authenticated session
+      description: |
+        Requires `idp_session` cookie. Returns TOTP enrollment material
+        (`secret`, `provisioning_uri`, `qr_code_url`) and CSRF token.
+        Enrollment is cached server-side for up to 10 minutes.
+      operationId: beginTOTPSetup
+      parameters:
+        - $ref: '#/components/parameters/IdpSessionCookie'
+      responses:
+        '200':
+          description: TOTP setup page or JSON enrollment payload
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: May set the `idp_csrf_token` cookie when needed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TOTPSetupViewResponse'
+            text/html:
+              schema:
+                type: string
+        '302':
+          description: Missing or invalid session, redirected to login
+          headers:
+            Location:
+              schema:
+                type: string
+                example: /login?return_to=%2Fmfa%2Ftotp%2Fsetup
+        '500':
+          description: TOTP setup initialization failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TOTPSetupViewResponse'
+            text/html:
+              schema:
+                type: string
+    post:
+      tags: [mfa]
+      summary: Confirm TOTP enrollment with a one-time code
+      description: |
+        Requires `idp_session` cookie. Verifies submitted code against the
+        in-progress enrollment secret bound to this session. CSRF token can be
+        supplied in body `csrf_token` or `X-CSRF-Token` header, and must match
+        `idp_csrf_token` cookie.
+      operationId: confirmTOTPSetup
+      parameters:
+        - $ref: '#/components/parameters/XCSRFToken'
+        - $ref: '#/components/parameters/IdpSessionCookie'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TOTPSetupRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TOTPSetupRequest'
+      responses:
+        '200':
+          description: TOTP enabled successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TOTPSetupViewResponse'
+            text/html:
+              schema:
+                type: string
+        '302':
+          description: Missing or invalid session, redirected to login
+          headers:
+            Location:
+              schema:
+                type: string
+                example: /login?return_to=%2Fmfa%2Ftotp%2Fsetup
+        '400':
+          description: Invalid setup payload, expired enrollment, or invalid TOTP code
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+                  - $ref: '#/components/schemas/TOTPSetupViewResponse'
+            text/html:
+              schema:
+                type: string
+        '403':
+          description: Invalid CSRF token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TOTPSetupViewResponse'
+            text/html:
+              schema:
+                type: string
+        '409':
+          description: TOTP already enabled for current account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TOTPSetupViewResponse'
+            text/html:
+              schema:
+                type: string
+        '500':
+          description: TOTP setup failed due to server-side error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TOTPSetupViewResponse'
+            text/html:
+              schema:
+                type: string
 
   /logout:
     post:
@@ -943,6 +1179,22 @@ components:
         `idp_csrf_token` cookie.
       schema:
         type: string
+    IdpSessionCookie:
+      name: idp_session
+      in: cookie
+      required: false
+      description: Browser session cookie for authenticated IdP session.
+      schema:
+        type: string
+    IdpMFAChallengeCookie:
+      name: idp_mfa_challenge
+      in: cookie
+      required: false
+      description: |
+        MFA challenge cookie issued by `/login` when password verification
+        succeeds but second-factor verification is required.
+      schema:
+        type: string
 
   schemas:
     HealthResponse:
@@ -1121,6 +1373,83 @@ components:
         expires_at:
           type: string
           format: date-time
+
+    LoginMFARequiredResponse:
+      type: object
+      required: [error, mfa_required, challenge_id, redirect_uri]
+      properties:
+        error:
+          type: string
+          example: mfa required
+        mfa_required:
+          type: boolean
+          example: true
+        challenge_id:
+          type: string
+          format: uuid
+        redirect_uri:
+          type: string
+          example: /login/totp
+        return_to:
+          type: string
+          nullable: true
+
+    LoginTOTPRequest:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+          example: '123456'
+        csrf_token:
+          type: string
+
+    LoginTOTPViewResponse:
+      type: object
+      required: [csrf_token]
+      properties:
+        csrf_token:
+          type: string
+        error:
+          type: string
+          nullable: true
+
+    TOTPSetupRequest:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+          example: '123456'
+        csrf_token:
+          type: string
+
+    TOTPSetupViewResponse:
+      type: object
+      required: [already_enabled, enabled, csrf_token]
+      properties:
+        secret:
+          type: string
+          nullable: true
+          description: Base32 encoded TOTP shared secret for enrollment.
+        provisioning_uri:
+          type: string
+          nullable: true
+          description: otpauth provisioning URI used by authenticator apps.
+        qr_code_url:
+          type: string
+          nullable: true
+          format: uri
+          description: External QR rendering URL for provisioning URI.
+        already_enabled:
+          type: boolean
+        enabled:
+          type: boolean
+        csrf_token:
+          type: string
+        error:
+          type: string
+          nullable: true
 
     LogoutRequest:
       type: object
