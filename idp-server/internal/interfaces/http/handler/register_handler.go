@@ -3,15 +3,26 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"idp-server/internal/application/register"
 	"idp-server/internal/interfaces/http/dto"
+	"idp-server/resource"
 
 	"github.com/gin-gonic/gin"
 )
 
 type RegisterHandler struct {
 	service register.Registrar
+}
+
+type registerPageData struct {
+	Username    string
+	Email       string
+	DisplayName string
+	CSRFToken   string
+	Error       string
+	Success     bool
 }
 
 func NewRegisterHandler(service register.Registrar) *RegisterHandler {
@@ -25,6 +36,12 @@ func (h *RegisterHandler) Handle(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate csrf token"})
 			return
 		}
+		if wantsRegisterHTML(c.GetHeader("Accept")) {
+			h.renderRegisterPage(c, http.StatusOK, registerPageData{
+				CSRFToken: csrfToken,
+			})
+			return
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"endpoint":   "register",
 			"message":    "submit username, email, display_name and password to register",
@@ -35,10 +52,28 @@ func (h *RegisterHandler) Handle(c *gin.Context) {
 
 	var req dto.RegisterRequest
 	if err := c.ShouldBind(&req); err != nil {
+		if wantsRegisterHTML(c.GetHeader("Accept")) {
+			h.renderRegisterPage(c, http.StatusBadRequest, registerPageData{
+				Username:    strings.TrimSpace(c.PostForm("username")),
+				Email:       strings.TrimSpace(c.PostForm("email")),
+				DisplayName: strings.TrimSpace(c.PostForm("display_name")),
+				Error:       "入力値を確認してください。",
+			})
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid register request"})
 		return
 	}
 	if err := validateCSRFToken(c, req.CSRFToken); err != nil {
+		if wantsRegisterHTML(c.GetHeader("Accept")) {
+			h.renderRegisterPage(c, http.StatusForbidden, registerPageData{
+				Username:    req.Username,
+				Email:       req.Email,
+				DisplayName: req.DisplayName,
+				Error:       errInvalidCSRFToken.Error(),
+			})
+			return
+		}
 		c.JSON(http.StatusForbidden, gin.H{"error": errInvalidCSRFToken.Error()})
 		return
 	}
@@ -64,8 +99,23 @@ func (h *RegisterHandler) Handle(c *gin.Context) {
 		default:
 			status = http.StatusInternalServerError
 		}
+		if wantsRegisterHTML(c.GetHeader("Accept")) {
+			h.renderRegisterPage(c, status, registerPageData{
+				Username:    req.Username,
+				Email:       req.Email,
+				DisplayName: req.DisplayName,
+				Error:       err.Error(),
+			})
+			return
+		}
 
 		c.JSON(status, gin.H{"error": err.Error()})
+		return
+	}
+	if wantsRegisterHTML(c.GetHeader("Accept")) {
+		h.renderRegisterPage(c, http.StatusCreated, registerPageData{
+			Success: true,
+		})
 		return
 	}
 
@@ -79,4 +129,23 @@ func (h *RegisterHandler) Handle(c *gin.Context) {
 		"status":         result.Status,
 		"created_at":     result.CreatedAt,
 	})
+}
+
+func wantsRegisterHTML(accept string) bool {
+	accept = strings.ToLower(strings.TrimSpace(accept))
+	return strings.Contains(accept, "text/html")
+}
+
+func (h *RegisterHandler) renderRegisterPage(c *gin.Context, status int, data registerPageData) {
+	if data.CSRFToken == "" {
+		csrfToken, err := ensureCSRFToken(c)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate csrf token"})
+			return
+		}
+		data.CSRFToken = csrfToken
+	}
+	c.Header("Content-Type", "text/html; charset=utf-8")
+	c.Status(status)
+	_ = resource.RegisterPageTemplate.Execute(c.Writer, data)
 }

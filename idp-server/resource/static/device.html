@@ -4,56 +4,95 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>デバイス認証</title>
-  <style>
-    body { font-family: sans-serif; max-width: 720px; margin: 40px auto; padding: 0 20px; color: #1f2937; }
-    .card { border: 1px solid #d1d5db; border-radius: 16px; padding: 24px; box-shadow: 0 10px 24px rgba(0,0,0,0.06); }
-    .banner { margin-bottom: 16px; padding: 12px 14px; border-radius: 10px; background: #f3f4f6; }
-    .error { background: #fef2f2; color: #b91c1c; }
-    .success { background: #ecfdf5; color: #166534; }
-    .muted { color: #6b7280; }
-    input[type=text] { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #cbd5e1; }
-    button { padding: 10px 16px; border-radius: 10px; border: 0; cursor: pointer; }
-    .approve { background: #0f766e; color: white; }
-    .deny { background: #e5e7eb; color: #111827; }
-    .actions { display: flex; gap: 12px; margin-top: 20px; }
-  </style>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ["Manrope", "Noto Sans JP", "sans-serif"]
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 </head>
-<body>
-  <div class="card">
-    <h1>デバイス認証</h1>
-    {{if .Error}}<div class="banner {{if .Success}}success{{else}}error{{end}}">{{.Error}}</div>{{end}}
-    {{if .UserCode}}
-      <p><strong>ユーザーコード:</strong> {{.UserCode}}</p>
-      {{if .ClientID}}
-        <p><strong>クライアント:</strong> {{if .ClientName}}{{.ClientName}}{{else}}{{.ClientID}}{{end}}</p>
-        {{if .Scopes}}
-          <p><strong>要求された権限:</strong></p>
-          <ul>
-            {{range .Scopes}}<li>{{.}}</li>{{end}}
-          </ul>
-        {{end}}
-        {{if not .Success}}
-        <form method="post">
-          <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-          <input type="hidden" name="user_code" value="{{.UserCode}}">
-          <div class="actions">
-            <button class="approve" type="submit" name="action" value="approve">承認</button>
-            <button class="deny" type="submit" name="action" value="deny">拒否</button>
-          </div>
-        </form>
-        {{end}}
-      {{else}}
-        <p class="muted">コードを確認して続行してください。</p>
+<body class="min-h-screen bg-[radial-gradient(circle_at_10%_10%,#fde68a_0%,transparent_28%),radial-gradient(circle_at_92%_90%,#dbeafe_0%,transparent_30%),linear-gradient(135deg,#fefce8_0%,#f8fafc_48%,#eef2ff_100%)] text-slate-900">
+  <div class="mx-auto flex min-h-screen w-full max-w-4xl items-center justify-center px-4 py-10 sm:px-6">
+    <main class="w-full max-w-xl rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_30px_90px_rgba(15,23,42,0.12)] backdrop-blur sm:p-8">
+      <div class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-50 text-amber-700">
+        <i class="fa-solid fa-tv"></i>
+      </div>
+      <p class="mt-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Device Flow</p>
+      <h1 class="mt-2 text-3xl font-extrabold tracking-tight">デバイス認証</h1>
+
+      {{if .Error}}
+      <div class="mt-5 rounded-xl border {{if .Success}}border-emerald-200 bg-emerald-50 text-emerald-700{{else}}border-red-200 bg-red-50 text-red-700{{end}} px-4 py-3 text-sm">
+        {{if .Success}}<i class="fa-solid fa-circle-check mr-2"></i>{{else}}<i class="fa-solid fa-circle-exclamation mr-2"></i>{{end}}{{.Error}}
+      </div>
       {{end}}
-    {{else}}
-      <p class="muted">デバイスに表示されたユーザーコードを入力してください。</p>
-      <form method="get">
-        <input type="text" name="user_code" placeholder="ABCD-EFGH" autocomplete="one-time-code">
-        <div class="actions">
-          <button class="approve" type="submit">続行</button>
+
+      {{if .UserCode}}
+      <div class="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+        <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">User Code</p>
+        <p class="mt-2 text-2xl font-extrabold tracking-[0.2em] text-slate-900">{{.UserCode}}</p>
+
+        {{if .ClientID}}
+        <div class="mt-5 space-y-4 text-sm">
+          <div>
+            <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Client</p>
+            <p class="mt-1 font-semibold text-slate-800">{{if .ClientName}}{{.ClientName}}{{else}}{{.ClientID}}{{end}}</p>
+          </div>
+
+          {{if .Scopes}}
+          <div>
+            <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Scopes</p>
+            <div class="mt-2 flex flex-wrap gap-2">
+              {{range .Scopes}}
+              <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">{{.}}</span>
+              {{end}}
+            </div>
+          </div>
+          {{end}}
+
+          {{if not .Success}}
+          <form method="post" class="pt-1">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <input type="hidden" name="user_code" value="{{.UserCode}}">
+            <div class="flex flex-col gap-3 sm:flex-row">
+              <button class="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 px-4 py-3 text-sm font-bold text-white shadow-[0_14px_30px_rgba(5,150,105,0.25)] transition hover:brightness-105" type="submit" name="action" value="approve">
+                <i class="fa-solid fa-check"></i>
+                承認
+              </button>
+              <button class="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50" type="submit" name="action" value="deny">
+                <i class="fa-solid fa-xmark"></i>
+                拒否
+              </button>
+            </div>
+          </form>
+          {{end}}
         </div>
+        {{else}}
+        <p class="mt-4 text-sm text-slate-600">コードを確認して続行してください。</p>
+        {{end}}
+      </div>
+      {{else}}
+      <form method="get" class="mt-6 space-y-4">
+        <label class="block">
+          <span class="mb-2 block text-xs font-bold uppercase tracking-[0.18em] text-slate-500">User Code</span>
+          <input type="text" name="user_code" placeholder="ABCD-EFGH" autocomplete="one-time-code" class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold tracking-[0.15em] outline-none transition focus:border-amber-500 focus:ring-4 focus:ring-amber-100">
+        </label>
+        <button class="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 px-5 py-3 text-sm font-bold text-white shadow-[0_14px_30px_rgba(217,119,6,0.25)] transition hover:brightness-105" type="submit">
+          <i class="fa-solid fa-arrow-right"></i>
+          続行
+        </button>
       </form>
-    {{end}}
+      {{end}}
+    </main>
   </div>
 </body>
 </html>

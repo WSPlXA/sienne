@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prototype - Login TOTP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <script>
+    tailwind.config = { theme: { extend: { fontFamily: { sans: ["Manrope", "Noto Sans SC", "sans-serif"] } } } };
+  </script>
+</head>
+<body class="min-h-screen bg-[linear-gradient(135deg,#ecfeff_0%,#f8fafc_50%,#ecfdf5_100%)] font-sans text-slate-900">
+  <main class="mx-auto flex min-h-screen max-w-xl items-center px-5 py-10">
+    <section class="w-full rounded-3xl border border-slate-200 bg-white p-8 shadow-xl">
+      <div class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-50 text-teal-700"><i class="fa-solid fa-mobile-screen-button"></i></div>
+      <h1 class="mt-4 text-3xl font-extrabold tracking-tight">输入 6 位验证码</h1>
+      <p class="mt-2 text-sm text-slate-500">从 Authenticator 获取一次性密码</p>
+
+      <div class="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"><i class="fa-solid fa-circle-exclamation mr-2"></i>示例错误：验证码无效或已使用</div>
+
+      <form class="mt-5 space-y-4">
+        <label class="block">
+          <span class="mb-2 block text-xs font-bold uppercase tracking-[0.16em] text-slate-500">TOTP</span>
+          <input value="427193" class="w-full rounded-xl border border-slate-300 px-4 py-3 text-center text-2xl font-extrabold tracking-[0.35em] outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100">
+        </label>
+        <button type="button" class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-700 px-4 py-3 text-sm font-bold text-white">
+          <i class="fa-solid fa-check"></i>验证并继续
+        </button>
+      </form>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prototype - Register</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <script>
+    tailwind.config = { theme: { extend: { fontFamily: { sans: ["Manrope", "Noto Sans SC", "sans-serif"] } } } };
+  </script>
+</head>
+<body class="min-h-screen bg-[linear-gradient(135deg,#eff6ff_0%,#f8fafc_40%,#f0fdf4_100%)] font-sans text-slate-900">
+  <main class="mx-auto flex min-h-screen max-w-6xl items-center px-5 py-10">
+    <section class="grid w-full overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl md:grid-cols-[0.95fr_1.05fr]">
+      <aside class="bg-slate-900 p-8 text-white">
+        <p class="text-xs uppercase tracking-[0.2em] text-white/70">New Account</p>
+        <h1 class="mt-3 text-4xl font-extrabold leading-tight">创建 IDP 账号</h1>
+        <div class="mt-8 space-y-3 text-sm text-white/85">
+          <div class="rounded-xl border border-white/10 bg-white/5 p-4">用户名、邮箱唯一性校验</div>
+          <div class="rounded-xl border border-white/10 bg-white/5 p-4">弱密码检测</div>
+          <div class="rounded-xl border border-white/10 bg-white/5 p-4">创建后可直接进入授权流程</div>
+        </div>
+      </aside>
+      <div class="p-7 sm:p-10">
+        <h2 class="text-3xl font-extrabold tracking-tight">注册</h2>
+        <p class="mt-2 text-sm text-slate-500">填写基础资料</p>
+
+        <form class="mt-7 grid gap-4 sm:grid-cols-2">
+          <label class="block sm:col-span-2">
+            <span class="mb-2 block text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Username</span>
+            <input value="alice" class="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-sky-500 focus:ring-4 focus:ring-sky-100">
+          </label>
+
+          <label class="block sm:col-span-2">
+            <span class="mb-2 block text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Email</span>
+            <input value="alice@example.com" class="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-sky-500 focus:ring-4 focus:ring-sky-100">
+          </label>
+
+          <label class="block sm:col-span-2">
+            <span class="mb-2 block text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Display Name</span>
+            <input value="Alice" class="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-sky-500 focus:ring-4 focus:ring-sky-100">
+          </label>
+
+          <label class="block sm:col-span-2">
+            <span class="mb-2 block text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Password</span>
+            <input type="password" value="StrongPassw0rd!" class="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-sky-500 focus:ring-4 focus:ring-sky-100">
+          </label>
+
+          <button type="button" class="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-700 px-4 py-3 text-sm font-bold text-white sm:col-span-2">
+            <i class="fa-solid fa-user-plus"></i>创建账号
+          </button>
+        </form>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

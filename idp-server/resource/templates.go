@@ -14,3 +14,4 @@ var ConsentPageTemplate = template.Must(template.ParseFS(staticFiles, "static/co
 var DevicePageTemplate = template.Must(template.ParseFS(staticFiles, "static/device.html"))
 var TOTPSetupTemplate = template.Must(template.ParseFS(staticFiles, "static/totp_setup.html"))
 var LogoutPageTemplate = template.Must(template.ParseFS(staticFiles, "static/logout.html"))
+var RegisterPageTemplate = template.Must(template.ParseFS(staticFiles, "static/register.html"))

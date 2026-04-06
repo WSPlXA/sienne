@@ -3,369 +3,88 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>アクセス許可</title>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap');
-
-    :root {
-      --bg: #f6f0e4;
-      --surface: rgba(255, 251, 245, 0.86);
-      --surface-strong: rgba(255, 255, 255, 0.94);
-      --line: rgba(61, 46, 24, 0.12);
-      --text: #201b15;
-      --muted: #6c6358;
-      --accent: #0f766e;
-      --accent-soft: rgba(15, 118, 110, 0.10);
-      --deny: #b42318;
-      --deny-soft: rgba(180, 35, 24, 0.08);
-      --shadow: 0 28px 84px rgba(41, 31, 18, 0.14);
+  <title>同意確認</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ["Manrope", "Noto Sans JP", "sans-serif"]
+          }
+        }
+      }
     }
-
-    * { box-sizing: border-box; }
-    html, body { margin: 0; min-height: 100%; }
-
-    body {
-      font-family: "Noto Sans JP", sans-serif;
-      color: var(--text);
-      background:
-        radial-gradient(circle at 15% 15%, rgba(217, 119, 6, 0.14), transparent 26%),
-        radial-gradient(circle at 85% 20%, rgba(15, 118, 110, 0.16), transparent 26%),
-        linear-gradient(135deg, #f7f1e6 0%, #f2eadb 50%, #efe5d3 100%);
-      padding: 24px;
-      display: grid;
-      place-items: center;
-    }
-
-    .shell {
-      width: min(100%, 960px);
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(340px, 400px);
-      gap: 26px;
-    }
-
-    .summary,
-    .panel {
-      border: 1px solid var(--line);
-      border-radius: 30px;
-      background: var(--surface);
-      backdrop-filter: blur(18px);
-      -webkit-backdrop-filter: blur(18px);
-      box-shadow: var(--shadow);
-      overflow: hidden;
-    }
-
-    .summary {
-      padding: 34px;
-      background:
-        linear-gradient(180deg, rgba(255,255,255,0.68), rgba(255,247,236,0.76)),
-        linear-gradient(135deg, rgba(217,119,6,0.06), rgba(15,118,110,0.09));
-    }
-
-    .panel {
-      padding: 30px 26px;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .eyebrow,
-    .mini-label {
-      text-transform: uppercase;
-      letter-spacing: 0.16em;
-      font-size: 11px;
-      font-weight: 700;
-      color: var(--muted);
-    }
-
-    h1, h2 {
-      margin: 0;
-      font-family: "Space Grotesk", sans-serif;
-      letter-spacing: -0.04em;
-    }
-
-    h1 {
-      margin-top: 14px;
-      font-size: clamp(36px, 5vw, 58px);
-      line-height: 0.96;
-      max-width: 10ch;
-    }
-
-    h2 {
-      font-size: 30px;
-    }
-
-    .lead,
-    .subtitle {
-      color: #544d44;
-      line-height: 1.75;
-      font-size: 14px;
-    }
-
-    .lead { margin: 16px 0 0; max-width: 42ch; }
-    .subtitle { margin: 10px 0 0; }
-
-    .app-badge {
-      margin-top: 26px;
-      border-radius: 22px;
-      padding: 18px 20px;
-      background: rgba(255,255,255,0.64);
-      border: 1px solid var(--line);
-    }
-
-    .app-name {
-      margin-top: 10px;
-      font-family: "Space Grotesk", sans-serif;
-      font-size: 28px;
-      font-weight: 700;
-      color: #8a4b08;
-      word-break: break-word;
-    }
-
-    .scope-grid {
-      margin-top: 28px;
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 14px;
-    }
-
-    .scope-card {
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,0.58);
-      border-radius: 20px;
-      padding: 16px;
-      min-height: 118px;
-    }
-
-    .scope-title {
-      margin-top: 10px;
-      font-family: "Space Grotesk", sans-serif;
-      font-size: 20px;
-      font-weight: 700;
-      overflow-wrap: anywhere;
-    }
-
-    .scope-copy {
-      margin-top: 8px;
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.65;
-    }
-
-    .card-icon {
-      width: 44px;
-      height: 44px;
-      display: grid;
-      place-items: center;
-      border-radius: 14px;
-      background: var(--accent-soft);
-      color: var(--accent);
-    }
-
-    .panel-top {
-      margin-bottom: 22px;
-    }
-
-    .banner {
-      margin-bottom: 18px;
-      padding: 13px 15px;
-      border-radius: 16px;
-      background: #fff1f1;
-      border: 1px solid rgba(180, 35, 24, 0.16);
-      color: var(--deny);
-      font-size: 13px;
-      line-height: 1.6;
-    }
-
-    .decision-box {
-      padding: 18px;
-      border-radius: 22px;
-      background: var(--surface-strong);
-      border: 1px solid var(--line);
-    }
-
-    .decision-list {
-      list-style: none;
-      margin: 16px 0 0;
-      padding: 0;
-      display: grid;
-      gap: 12px;
-    }
-
-    .decision-item {
-      display: grid;
-      grid-template-columns: auto 1fr;
-      gap: 12px;
-      align-items: start;
-      padding: 14px;
-      border-radius: 16px;
-      background: rgba(15,118,110,0.05);
-    }
-
-    .decision-item svg {
-      margin-top: 2px;
-      color: var(--accent);
-      flex: 0 0 auto;
-    }
-
-    .decision-item strong {
-      display: block;
-      font-size: 14px;
-    }
-
-    .decision-item span {
-      display: block;
-      margin-top: 4px;
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.6;
-      overflow-wrap: anywhere;
-    }
-
-    .btn-row {
-      margin-top: 22px;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 14px;
-    }
-
-    .btn {
-      width: 100%;
-      border-radius: 999px;
-      padding: 14px 16px;
-      border: 0;
-      font-size: 15px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
-    }
-
-    .btn:hover {
-      transform: translateY(-1px);
-      filter: brightness(1.01);
-    }
-
-    .btn-allow {
-      background: linear-gradient(135deg, #0f766e 0%, #115e59 100%);
-      color: #fff;
-      box-shadow: 0 14px 28px rgba(15,118,110,0.24);
-    }
-
-    .btn-deny {
-      background: var(--deny-soft);
-      color: var(--deny);
-      border: 1px solid rgba(180,35,24,0.14);
-    }
-
-    .footer {
-      margin-top: auto;
-      padding-top: 18px;
-      color: var(--muted);
-      font-size: 11px;
-      text-align: center;
-    }
-
-    @media (max-width: 920px) {
-      .shell { grid-template-columns: 1fr; }
-      .scope-grid { grid-template-columns: 1fr; }
-    }
-
-    @media (max-width: 520px) {
-      body { padding: 14px; }
-      .summary,
-      .panel { border-radius: 24px; }
-      .summary { padding: 24px; }
-      .panel { padding: 24px 18px; }
-      .btn-row { grid-template-columns: 1fr; }
-    }
-  </style>
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 </head>
-<body>
-  <main class="shell">
-    <section class="summary" aria-label="認可概要">
-      <div class="eyebrow">Authorization Review</div>
-      <h1>アクセス許可の確認</h1>
-      <p class="lead"></p>
+<body class="min-h-screen bg-[radial-gradient(circle_at_10%_10%,#dbeafe_0%,transparent_30%),radial-gradient(circle_at_92%_5%,#dcfce7_0%,transparent_28%),linear-gradient(135deg,#eff6ff_0%,#f8fafc_45%,#f0fdf4_100%)] text-slate-900">
+  <div class="mx-auto flex min-h-screen w-full max-w-6xl items-center px-4 py-10 sm:px-6 lg:px-8">
+    <main class="grid w-full overflow-hidden rounded-3xl border border-slate-200 bg-white/85 shadow-[0_30px_100px_rgba(15,23,42,0.12)] backdrop-blur md:grid-cols-[1fr_360px]">
+      <section class="p-6 sm:p-8 lg:p-10">
+        <p class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Consent</p>
+        <h1 class="mt-2 text-3xl font-extrabold tracking-tight">アクセス許可</h1>
 
-      <div class="app-badge">
-        <div class="mini-label">Client Application</div>
-        <div class="app-name">{{.ClientName}}</div>
-        <p class="subtitle"></p>
-      </div>
-
-      <div class="scope-grid">
-        {{range .Scopes}}
-        <article class="scope-card">
-          <div class="card-icon" aria-hidden="true">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="20 6 9 17 4 12"></polyline>
-            </svg>
-          </div>
-          <div class="scope-title">{{.}}</div>
-          <div class="scope-copy"></div>
-        </article>
-        {{else}}
-        <article class="scope-card">
-          <div class="card-icon" aria-hidden="true">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="8"></circle>
-              <path d="M12 8v4"></path>
-              <path d="M12 16h.01"></path>
-            </svg>
-          </div>
-          <div class="scope-title">No Scope Details</div>
-          <div class="scope-copy"></div>
-        </article>
-        {{end}}
-      </div>
-    </section>
-
-    <section class="panel" aria-labelledby="consent-heading">
-      <div class="panel-top">
-        <div class="eyebrow">Decision Gate</div>
-        <h2 id="consent-heading">この要求を許可しますか</h2>
-        <p class="subtitle"></p>
-      </div>
-
-      {{if .Error}}
-      <div class="banner">{{.Error}}</div>
-      {{end}}
-
-      <div class="decision-box">
-        <div class="mini-label">What Happens Next</div>
-        <ul class="decision-list">
-          <li class="decision-item">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M5 12h14"></path>
-              <path d="m12 5 7 7-7 7"></path>
-            </svg>
-            <div>
-              <strong>許可</strong>
-              <span></span>
-            </div>
-          </li>
-          <li class="decision-item">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="m18 6-12 12"></path>
-              <path d="m6 6 12 12"></path>
-            </svg>
-            <div>
-              <strong>拒否</strong>
-              <span></span>
-            </div>
-          </li>
-        </ul>
-      </div>
-
-      <form method="post">
-        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-        <input type="hidden" name="return_to" value="{{.ReturnTo}}">
-        <div class="btn-row">
-          <button type="submit" name="action" value="accept" class="btn btn-allow">許可する</button>
-          <button type="submit" name="action" value="deny" class="btn btn-deny">拒否する</button>
+        {{if .Error}}
+        <div class="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <i class="fa-solid fa-circle-exclamation mr-2"></i>{{.Error}}
         </div>
-      </form>
+        {{end}}
 
-      <div class="footer">Sienne IDP</div>
-    </section>
-  </main>
+        <div class="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+          <div class="flex items-center justify-between gap-4">
+            <div>
+              <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Client</p>
+              <p class="mt-1 text-xl font-extrabold text-slate-900">{{if .ClientName}}{{.ClientName}}{{else}}{{.ClientID}}{{end}}</p>
+            </div>
+            <div class="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-50 text-indigo-700">
+              <i class="fa-solid fa-building-shield"></i>
+            </div>
+          </div>
+
+          <div class="mt-5">
+            <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Scopes</p>
+            <div class="mt-3 flex flex-wrap gap-2">
+              {{range .Scopes}}
+              <span class="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">{{.}}</span>
+              {{else}}
+              <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">No scopes</span>
+              {{end}}
+            </div>
+          </div>
+        </div>
+
+        <form method="post" class="mt-6">
+          <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+          <input type="hidden" name="return_to" value="{{.ReturnTo}}">
+          <div class="flex flex-col gap-3 sm:flex-row">
+            <button type="submit" name="action" value="accept" class="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 px-4 py-3 text-sm font-bold text-white shadow-[0_14px_30px_rgba(5,150,105,0.25)] transition hover:brightness-105">
+              <i class="fa-solid fa-check"></i>
+              許可する
+            </button>
+            <button type="submit" name="action" value="deny" class="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50">
+              <i class="fa-solid fa-xmark"></i>
+              拒否する
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <aside class="border-t border-slate-200 bg-slate-50 p-6 md:border-l md:border-t-0 md:p-8">
+        <p class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Session</p>
+        <div class="mt-4 rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-500">
+          ReturnTo
+          <p class="mt-1 break-all text-slate-700">{{if .ReturnTo}}{{.ReturnTo}}{{else}}/oauth2/authorize{{end}}</p>
+        </div>
+        <ul class="mt-5 space-y-3 text-sm text-slate-700">
+          <li class="flex items-start gap-3"><i class="fa-solid fa-lock mt-1 text-indigo-600"></i><span>同意結果は認可コード発行に反映されます</span></li>
+          <li class="flex items-start gap-3"><i class="fa-solid fa-rotate-right mt-1 text-indigo-600"></i><span>拒否時は OAuth エラーでクライアントへ戻ります</span></li>
+        </ul>
+      </aside>
+    </main>
+  </div>
 </body>
 </html>
