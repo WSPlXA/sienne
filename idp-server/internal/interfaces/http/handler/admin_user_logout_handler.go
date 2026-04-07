@@ -9,14 +9,16 @@ import (
 	"github.com/gin-gonic/gin"
 	appsession "idp-server/internal/application/session"
 	"idp-server/internal/interfaces/http/dto"
+	"idp-server/internal/ports/repository"
 )
 
 type AdminUserLogoutHandler struct {
 	service appsession.Manager
+	audit   repository.AuditEventRepository
 }
 
-func NewAdminUserLogoutHandler(service appsession.Manager) *AdminUserLogoutHandler {
-	return &AdminUserLogoutHandler{service: service}
+func NewAdminUserLogoutHandler(service appsession.Manager, audit repository.AuditEventRepository) *AdminUserLogoutHandler {
+	return &AdminUserLogoutHandler{service: service, audit: audit}
 }
 
 func (h *AdminUserLogoutHandler) Handle(c *gin.Context) {
@@ -44,6 +46,12 @@ func (h *AdminUserLogoutHandler) Handle(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "logout user failed"})
 		return
 	}
+	recordAdminAuditEvent(c.Request.Context(), h.audit, currentAdminAuditContext(c), "auth.user.logout_all.admin", "user:"+result.UserID, map[string]any{
+		"target_user_id":         result.UserID,
+		"revoked_session_count":  result.RevokedSessionCount,
+		"revoked_access_tokens":  result.RevokedAccessTokens,
+		"revoked_refresh_tokens": result.RevokedRefreshTokens,
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"logged_out_user":        true,

@@ -78,6 +78,7 @@ func Wire() (*App, error) {
 	keyBuilder := cacheRedis.NewKeyBuilder(cfg.RedisKeyPrefix, cfg.AppEnv)
 	// userRepo是一个用户存储库实例，用于与数据库交互以管理用户数据。
 	userRepo := persistence.NewUserRepository(db)
+	auditEventRepo := persistence.NewAuditEventRepository(db)
 	operatorRoleRepo := persistence.NewOperatorRoleRepository(db)
 	// sessionRepo是一个会话存储库实例，用于与数据库交互以管理会话数据。!【重要】
 	sessionRepo := persistence.NewSessionRepository(db)
@@ -184,7 +185,7 @@ func Wire() (*App, error) {
 	adminMiddleware := httpmiddleware.NewSessionPermissionMiddleware(sessionRepo, sessionCache, userRepo)
 
 	return &App{
-		Router: interfacehttp.NewRouter(authzService, consentService, registerService, clientService, clientService, clientService, clientService, authnService, federatedOIDCProvider != nil, sessionService, rbacService, clientAuthenticator, grantRegistry, deviceService, mfaService, oidcService, authMiddleware, adminMiddleware),
+		Router: interfacehttp.NewRouter(authzService, consentService, registerService, clientService, clientService, clientService, clientService, authnService, federatedOIDCProvider != nil, sessionService, rbacService, auditEventRepo, clientAuthenticator, grantRegistry, deviceService, mfaService, oidcService, authMiddleware, adminMiddleware),
 	}, nil
 }
 

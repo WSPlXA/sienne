@@ -9,6 +9,9 @@ import (
 	"testing"
 
 	appsession "idp-server/internal/application/session"
+	sessiondomain "idp-server/internal/domain/session"
+	userdomain "idp-server/internal/domain/user"
+	httpmiddleware "idp-server/internal/interfaces/http/middleware"
 
 	"github.com/gin-gonic/gin"
 )
@@ -143,8 +146,14 @@ func TestAdminUserLogoutHandlerHandleJSON(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	service := &stubSessionManager{}
+	auditRepo := &stubAuditEventRepository{}
 	router := gin.New()
-	router.POST("/admin/users/:user_id/logout-all", NewAdminUserLogoutHandler(service).Handle)
+	router.Use(func(c *gin.Context) {
+		c.Set(httpmiddleware.ContextAdminUser, &userdomain.Model{ID: 7, Username: "alice-admin"})
+		c.Set(httpmiddleware.ContextAdminSession, &sessiondomain.Model{ID: 11, SessionID: "session-admin"})
+		c.Next()
+	})
+	router.POST("/admin/users/:user_id/logout-all", NewAdminUserLogoutHandler(service, auditRepo).Handle)
 	csrfCookie, csrfToken := mustNewCSRFCookie(t)
 
 	form := url.Values{}
@@ -161,5 +170,8 @@ func TestAdminUserLogoutHandlerHandleJSON(t *testing.T) {
 	}
 	if service.adminLogoutUser.UserID != 42 {
 		t.Fatalf("admin logout user id = %d, want 42", service.adminLogoutUser.UserID)
+	}
+	if len(auditRepo.events) != 1 || auditRepo.events[0].EventType != "auth.user.logout_all.admin" {
+		t.Fatalf("audit events = %#v", auditRepo.events)
 	}
 }

@@ -8,16 +8,18 @@ import (
 
 	apprbac "idp-server/internal/application/rbac"
 	"idp-server/internal/interfaces/http/dto"
+	"idp-server/internal/ports/repository"
 
 	"github.com/gin-gonic/gin"
 )
 
 type RBACHandler struct {
 	service apprbac.Manager
+	audit   repository.AuditEventRepository
 }
 
-func NewRBACHandler(service apprbac.Manager) *RBACHandler {
-	return &RBACHandler{service: service}
+func NewRBACHandler(service apprbac.Manager, audit repository.AuditEventRepository) *RBACHandler {
+	return &RBACHandler{service: service, audit: audit}
 }
 
 func (h *RBACHandler) Bootstrap(c *gin.Context) {
@@ -36,6 +38,9 @@ func (h *RBACHandler) Bootstrap(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "bootstrap roles failed"})
 		return
 	}
+	recordAdminAuditEvent(c.Request.Context(), h.audit, currentAdminAuditContext(c), "rbac.bootstrap", "rbac:bootstrap", map[string]any{
+		"role_count": len(result.Roles),
+	})
 	c.JSON(http.StatusOK, gin.H{"roles": result.Roles})
 }
 
@@ -99,6 +104,13 @@ func (h *RBACHandler) CreateRole(c *gin.Context) {
 		writeRBACError(c, err)
 		return
 	}
+	recordAdminAuditEvent(c.Request.Context(), h.audit, currentAdminAuditContext(c), "rbac.role.created", "role:"+result.Role.RoleCode, map[string]any{
+		"role_code":      result.Role.RoleCode,
+		"display_name":   result.Role.DisplayName,
+		"privilege_mask": result.Role.PrivilegeMask,
+		"is_system":      result.Role.IsSystem,
+		"description":    result.Role.Description,
+	})
 	c.JSON(http.StatusCreated, gin.H{"role": result.Role})
 }
 
@@ -122,6 +134,13 @@ func (h *RBACHandler) UpdateRole(c *gin.Context) {
 		writeRBACError(c, err)
 		return
 	}
+	recordAdminAuditEvent(c.Request.Context(), h.audit, currentAdminAuditContext(c), "rbac.role.updated", "role:"+result.Role.RoleCode, map[string]any{
+		"role_code":      result.Role.RoleCode,
+		"display_name":   result.Role.DisplayName,
+		"privilege_mask": result.Role.PrivilegeMask,
+		"is_system":      result.Role.IsSystem,
+		"description":    result.Role.Description,
+	})
 	c.JSON(http.StatusOK, gin.H{"role": result.Role})
 }
 
@@ -141,7 +160,11 @@ func (h *RBACHandler) DeleteRole(c *gin.Context) {
 		writeRBACError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"deleted": true, "role_code": strings.TrimSpace(c.Param("role_code"))})
+	roleCode := strings.TrimSpace(c.Param("role_code"))
+	recordAdminAuditEvent(c.Request.Context(), h.audit, currentAdminAuditContext(c), "rbac.role.deleted", "role:"+roleCode, map[string]any{
+		"role_code": roleCode,
+	})
+	c.JSON(http.StatusOK, gin.H{"deleted": true, "role_code": roleCode})
 }
 
 func (h *RBACHandler) AssignRole(c *gin.Context) {
@@ -180,6 +203,18 @@ func (h *RBACHandler) AssignRole(c *gin.Context) {
 		c.JSON(status, gin.H{"error": err.Error()})
 		return
 	}
+
+	metadata := map[string]any{
+		"user_id":        result.UserID,
+		"username":       result.Username,
+		"role_code":      result.RoleCode,
+		"privilege_mask": result.PrivilegeMask,
+		"tenant_scope":   result.TenantScope,
+	}
+	if req.PrivilegeMask != nil {
+		metadata["custom_privilege_mask"] = true
+	}
+	recordAdminAuditEvent(c.Request.Context(), h.audit, currentAdminAuditContext(c), "rbac.role.assigned", "user:"+strconv.FormatInt(result.UserID, 10), metadata)
 
 	c.JSON(http.StatusOK, gin.H{
 		"user_id":        result.UserID,
