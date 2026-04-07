@@ -49,6 +49,7 @@
 - 登录失败限流 + 用户锁定
 - Redis Lua 原子脚本（state/nonce/revoke/rotate 等）
 - 32 位 RBAC 权限位（管理接口按 session + privilege_mask 鉴权）
+- 管理控制面审计：角色 CRUD、赋权、管理员强制下线都会写入 `audit_events`
 - 内置角色初始化、角色列表查询、用户角色分配
 
 ## 2. HTTP 路由总览
@@ -78,6 +79,8 @@
 | `DELETE` | `/admin/rbac/roles/:role_code` | 删除自定义角色（需 RBAC） |
 | `POST` | `/admin/users/:user_id/role` | 给用户分配角色与权限掩码（需 RBAC） |
 | `POST` | `/admin/users/:user_id/logout-all` | 管理员强制某用户全端下线（需 RBAC） |
+
+上述管理动作在成功执行后会写入 `audit_events`，记录操作者、目标对象、IP、UA、session 和动作元数据，便于安全审计与运营追踪。
 
 ### OAuth2 / OIDC
 

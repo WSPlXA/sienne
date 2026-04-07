@@ -15,6 +15,7 @@ import (
 	apprbac "idp-server/internal/application/rbac"
 	appregister "idp-server/internal/application/register"
 	appsession "idp-server/internal/application/session"
+	"idp-server/internal/ports/repository"
 
 	"idp-server/internal/application/authz"
 	"idp-server/internal/interfaces/http/handler"
@@ -23,7 +24,7 @@ import (
 	"idp-server/pkg/rbac"
 )
 
-func NewRouter(authzService authz.Service, consentService appconsent.Manager, registerService appregister.Registrar, clientCreator appclient.Creator, clientRedirectRegistrar appclient.Registrar, clientPostLogoutRedirectRegistrar appclient.PostLogoutRegistrar, logoutRedirectValidator appclient.LogoutRedirectValidator, authnService authn.Authenticator, federatedOIDCEnabled bool, sessionService appsession.Manager, rbacService apprbac.Manager, clientAuthenticator appclientauth.Authenticator, grantRegistry *pluginregistry.GrantRegistry, deviceService *appdevice.Service, mfaService appmfa.Manager, oidcService *oidc.Service, authMiddleware *middleware.AuthMiddleware, adminMiddleware *middleware.SessionPermissionMiddleware) *gin.Engine {
+func NewRouter(authzService authz.Service, consentService appconsent.Manager, registerService appregister.Registrar, clientCreator appclient.Creator, clientRedirectRegistrar appclient.Registrar, clientPostLogoutRedirectRegistrar appclient.PostLogoutRegistrar, logoutRedirectValidator appclient.LogoutRedirectValidator, authnService authn.Authenticator, federatedOIDCEnabled bool, sessionService appsession.Manager, rbacService apprbac.Manager, auditRepo repository.AuditEventRepository, clientAuthenticator appclientauth.Authenticator, grantRegistry *pluginregistry.GrantRegistry, deviceService *appdevice.Service, mfaService appmfa.Manager, oidcService *oidc.Service, authMiddleware *middleware.AuthMiddleware, adminMiddleware *middleware.SessionPermissionMiddleware) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(middleware.NewLoggingMiddleware(log.Default()).Handler())
@@ -38,8 +39,8 @@ func NewRouter(authzService authz.Service, consentService appconsent.Manager, re
 	loginTOTPHandler := handler.NewLoginTOTPHandler(authnService)
 	logoutHandler := handler.NewLogoutHandler(sessionService)
 	logoutAllHandler := handler.NewLogoutAllHandler(sessionService)
-	adminUserLogoutHandler := handler.NewAdminUserLogoutHandler(sessionService)
-	rbacHandler := handler.NewRBACHandler(rbacService)
+	adminUserLogoutHandler := handler.NewAdminUserLogoutHandler(sessionService, auditRepo)
+	rbacHandler := handler.NewRBACHandler(rbacService, auditRepo)
 	totpSetupHandler := handler.NewTOTPSetupHandler(mfaService)
 	endSessionHandler := handler.NewEndSessionHandler(sessionService, logoutRedirectValidator)
 	tokenHandler := handler.NewTokenHandler(clientAuthenticator, grantRegistry)

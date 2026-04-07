@@ -9,9 +9,23 @@ import (
 	"testing"
 
 	apprbac "idp-server/internal/application/rbac"
+	auditdomain "idp-server/internal/domain/audit"
+	sessiondomain "idp-server/internal/domain/session"
+	userdomain "idp-server/internal/domain/user"
+	httpmiddleware "idp-server/internal/interfaces/http/middleware"
 
 	"github.com/gin-gonic/gin"
 )
+
+type stubAuditEventRepository struct {
+	events []*auditdomain.Model
+}
+
+func (s *stubAuditEventRepository) Create(_ context.Context, model *auditdomain.Model) error {
+	copyModel := *model
+	s.events = append(s.events, &copyModel)
+	return nil
+}
 
 type stubRBACManager struct {
 	assignInput apprbac.AssignRoleInput
@@ -82,7 +96,7 @@ func TestRBACHandlerListRoles(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	router := gin.New()
-	router.GET("/admin/rbac/roles", NewRBACHandler(&stubRBACManager{}).ListRoles)
+	router.GET("/admin/rbac/roles", NewRBACHandler(&stubRBACManager{}, nil).ListRoles)
 	req := httptest.NewRequest(http.MethodGet, "/admin/rbac/roles", nil)
 	rec := httptest.NewRecorder()
 
@@ -96,8 +110,10 @@ func TestRBACHandlerAssignRole(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	service := &stubRBACManager{}
+	auditRepo := &stubAuditEventRepository{}
 	router := gin.New()
-	router.POST("/admin/users/:user_id/role", NewRBACHandler(service).AssignRole)
+	withAdminContext(router)
+	router.POST("/admin/users/:user_id/role", NewRBACHandler(service, auditRepo).AssignRole)
 	csrfCookie, csrfToken := mustNewCSRFCookie(t)
 
 	form := url.Values{}
@@ -116,14 +132,19 @@ func TestRBACHandlerAssignRole(t *testing.T) {
 	if service.assignInput.UserID != 42 || service.assignInput.RoleCode != "support" {
 		t.Fatalf("assign input = %#v", service.assignInput)
 	}
+	if len(auditRepo.events) != 1 || auditRepo.events[0].EventType != "rbac.role.assigned" {
+		t.Fatalf("audit events = %#v", auditRepo.events)
+	}
 }
 
 func TestRBACHandlerCreateRole(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	service := &stubRBACManager{}
+	auditRepo := &stubAuditEventRepository{}
 	router := gin.New()
-	router.POST("/admin/rbac/roles", NewRBACHandler(service).CreateRole)
+	withAdminContext(router)
+	router.POST("/admin/rbac/roles", NewRBACHandler(service, auditRepo).CreateRole)
 	csrfCookie, csrfToken := mustNewCSRFCookie(t)
 
 	form := url.Values{}
@@ -145,14 +166,19 @@ func TestRBACHandlerCreateRole(t *testing.T) {
 	if service.createInput.RoleCode != "custom_ops" {
 		t.Fatalf("create input = %#v", service.createInput)
 	}
+	if len(auditRepo.events) != 1 || auditRepo.events[0].EventType != "rbac.role.created" {
+		t.Fatalf("audit events = %#v", auditRepo.events)
+	}
 }
 
 func TestRBACHandlerDeleteRole(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	service := &stubRBACManager{}
+	auditRepo := &stubAuditEventRepository{}
 	router := gin.New()
-	router.DELETE("/admin/rbac/roles/:role_code", NewRBACHandler(service).DeleteRole)
+	withAdminContext(router)
+	router.DELETE("/admin/rbac/roles/:role_code", NewRBACHandler(service, auditRepo).DeleteRole)
 	csrfCookie, csrfToken := mustNewCSRFCookie(t)
 
 	form := url.Values{}
@@ -170,13 +196,16 @@ func TestRBACHandlerDeleteRole(t *testing.T) {
 	if service.deleteInput.RoleCode != "custom_ops" {
 		t.Fatalf("delete input = %#v", service.deleteInput)
 	}
+	if len(auditRepo.events) != 1 || auditRepo.events[0].EventType != "rbac.role.deleted" {
+		t.Fatalf("audit events = %#v", auditRepo.events)
+	}
 }
 
 func TestRBACHandlerListUsersByRole(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	router := gin.New()
-	router.GET("/admin/rbac/roles/:role_code/users", NewRBACHandler(&stubRBACManager{}).ListUsersByRole)
+	router.GET("/admin/rbac/roles/:role_code/users", NewRBACHandler(&stubRBACManager{}, nil).ListUsersByRole)
 	req := httptest.NewRequest(http.MethodGet, "/admin/rbac/roles/support/users?limit=10", nil)
 	rec := httptest.NewRecorder()
 
@@ -190,7 +219,7 @@ func TestRBACHandlerRoleUsage(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	router := gin.New()
-	router.GET("/admin/rbac/usage", NewRBACHandler(&stubRBACManager{}).RoleUsage)
+	router.GET("/admin/rbac/usage", NewRBACHandler(&stubRBACManager{}, nil).RoleUsage)
 	req := httptest.NewRequest(http.MethodGet, "/admin/rbac/usage", nil)
 	rec := httptest.NewRecorder()
 
@@ -198,4 +227,12 @@ func TestRBACHandlerRoleUsage(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status code = %d, want %d", rec.Code, http.StatusOK)
 	}
+}
+
+func withAdminContext(router *gin.Engine) {
+	router.Use(func(c *gin.Context) {
+		c.Set(httpmiddleware.ContextAdminUser, &userdomain.Model{ID: 7, Username: "alice-admin"})
+		c.Set(httpmiddleware.ContextAdminSession, &sessiondomain.Model{ID: 11, SessionID: "session-admin"})
+		c.Next()
+	})
 }

@@ -115,3 +115,9 @@ func CurrentAdminUser(c *gin.Context) *userdomain.Model {
 	user, _ := value.(*userdomain.Model)
 	return user
 }
+
+func CurrentAdminSession(c *gin.Context) *sessiondomain.Model {
+	value, _ := c.Get(ContextAdminSession)
+	sessionModel, _ := value.(*sessiondomain.Model)
+	return sessionModel
+}
