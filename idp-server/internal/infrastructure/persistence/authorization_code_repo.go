@@ -18,25 +18,9 @@ func NewAuthorizationCodeRepository(db *sql.DB) *AuthorizationCodeRepository {
 }
 
 func (r *AuthorizationCodeRepository) Create(ctx context.Context, model *authorizationdomain.Model) error {
-	const query = `
-INSERT INTO oauth_authorization_codes (
-    code,
-    client_id,
-    user_id,
-    session_id,
-    redirect_uri,
-    scopes_json,
-    state_value,
-    nonce_value,
-    code_challenge,
-    code_challenge_method,
-    expires_at,
-    consumed_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-
 	result, err := r.db.ExecContext(
 		ctx,
-		query,
+		authorizationCodeRepositorySQL.createAuthorizationCode,
 		model.Code,
 		model.ClientDBID,
 		model.UserID,
@@ -70,27 +54,7 @@ func (r *AuthorizationCodeRepository) ConsumeByCode(ctx context.Context, code st
 		_ = tx.Rollback()
 	}()
 
-	const selectQuery = `
-SELECT
-    id,
-    code,
-    client_id,
-    user_id,
-    session_id,
-    redirect_uri,
-    scopes_json,
-    state_value,
-    nonce_value,
-    code_challenge,
-    code_challenge_method,
-    expires_at,
-    consumed_at,
-    created_at
-FROM oauth_authorization_codes
-WHERE code = ?
-FOR UPDATE`
-
-	row := tx.QueryRowContext(ctx, selectQuery, code)
+	row := tx.QueryRowContext(ctx, authorizationCodeRepositorySQL.consumeSelectByCodeForUpdate, code)
 	model, err := scanAuthorizationCode(row)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -103,13 +67,7 @@ FOR UPDATE`
 		return nil, nil
 	}
 
-	const updateQuery = `
-UPDATE oauth_authorization_codes
-SET consumed_at = ?
-WHERE id = ?
-  AND consumed_at IS NULL`
-
-	result, err := tx.ExecContext(ctx, updateQuery, consumedAt, model.ID)
+	result, err := tx.ExecContext(ctx, authorizationCodeRepositorySQL.consumeUpdateConsumedAt, consumedAt, model.ID)
 	if err != nil {
 		return nil, err
 	}

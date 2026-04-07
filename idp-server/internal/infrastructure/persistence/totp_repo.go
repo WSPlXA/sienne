@@ -24,14 +24,8 @@ func NewTOTPRepository(db *sql.DB, codec secretCodec) *TOTPRepository {
 }
 
 func (r *TOTPRepository) FindByUserID(ctx context.Context, userID int64) (*totpdomain.Model, error) {
-	const query = `
-SELECT id, user_id, secret, enabled_at, created_at, updated_at
-FROM user_totp_credentials
-WHERE user_id = ?
-LIMIT 1`
-
 	var model totpdomain.Model
-	err := r.db.QueryRowContext(ctx, query, userID).Scan(
+	err := r.db.QueryRowContext(ctx, totpRepositorySQL.findByUserID, userID).Scan(
 		&model.ID,
 		&model.UserID,
 		&model.Secret,
@@ -54,14 +48,6 @@ LIMIT 1`
 }
 
 func (r *TOTPRepository) Upsert(ctx context.Context, model *totpdomain.Model) error {
-	const query = `
-INSERT INTO user_totp_credentials (user_id, secret, enabled_at, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?)
-ON DUPLICATE KEY UPDATE
-    secret = VALUES(secret),
-    enabled_at = VALUES(enabled_at),
-    updated_at = VALUES(updated_at)`
-
 	now := time.Now().UTC()
 	if model.CreatedAt.IsZero() {
 		model.CreatedAt = now
@@ -76,7 +62,7 @@ ON DUPLICATE KEY UPDATE
 	if err != nil {
 		return err
 	}
-	_, err = r.db.ExecContext(ctx, query, model.UserID, secret, model.EnabledAt, model.CreatedAt, model.UpdatedAt)
+	_, err = r.db.ExecContext(ctx, totpRepositorySQL.upsert, model.UserID, secret, model.EnabledAt, model.CreatedAt, model.UpdatedAt)
 	return err
 }
 
@@ -95,6 +81,6 @@ func (r *TOTPRepository) decryptSecret(secret string) (string, error) {
 }
 
 func (r *TOTPRepository) DeleteByUserID(ctx context.Context, userID int64) error {
-	_, err := r.db.ExecContext(ctx, `DELETE FROM user_totp_credentials WHERE user_id = ?`, userID)
+	_, err := r.db.ExecContext(ctx, totpRepositorySQL.deleteByUser, userID)
 	return err
 }

@@ -42,46 +42,66 @@ import (
 	cacheport "idp-server/internal/ports/cache"
 )
 
+// Wire设置应用程序的依赖关系并返回一个App实例。它加载配置，初始化数据库和缓存连接，创建存储库和服务，并构建HTTP路由器。
 type App struct {
 	Router http.Handler
 }
 
+// 本方法挂载在App结构体上，负责设置应用程序的依赖关系并返回一个App实例。它加载配置，初始化数据库和缓存连接，创建存储库和服务，并构建HTTP路由器。
 func Wire() (*App, error) {
-	// Load configuration from environment variablesand set defaults
+	// 加载配置从环境变量中获取应用程序的配置参数。如果某些必需的配置项缺失或无效，函数将返回错误。
 	cfg, err := loadConfigFromEnv()
+	// 如果加载配置失败，返回错误。
 	if err != nil {
 		return nil, err
 	}
-
+	// 创建一个带有超时的上下文，用于后续的数据库和缓存连接初始化。
+	// 入参context.Background()表示从根上下文开始，5*time.Second表示设置超时时间为5秒。defer cancel()确保在函数返回时取消上下文，释放相关资源。
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	//首先是db，它是通过调用storage.NewMySQL函数创建的，该函数接受上下文和MySQL数据源名称（DSN）作为参数。如果连接数据库失败，函数将返回错误。
 	db, err := storage.NewMySQL(ctx, cfg.MySQLDSN)
 	if err != nil {
 		return nil, err
 	}
 
+	// 接下来是redisClient，它是通过调用storage.NewRedis函数创建的，该函数接受上下文、Redis地址、密码和数据库索引作为参数。如果连接Redis失败，函数将关闭之前打开的数据库连接并返回错误。
 	redisClient, err := storage.NewRedis(ctx, cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
 	if err != nil {
 		_ = db.Close()
 		return nil, err
 	}
 
+	// 创建存储库和服务实例。这里创建了多个存储库实例，如userRepo、sessionRepo、clientRepo等，以及多个服务实例，如authzService、consentService、authnService等。这些实例将用于处理应用程序的业务逻辑。
 	keyBuilder := cacheRedis.NewKeyBuilder(cfg.RedisKeyPrefix, cfg.AppEnv)
+	// userRepo是一个用户存储库实例，用于与数据库交互以管理用户数据。
 	userRepo := persistence.NewUserRepository(db)
+	// sessionRepo是一个会话存储库实例，用于与数据库交互以管理会话数据。!【重要】
 	sessionRepo := persistence.NewSessionRepository(db)
+	// clientRepo是一个客户端存储库实例，用于与数据库交互以管理客户端数据。
 	clientRepo := persistence.NewClientRepository(db)
+	// authCodeRepo是一个授权码存储库实例，用于与数据库交互以管理授权码数据。
 	authCodeRepo := persistence.NewAuthorizationCodeRepository(db)
+	// consentRepo是一个consent存储库实例，用于与数据库交互以管理consent数据。
 	consentRepo := persistence.NewConsentRepository(db)
+	// jwkRepo是一个jwk存储库实例，用于与数据库交互以管理jwk数据。
 	jwkRepo := persistence.NewJWKKeyRepository(db)
+	// tokenRepo是一个token存储库实例，用于与数据库交互以管理token数据。
 	tokenRepo := persistence.NewTokenRepository(db)
+	// secretCodec是一个用于加密和解密TOTP秘密的编解码器实例。它使用配置中的TOTPSecretEncryptionKey进行初始化。如果初始化失败，函数将关闭之前打开的数据库和Redis连接并返回错误。
+	// 为什么初始化失败要关闭数据库和Redis连接？因为如果编解码器无法正确初始化，应用程序可能无法安全地处理TOTP秘密，这可能会导致安全风险。因此，在这种情况下，最好关闭数据库和Redis连接以防止潜在的安全问题。
 	secretCodec, err := infrasecurity.NewSecretCodec(cfg.TOTPSecretEncryptionKey)
 	if err != nil {
 		_ = db.Close()
 		_ = redisClient.Close()
 		return nil, fmt.Errorf("init totp secret codec: %w", err)
 	}
+	// 创建更多的存储库实例，如totpRepo、sessionCache、tokenCache等，这些存储库将用于管理TOTP数据、会话缓存、令牌缓存等。
+	// repositories代表应用程序中与数据存储相关的组件，负责与数据库或缓存系统交互以存储和检索数据。这些存储库实例将被服务层使用，以实现应用程序的业务逻辑。
+	// cacheRepositories代表应用程序中与缓存相关的组件，负责与缓存系统（如Redis）交互以存储和检索数据。这些缓存存储库实例将被服务层使用，以提高应用程序的性能和响应速度。
 	totpRepo := persistence.NewTOTPRepository(db, secretCodec)
+	// 比如sessionCache是一个会话缓存存储库实例，用于与Redis交互以管理会话缓存数据。它使用redisClient和keyBuilder进行初始化。
 	sessionCache := cacheRedis.NewSessionCacheRepository(redisClient, keyBuilder)
 	tokenCache := cacheRedis.NewTokenCacheRepository(redisClient, keyBuilder)
 	deviceCodeRepo := cacheRedis.NewDeviceCodeRepository(redisClient, keyBuilder)
@@ -99,6 +119,8 @@ func Wire() (*App, error) {
 		authnpassword.NewMethod(userRepo, passwordVerifier),
 		authnfederatedoidc.NewMethod(federatedOIDCProvider),
 	)
+	// 上述都是在应用程序中使用的服务实例，这些服务实例封装了应用程序的业务逻辑，并使用存储库和缓存存储库来管理数据。它们将被HTTP处理程序使用，以处理来自客户端的请求并生成响应。
+	// 例如，authnService是一个认证服务实例，用于处理用户认证相关的业务逻辑。它使用userRepo、sessionRepo、sessionCache、rateLimitRepo、mfaCache、authnRegistry、totpRepo、totpProvider等组件进行初始化，并配置了会话TTL、登录失败窗口、强制MFA注册等参数。
 	authnService := authn.NewService(userRepo, sessionRepo, sessionCache, rateLimitRepo, mfaCache, authnRegistry, totpRepo, totpProvider, cfg.SessionTTL, 5*time.Minute, cfg.ForceMFAEnrollment, authn.RateLimitPolicy{
 		FailureWindow:      cfg.LoginFailureWindow,
 		MaxFailuresPerIP:   int64(cfg.LoginMaxFailuresPerIP),
@@ -162,6 +184,7 @@ func Wire() (*App, error) {
 	}, nil
 }
 
+// 配置结构体定义了应用程序的配置参数，这些参数通常从环境变量中加载。loadConfigFromEnv函数负责从环境变量中加载配置，并设置默认值。如果某些必需的配置项缺失或无效，函数将返回错误。
 type config struct {
 	MySQLDSN                      string
 	RedisAddr                     string
@@ -197,6 +220,7 @@ type config struct {
 	TOTPSecretEncryptionKey       string
 }
 
+// loadConfigFromEnv函数负责从环境变量中加载配置，并设置默认值。如果某些必需的配置项缺失或无效，函数将返回错误。
 func loadConfigFromEnv() (*config, error) {
 	cfg := &config{
 		MySQLDSN:                      strings.TrimSpace(os.Getenv("MYSQL_DSN")),
@@ -232,7 +256,7 @@ func loadConfigFromEnv() (*config, error) {
 		ForceMFAEnrollment:            getEnvBool("FORCE_MFA_ENROLLMENT", true),
 		TOTPSecretEncryptionKey:       strings.TrimSpace(os.Getenv("TOTP_SECRET_ENCRYPTION_KEY")),
 	}
-
+	// 如果加载配置失败，返回错误。
 	if cfg.MySQLDSN == "" {
 		cfg.MySQLDSN = buildMySQLDSNFromEnv()
 	}
@@ -257,6 +281,8 @@ func loadConfigFromEnv() (*config, error) {
 	return cfg, nil
 }
 
+// getWorkingDir函数获取当前工作目录，如果获取失败则返回当前目录（"."）。这个函数用于确定应用程序的工作目录，以便在需要时访问文件系统。
+// 因为我们的脚本和生成的密钥文件都放在项目根目录下的scripts/dev_keys目录中，所以工作目录应该设置为项目根目录。通过调用getWorkingDir函数，我们可以确保应用程序能够正确地找到和访问这些文件，无论它是从哪个目录启动的。
 func getWorkingDir() string {
 	wd, err := os.Getwd()
 	if err != nil {
@@ -328,11 +354,15 @@ func getEnvDuration(key string, fallback time.Duration) time.Duration {
 	return value
 }
 
+// 布尔值的环境变量通常用于启用或禁用某些功能，例如是否强制MFA注册。getEnvBool函数从环境变量中获取布尔值，如果环境变量未设置或无法解析为布尔值，则返回默认值。
+// 为什么要写这个函数？因为环境变量都是字符串类型的，而我们需要将它们转换为布尔值以便在代码中使用。通过编写getEnvBool函数，我们可以方便地从环境变量中获取布尔值，并且在环境变量未设置或无效时提供一个合理的默认值。这有助于提高代码的健壮性和可配置性。
 func getEnvBool(key string, fallback bool) bool {
+	// 从环境变量中获取布尔值，如果环境变量未设置或无法解析为布尔值，则返回默认值。
 	raw := strings.TrimSpace(os.Getenv(key))
 	if raw == "" {
 		return fallback
 	}
+	// 比如传入的是True、true、1等都应该被解析为true，False、false、0等都应该被解析为false。strconv.ParseBool函数可以处理这些常见的布尔值表示形式。
 	value, err := strconv.ParseBool(raw)
 	if err != nil {
 		return fallback
@@ -375,6 +405,7 @@ func buildFederatedOIDCProvider(cfg *config, replayCache cacheport.ReplayProtect
 	}, replayCache)
 }
 
+// jwtServiceAdapter和jwtMiddlewareAdapter是适配器结构体，用于将infracrypto.JWTService适配为应用程序中使用的JWT服务接口。这些适配器实现了相应的接口方法，并将调用委托给infracrypto.JWTService实例。
 type jwtServiceAdapter struct {
 	service *infracrypto.JWTService
 }

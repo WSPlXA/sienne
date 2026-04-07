@@ -17,16 +17,8 @@ func NewConsentRepository(db *sql.DB) *ConsentRepository {
 }
 
 func (r *ConsentRepository) HasActiveConsent(ctx context.Context, userID, clientID int64, scopes []string) (bool, error) {
-	const query = `
-SELECT scopes_json
-FROM oauth_consents
-WHERE user_id = ?
-  AND client_id = ?
-  AND revoked_at IS NULL
-LIMIT 1`
-
 	var scopesJSON string
-	err := r.db.QueryRowContext(ctx, query, userID, clientID).Scan(&scopesJSON)
+	err := r.db.QueryRowContext(ctx, consentRepositorySQL.hasActiveConsentSelect, userID, clientID).Scan(&scopesJSON)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return false, nil
@@ -62,15 +54,8 @@ LIMIT 1`
 }
 
 func (r *ConsentRepository) UpsertActiveConsent(ctx context.Context, userID, clientID int64, scopes []string, grantedAt time.Time) error {
-	const selectQuery = `
-SELECT scopes_json
-FROM oauth_consents
-WHERE user_id = ?
-  AND client_id = ?
-LIMIT 1`
-
 	var existingJSON string
-	err := r.db.QueryRowContext(ctx, selectQuery, userID, clientID).Scan(&existingJSON)
+	err := r.db.QueryRowContext(ctx, consentRepositorySQL.upsertSelectExisting, userID, clientID).Scan(&existingJSON)
 	if err != nil && err != sql.ErrNoRows {
 		return err
 	}
@@ -108,19 +93,6 @@ LIMIT 1`
 		return err
 	}
 
-	const query = `
-INSERT INTO oauth_consents (
-    user_id,
-    client_id,
-    scopes_json,
-    granted_at,
-    revoked_at
-) VALUES (?, ?, ?, ?, NULL)
-ON DUPLICATE KEY UPDATE
-    scopes_json = VALUES(scopes_json),
-    granted_at = VALUES(granted_at),
-    revoked_at = NULL`
-
-	_, err = r.db.ExecContext(ctx, query, userID, clientID, string(scopesJSON), grantedAt)
+	_, err = r.db.ExecContext(ctx, consentRepositorySQL.upsertActiveConsent, userID, clientID, string(scopesJSON), grantedAt)
 	return err
 }

@@ -29,24 +29,7 @@ func NewJWKKeyRepository(db *sql.DB) *JWKKeyRepository {
 }
 
 func (r *JWKKeyRepository) ListCurrent(ctx context.Context) ([]JWKKeyRecord, error) {
-	const query = `
-SELECT
-    id,
-    kid,
-    kty,
-    alg,
-    use_type,
-    public_jwk_json,
-    private_key_ref,
-    is_active,
-    created_at,
-    rotates_at,
-    deactivated_at
-FROM jwk_keys
-WHERE deactivated_at IS NULL OR deactivated_at > UTC_TIMESTAMP()
-ORDER BY is_active DESC, created_at DESC, id DESC`
-
-	rows, err := r.db.QueryContext(ctx, query)
+	rows, err := r.db.QueryContext(ctx, jwkKeyRepositorySQL.listCurrentKeys)
 	if err != nil {
 		return nil, err
 	}
@@ -101,36 +84,13 @@ func (r *JWKKeyRepository) CreateActiveKey(ctx context.Context, record JWKKeyRec
 		_ = tx.Rollback()
 	}()
 
-	const deactivateQuery = `
-UPDATE jwk_keys
-SET is_active = 0,
-    deactivated_at = CASE
-        WHEN deactivated_at IS NULL OR deactivated_at > ? THEN ?
-        ELSE deactivated_at
-    END
-WHERE is_active = 1`
-
-	if _, err := tx.ExecContext(ctx, deactivateQuery, retiresExistingAt, retiresExistingAt); err != nil {
+	if _, err := tx.ExecContext(ctx, jwkKeyRepositorySQL.deactivateActive, retiresExistingAt, retiresExistingAt); err != nil {
 		return err
 	}
 
-	const insertQuery = `
-INSERT INTO jwk_keys (
-    kid,
-    kty,
-    alg,
-    use_type,
-    public_jwk_json,
-    private_key_ref,
-    is_active,
-    created_at,
-    rotates_at,
-    deactivated_at
-) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, NULL)`
-
 	_, err = tx.ExecContext(
 		ctx,
-		insertQuery,
+		jwkKeyRepositorySQL.insertActiveKey,
 		record.KID,
 		record.KTY,
 		record.Alg,

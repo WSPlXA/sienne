@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+// JWTService是一个用于处理JWT（JSON Web Token）的服务结构体。它提供了生成和验证JWT的功能。
 type JWTService struct {
 	signer *Signer
 }

@@ -18,23 +18,9 @@ func NewSessionRepository(db *sql.DB) *SessionRepository {
 }
 
 func (r *SessionRepository) Create(ctx context.Context, model *session.Model) error {
-	const query = `
-INSERT INTO login_sessions (
-    session_id,
-    user_id,
-    subject,
-    acr,
-    amr_json,
-    ip_address,
-    user_agent,
-    authenticated_at,
-    expires_at,
-    logged_out_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-
 	result, err := r.db.ExecContext(
 		ctx,
-		query,
+		sessionRepositorySQL.createSession,
 		model.SessionID,
 		model.UserID,
 		model.Subject,
@@ -59,49 +45,11 @@ INSERT INTO login_sessions (
 }
 
 func (r *SessionRepository) FindBySessionID(ctx context.Context, sessionID string) (*session.Model, error) {
-	const query = `
-SELECT
-    id,
-    session_id,
-    user_id,
-    subject,
-    acr,
-    amr_json,
-    ip_address,
-    user_agent,
-    authenticated_at,
-    expires_at,
-    logged_out_at,
-    created_at
-FROM login_sessions
-WHERE session_id = ?
-LIMIT 1`
-
-	return r.getOne(ctx, query, sessionID)
+	return r.getOne(ctx, sessionRepositorySQL.findBySessionID, sessionID)
 }
 
 func (r *SessionRepository) ListActiveByUserID(ctx context.Context, userID int64) ([]*session.Model, error) {
-	const query = `
-SELECT
-    id,
-    session_id,
-    user_id,
-    subject,
-    acr,
-    amr_json,
-    ip_address,
-    user_agent,
-    authenticated_at,
-    expires_at,
-    logged_out_at,
-    created_at
-FROM login_sessions
-WHERE user_id = ?
-  AND logged_out_at IS NULL
-  AND expires_at > CURRENT_TIMESTAMP
-ORDER BY authenticated_at DESC`
-
-	rows, err := r.db.QueryContext(ctx, query, userID)
+	rows, err := r.db.QueryContext(ctx, sessionRepositorySQL.listActiveByUserID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -124,24 +72,12 @@ ORDER BY authenticated_at DESC`
 }
 
 func (r *SessionRepository) LogoutBySessionID(ctx context.Context, sessionID string, loggedOutAt time.Time) error {
-	const query = `
-UPDATE login_sessions
-SET logged_out_at = ?
-WHERE session_id = ?
-  AND logged_out_at IS NULL`
-
-	_, err := r.db.ExecContext(ctx, query, loggedOutAt, sessionID)
+	_, err := r.db.ExecContext(ctx, sessionRepositorySQL.logoutBySessionID, loggedOutAt, sessionID)
 	return err
 }
 
 func (r *SessionRepository) LogoutAllByUserID(ctx context.Context, userID int64, loggedOutAt time.Time) error {
-	const query = `
-UPDATE login_sessions
-SET logged_out_at = ?
-WHERE user_id = ?
-  AND logged_out_at IS NULL`
-
-	_, err := r.db.ExecContext(ctx, query, loggedOutAt, userID)
+	_, err := r.db.ExecContext(ctx, sessionRepositorySQL.logoutAllByUserID, loggedOutAt, userID)
 	return err
 }
 

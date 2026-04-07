@@ -18,22 +18,9 @@ func NewUserRepository(db *sql.DB) *UserRepository {
 }
 
 func (r *UserRepository) Create(ctx context.Context, model *user.Model) error {
-	const query = `
-INSERT INTO users (
-    user_uuid,
-    username,
-    email,
-    email_verified,
-    display_name,
-    password_hash,
-    status,
-    failed_login_count,
-    last_login_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-
 	result, err := r.db.ExecContext(
 		ctx,
-		query,
+		userRepositorySQL.createUser,
 		model.UserUUID,
 		model.Username,
 		model.Email,
@@ -56,111 +43,28 @@ INSERT INTO users (
 }
 
 func (r *UserRepository) FindByID(ctx context.Context, id int64) (*user.Model, error) {
-	const query = `
-SELECT
-    id,
-    user_uuid,
-    username,
-    email,
-    email_verified,
-    display_name,
-    password_hash,
-    status,
-    failed_login_count,
-    last_login_at,
-    created_at,
-    updated_at
-FROM users
-WHERE id = ?
-LIMIT 1`
-
-	return r.getOne(ctx, query, id)
+	return r.getOne(ctx, userRepositorySQL.findByID, id)
 }
 
 func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*user.Model, error) {
-	const query = `
-SELECT
-    id,
-    user_uuid,
-    username,
-    email,
-    email_verified,
-    display_name,
-    password_hash,
-    status,
-    failed_login_count,
-    last_login_at,
-    created_at,
-    updated_at
-FROM users
-WHERE username = ?
-LIMIT 1`
-
-	return r.getOne(ctx, query, username)
+	return r.getOne(ctx, userRepositorySQL.findByUsername, username)
 }
 
 func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*user.Model, error) {
-	const query = `
-SELECT
-    id,
-    user_uuid,
-    username,
-    email,
-    email_verified,
-    display_name,
-    password_hash,
-    status,
-    failed_login_count,
-    last_login_at,
-    created_at,
-    updated_at
-FROM users
-WHERE email = ?
-LIMIT 1`
-
-	return r.getOne(ctx, query, email)
+	return r.getOne(ctx, userRepositorySQL.findByEmail, email)
 }
 
 func (r *UserRepository) FindByUserUUID(ctx context.Context, userUUID string) (*user.Model, error) {
-	const query = `
-SELECT
-    id,
-    user_uuid,
-    username,
-    email,
-    email_verified,
-    display_name,
-    password_hash,
-    status,
-    failed_login_count,
-    last_login_at,
-    created_at,
-    updated_at
-FROM users
-WHERE user_uuid = ?
-LIMIT 1`
-
-	return r.getOne(ctx, query, userUUID)
+	return r.getOne(ctx, userRepositorySQL.findByUserUUID, userUUID)
 }
 
 func (r *UserRepository) IncrementFailedLogin(ctx context.Context, id int64) (int64, error) {
-	const query = `
-UPDATE users
-SET failed_login_count = failed_login_count + 1
-WHERE id = ?`
-
-	if _, err := r.db.ExecContext(ctx, query, id); err != nil {
+	if _, err := r.db.ExecContext(ctx, userRepositorySQL.incrementFailedLogin, id); err != nil {
 		return 0, err
 	}
 
-	const selectQuery = `
-SELECT failed_login_count
-FROM users
-WHERE id = ?
-LIMIT 1`
-
 	var count int64
-	if err := r.db.QueryRowContext(ctx, selectQuery, id).Scan(&count); err != nil {
+	if err := r.db.QueryRowContext(ctx, userRepositorySQL.selectFailedLoginCountByUserID, id).Scan(&count); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return 0, nil
 		}
@@ -171,13 +75,7 @@ LIMIT 1`
 }
 
 func (r *UserRepository) ResetFailedLogin(ctx context.Context, id int64, lastLoginAt time.Time) error {
-	const query = `
-UPDATE users
-SET failed_login_count = 0,
-    last_login_at = ?
-WHERE id = ?`
-
-	_, err := r.db.ExecContext(ctx, query, lastLoginAt, id)
+	_, err := r.db.ExecContext(ctx, userRepositorySQL.resetFailedLogin, lastLoginAt, id)
 	return err
 }
 

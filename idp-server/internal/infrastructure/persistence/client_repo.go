@@ -29,24 +29,9 @@ func (r *ClientRepository) CreateClient(ctx context.Context, model *clientdomain
 		}
 	}()
 
-	const clientQuery = `
-INSERT INTO oauth_clients (
-    client_id,
-    client_name,
-    client_secret_hash,
-    client_type,
-    token_endpoint_auth_method,
-    require_pkce,
-    require_consent,
-    access_token_ttl_seconds,
-    refresh_token_ttl_seconds,
-    id_token_ttl_seconds,
-    status
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-
 	result, err := tx.ExecContext(
 		ctx,
-		clientQuery,
+		clientRepositorySQL.createClient,
 		model.ClientID,
 		model.ClientName,
 		nullString(model.ClientSecretHash),
@@ -69,13 +54,13 @@ INSERT INTO oauth_clients (
 	}
 	model.ID = insertedID
 
-	if err := insertStringValuesTx(ctx, tx, `INSERT INTO oauth_client_grant_types (client_id, grant_type) VALUES (?, ?)`, model.ID, model.GrantTypes); err != nil {
+	if err := insertStringValuesTx(ctx, tx, clientRepositorySQL.insertClientGrantType, model.ID, model.GrantTypes); err != nil {
 		return err
 	}
-	if err := insertStringValuesTx(ctx, tx, `INSERT INTO oauth_client_auth_methods (client_id, auth_method) VALUES (?, ?)`, model.ID, model.AuthMethods); err != nil {
+	if err := insertStringValuesTx(ctx, tx, clientRepositorySQL.insertClientAuthMethod, model.ID, model.AuthMethods); err != nil {
 		return err
 	}
-	if err := insertStringValuesTx(ctx, tx, `INSERT INTO oauth_client_scopes (client_id, scope) VALUES (?, ?)`, model.ID, model.Scopes); err != nil {
+	if err := insertStringValuesTx(ctx, tx, clientRepositorySQL.insertClientScope, model.ID, model.Scopes); err != nil {
 		return err
 	}
 	if err := insertRedirectURIsTx(ctx, tx, model.ID, model.RedirectURIs); err != nil {
@@ -93,29 +78,9 @@ INSERT INTO oauth_clients (
 }
 
 func (r *ClientRepository) FindByClientID(ctx context.Context, clientID string) (*clientdomain.Model, error) {
-	const query = `
-SELECT
-    id,
-    client_id,
-    client_name,
-    client_secret_hash,
-    client_type,
-    token_endpoint_auth_method,
-    require_pkce,
-    require_consent,
-    access_token_ttl_seconds,
-    refresh_token_ttl_seconds,
-    id_token_ttl_seconds,
-    status,
-    created_at,
-    updated_at
-FROM oauth_clients
-WHERE client_id = ?
-LIMIT 1`
-
 	var model clientdomain.Model
 	var secretHash sql.NullString
-	err := r.db.QueryRowContext(ctx, query, clientID).Scan(
+	err := r.db.QueryRowContext(ctx, clientRepositorySQL.findByClientID, clientID).Scan(
 		&model.ID,
 		&model.ClientID,
 		&model.ClientName,
@@ -140,19 +105,19 @@ LIMIT 1`
 	model.ClientSecretHash = secretHash.String
 
 	var loadErr error
-	model.RedirectURIs, loadErr = r.loadStrings(ctx, `SELECT redirect_uri FROM oauth_client_redirect_uris WHERE client_id = ? ORDER BY id`, model.ID)
+	model.RedirectURIs, loadErr = r.loadStrings(ctx, clientRepositorySQL.selectRedirectURIsByClientID, model.ID)
 	if loadErr != nil {
 		return nil, loadErr
 	}
-	model.GrantTypes, loadErr = r.loadStrings(ctx, `SELECT grant_type FROM oauth_client_grant_types WHERE client_id = ? ORDER BY id`, model.ID)
+	model.GrantTypes, loadErr = r.loadStrings(ctx, clientRepositorySQL.selectGrantTypesByClientID, model.ID)
 	if loadErr != nil {
 		return nil, loadErr
 	}
-	model.AuthMethods, loadErr = r.loadStrings(ctx, `SELECT auth_method FROM oauth_client_auth_methods WHERE client_id = ? ORDER BY id`, model.ID)
+	model.AuthMethods, loadErr = r.loadStrings(ctx, clientRepositorySQL.selectAuthMethodsByClientID, model.ID)
 	if loadErr != nil {
 		return nil, loadErr
 	}
-	model.Scopes, loadErr = r.loadStrings(ctx, `SELECT scope FROM oauth_client_scopes WHERE client_id = ? ORDER BY id`, model.ID)
+	model.Scopes, loadErr = r.loadStrings(ctx, clientRepositorySQL.selectScopesByClientID, model.ID)
 	if loadErr != nil {
 		return nil, loadErr
 	}
@@ -197,17 +162,10 @@ func (r *ClientRepository) RegisterRedirectURIs(ctx context.Context, clientDBID 
 		}
 	}()
 
-	const query = `
-INSERT IGNORE INTO oauth_client_redirect_uris (
-    client_id,
-    redirect_uri,
-    redirect_uri_sha256
-) VALUES (?, ?, ?)`
-
 	insertedCount := 0
 	for _, redirectURI := range redirectURIs {
 		hash := sha256.Sum256([]byte(redirectURI))
-		result, execErr := tx.ExecContext(ctx, query, clientDBID, redirectURI, hex.EncodeToString(hash[:]))
+		result, execErr := tx.ExecContext(ctx, clientRepositorySQL.insertRedirectURIIgnore, clientDBID, redirectURI, hex.EncodeToString(hash[:]))
 		if execErr != nil {
 			return 0, execErr
 		}
@@ -228,15 +186,9 @@ INSERT IGNORE INTO oauth_client_redirect_uris (
 }
 
 func (r *ClientRepository) HasPostLogoutRedirectURI(ctx context.Context, clientDBID int64, redirectURI string) (bool, error) {
-	const query = `
-SELECT 1
-FROM oauth_client_post_logout_redirect_uris
-WHERE client_id = ? AND redirect_uri_sha256 = ?
-LIMIT 1`
-
 	hash := sha256.Sum256([]byte(redirectURI))
 	var matched int
-	err := r.db.QueryRowContext(ctx, query, clientDBID, hex.EncodeToString(hash[:])).Scan(&matched)
+	err := r.db.QueryRowContext(ctx, clientRepositorySQL.hasPostLogoutRedirectURI, clientDBID, hex.EncodeToString(hash[:])).Scan(&matched)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return false, nil
@@ -261,17 +213,10 @@ func (r *ClientRepository) RegisterPostLogoutRedirectURIs(ctx context.Context, c
 		}
 	}()
 
-	const query = `
-INSERT IGNORE INTO oauth_client_post_logout_redirect_uris (
-    client_id,
-    redirect_uri,
-    redirect_uri_sha256
-) VALUES (?, ?, ?)`
-
 	insertedCount := 0
 	for _, redirectURI := range redirectURIs {
 		hash := sha256.Sum256([]byte(redirectURI))
-		result, execErr := tx.ExecContext(ctx, query, clientDBID, redirectURI, hex.EncodeToString(hash[:]))
+		result, execErr := tx.ExecContext(ctx, clientRepositorySQL.insertPostLogoutRedirectURIIgnore, clientDBID, redirectURI, hex.EncodeToString(hash[:]))
 		if execErr != nil {
 			return 0, execErr
 		}
@@ -301,16 +246,9 @@ func insertStringValuesTx(ctx context.Context, tx *sql.Tx, query string, clientD
 }
 
 func insertRedirectURIsTx(ctx context.Context, tx *sql.Tx, clientDBID int64, redirectURIs []string) error {
-	const query = `
-INSERT INTO oauth_client_redirect_uris (
-    client_id,
-    redirect_uri,
-    redirect_uri_sha256
-) VALUES (?, ?, ?)`
-
 	for _, redirectURI := range redirectURIs {
 		hash := sha256.Sum256([]byte(redirectURI))
-		if _, err := tx.ExecContext(ctx, query, clientDBID, redirectURI, hex.EncodeToString(hash[:])); err != nil {
+		if _, err := tx.ExecContext(ctx, clientRepositorySQL.insertRedirectURI, clientDBID, redirectURI, hex.EncodeToString(hash[:])); err != nil {
 			return err
 		}
 	}
@@ -322,16 +260,9 @@ func insertPostLogoutRedirectURIsTx(ctx context.Context, tx *sql.Tx, clientDBID 
 		return nil
 	}
 
-	const query = `
-INSERT INTO oauth_client_post_logout_redirect_uris (
-    client_id,
-    redirect_uri,
-    redirect_uri_sha256
-) VALUES (?, ?, ?)`
-
 	for _, redirectURI := range redirectURIs {
 		hash := sha256.Sum256([]byte(redirectURI))
-		if _, err := tx.ExecContext(ctx, query, clientDBID, redirectURI, hex.EncodeToString(hash[:])); err != nil {
+		if _, err := tx.ExecContext(ctx, clientRepositorySQL.insertPostLogoutRedirectURI, clientDBID, redirectURI, hex.EncodeToString(hash[:])); err != nil {
 			return err
 		}
 	}
