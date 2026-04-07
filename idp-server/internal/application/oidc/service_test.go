@@ -28,6 +28,15 @@ func (s *stubOIDCUserRepository) FindByEmail(context.Context, string) (*userdoma
 func (s *stubOIDCUserRepository) FindByUsername(context.Context, string) (*userdomain.Model, error) {
 	return nil, nil
 }
+func (s *stubOIDCUserRepository) ListByRoleCode(context.Context, string, int) ([]*userdomain.Model, error) {
+	return nil, nil
+}
+func (s *stubOIDCUserRepository) CountByRoleCode(context.Context, string) (int64, error) {
+	return 0, nil
+}
+func (s *stubOIDCUserRepository) UpdateRoleAndPrivilege(context.Context, int64, string, uint32, string) error {
+	return nil
+}
 func (s *stubOIDCUserRepository) IncrementFailedLogin(context.Context, int64) (int64, error) {
 	return 0, nil
 }

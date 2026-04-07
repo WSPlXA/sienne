@@ -28,6 +28,8 @@ DROP TABLE IF EXISTS login_sessions;
 
 DROP TABLE IF EXISTS user_totp_credentials;
 
+DROP TABLE IF EXISTS operator_roles;
+
 DROP TABLE IF EXISTS oauth_client_scopes;
 
 DROP TABLE IF EXISTS oauth_client_auth_methods;
@@ -107,6 +109,22 @@ CREATE TABLE user_totp_credentials (
     UNIQUE KEY uk_user_totp_credentials_user_id (user_id),
     CONSTRAINT fk_user_totp_credentials_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'user totp mfa credentials';
+
+-- =========================================================
+-- 2.2 Operator roles / RBAC presets
+-- =========================================================
+CREATE TABLE operator_roles (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    role_code VARCHAR(64) NOT NULL,
+    display_name VARCHAR(128) NOT NULL,
+    description_text VARCHAR(512) NOT NULL,
+    privilege_mask INT UNSIGNED NOT NULL,
+    is_system TINYINT(1) NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_operator_roles_role_code (role_code)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'rbac role presets for admin/operator users';
 
 -- =========================================================
 -- 3. OAuth clients
@@ -504,6 +522,52 @@ VALUES (
         2592000,
         0,
         'active'
+    );
+
+-- Operator roles
+INSERT INTO
+    operator_roles (
+        role_code,
+        display_name,
+        description_text,
+        privilege_mask,
+        is_system
+    )
+VALUES
+    (
+        'end_user',
+        'End User',
+        'regular end user without management privilege',
+        0,
+        1
+    ),
+    (
+        'support',
+        'Support Engineer',
+        'support operator with read and limited execution permissions',
+        3431757964,
+        1
+    ),
+    (
+        'oauth_admin',
+        'OAuth Administrator',
+        'operator managing oauth clients and protocol settings',
+        2397851784,
+        1
+    ),
+    (
+        'security_admin',
+        'Security Administrator',
+        'security operator with broad but not catastrophic security permissions',
+        4008633070,
+        1
+    ),
+    (
+        'super_admin',
+        'Super Administrator',
+        'full access operator for bootstrap and emergency operations',
+        4294967295,
+        1
     );
 
 -- Redirect URIs

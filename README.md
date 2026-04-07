@@ -49,6 +49,7 @@
 - 登录失败限流 + 用户锁定
 - Redis Lua 原子脚本（state/nonce/revoke/rotate 等）
 - 32 位 RBAC 权限位（管理接口按 session + privilege_mask 鉴权）
+- 内置角色初始化、角色列表查询、用户角色分配
 
 ## 2. HTTP 路由总览
 
@@ -68,6 +69,14 @@
 | `POST` | `/logout` | 当前会话登出 |
 | `POST` | `/logout/all` | 当前用户全端下线（撤销 session + token） |
 | `GET` `POST` | `/connect/logout` | OIDC End Session |
+| `GET` | `/admin/rbac/roles` | 查询角色列表（需 RBAC） |
+| `GET` | `/admin/rbac/roles/:role_code/users` | 查询某角色下的用户列表（需 RBAC） |
+| `GET` | `/admin/rbac/usage` | 查询角色使用情况统计（需 RBAC） |
+| `POST` | `/admin/rbac/bootstrap` | 初始化/刷新内置角色（需 RBAC） |
+| `POST` | `/admin/rbac/roles` | 创建自定义角色（需 RBAC） |
+| `PUT` | `/admin/rbac/roles/:role_code` | 更新自定义角色（需 RBAC） |
+| `DELETE` | `/admin/rbac/roles/:role_code` | 删除自定义角色（需 RBAC） |
+| `POST` | `/admin/users/:user_id/role` | 给用户分配角色与权限掩码（需 RBAC） |
 | `POST` | `/admin/users/:user_id/logout-all` | 管理员强制某用户全端下线（需 RBAC） |
 
 ### OAuth2 / OIDC

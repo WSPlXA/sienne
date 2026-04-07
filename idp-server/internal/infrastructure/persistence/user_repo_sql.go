@@ -16,6 +16,9 @@ type userRepositorySQLSet struct {
 	findByUsername                 string
 	findByEmail                    string
 	findByUserUUID                 string
+	listByRoleCode                 string
+	countByRoleCode                string
+	updateRoleAndPrivilege         string
 	incrementFailedLogin           string
 	selectFailedLoginCountByUserID string
 	resetFailedLogin               string
@@ -30,6 +33,9 @@ func mustLoadUserRepositorySQL() userRepositorySQLSet {
 		findByUsername:                 mustReadUserRepositorySQL("find_by_username.sql"),
 		findByEmail:                    mustReadUserRepositorySQL("find_by_email.sql"),
 		findByUserUUID:                 mustReadUserRepositorySQL("find_by_user_uuid.sql"),
+		listByRoleCode:                 mustReadUserRepositorySQL("list_by_role_code.sql"),
+		countByRoleCode:                mustReadUserRepositorySQL("count_by_role_code.sql"),
+		updateRoleAndPrivilege:         mustReadUserRepositorySQL("update_role_and_privilege.sql"),
 		incrementFailedLogin:           mustReadUserRepositorySQL("increment_failed_login.sql"),
 		selectFailedLoginCountByUserID: mustReadUserRepositorySQL("select_failed_login_count_by_user_id.sql"),
 		resetFailedLogin:               mustReadUserRepositorySQL("reset_failed_login.sql"),

@@ -17,6 +17,7 @@ import (
 	appdevice "idp-server/internal/application/device"
 	appmfa "idp-server/internal/application/mfa"
 	"idp-server/internal/application/oidc"
+	apprbac "idp-server/internal/application/rbac"
 	appregister "idp-server/internal/application/register"
 	appsession "idp-server/internal/application/session"
 	apptoken "idp-server/internal/application/token"
@@ -77,6 +78,7 @@ func Wire() (*App, error) {
 	keyBuilder := cacheRedis.NewKeyBuilder(cfg.RedisKeyPrefix, cfg.AppEnv)
 	// userRepo是一个用户存储库实例，用于与数据库交互以管理用户数据。
 	userRepo := persistence.NewUserRepository(db)
+	operatorRoleRepo := persistence.NewOperatorRoleRepository(db)
 	// sessionRepo是一个会话存储库实例，用于与数据库交互以管理会话数据。!【重要】
 	sessionRepo := persistence.NewSessionRepository(db)
 	// clientRepo是一个客户端存储库实例，用于与数据库交互以管理客户端数据。
@@ -129,6 +131,7 @@ func Wire() (*App, error) {
 		UserLockTTL:        cfg.LoginUserLockTTL,
 	})
 	sessionService := appsession.NewService(sessionRepo, sessionCache, tokenRepo, tokenCache)
+	rbacService := apprbac.NewService(operatorRoleRepo, userRepo)
 	mfaService := appmfa.NewService(sessionRepo, sessionCache, userRepo, totpRepo, mfaCache, totpProvider, cfg.Issuer, 10*time.Minute)
 	rotationConfig := infracrypto.RotationConfig{
 		WorkingDir:    cfg.WorkDir,
@@ -181,7 +184,7 @@ func Wire() (*App, error) {
 	adminMiddleware := httpmiddleware.NewSessionPermissionMiddleware(sessionRepo, sessionCache, userRepo)
 
 	return &App{
-		Router: interfacehttp.NewRouter(authzService, consentService, registerService, clientService, clientService, clientService, clientService, authnService, federatedOIDCProvider != nil, sessionService, clientAuthenticator, grantRegistry, deviceService, mfaService, oidcService, authMiddleware, adminMiddleware),
+		Router: interfacehttp.NewRouter(authzService, consentService, registerService, clientService, clientService, clientService, clientService, authnService, federatedOIDCProvider != nil, sessionService, rbacService, clientAuthenticator, grantRegistry, deviceService, mfaService, oidcService, authMiddleware, adminMiddleware),
 	}, nil
 }
 

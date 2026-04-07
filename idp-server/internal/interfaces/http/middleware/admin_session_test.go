@@ -75,6 +75,15 @@ func (s *stubAdminUserRepository) FindByEmail(context.Context, string) (*userdom
 func (s *stubAdminUserRepository) FindByUsername(context.Context, string) (*userdomain.Model, error) {
 	return nil, nil
 }
+func (s *stubAdminUserRepository) ListByRoleCode(context.Context, string, int) ([]*userdomain.Model, error) {
+	return nil, nil
+}
+func (s *stubAdminUserRepository) CountByRoleCode(context.Context, string) (int64, error) {
+	return 0, nil
+}
+func (s *stubAdminUserRepository) UpdateRoleAndPrivilege(context.Context, int64, string, uint32, string) error {
+	return nil
+}
 func (s *stubAdminUserRepository) IncrementFailedLogin(context.Context, int64) (int64, error) {
 	return 0, nil
 }

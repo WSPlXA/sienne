@@ -50,6 +50,18 @@ func (s *stubAuthnUserRepository) FindByUsername(_ context.Context, username str
 	return s.usersByUsername[username], nil
 }
 
+func (s *stubAuthnUserRepository) ListByRoleCode(context.Context, string, int) ([]*userdomain.Model, error) {
+	return nil, nil
+}
+
+func (s *stubAuthnUserRepository) CountByRoleCode(context.Context, string) (int64, error) {
+	return 0, nil
+}
+
+func (s *stubAuthnUserRepository) UpdateRoleAndPrivilege(context.Context, int64, string, uint32, string) error {
+	return nil
+}
+
 func (s *stubAuthnUserRepository) IncrementFailedLogin(context.Context, int64) (int64, error) {
 	s.incrementFailedLoginCalls++
 	return s.incrementFailedLoginResult, nil

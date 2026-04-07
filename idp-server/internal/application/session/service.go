@@ -219,7 +219,7 @@ func (s *Service) revokeUserTokens(ctx context.Context, userID int64, revokedAt 
 			if token == nil {
 				continue
 			}
-			ttl := time.Until(token.ExpiresAt)
+			ttl := token.ExpiresAt.Sub(revokedAt)
 			if ttl <= 0 {
 				continue
 			}
@@ -231,7 +231,7 @@ func (s *Service) revokeUserTokens(ctx context.Context, userID int64, revokedAt 
 			if token == nil {
 				continue
 			}
-			ttl := time.Until(token.ExpiresAt)
+			ttl := token.ExpiresAt.Sub(revokedAt)
 			if ttl <= 0 {
 				continue
 			}

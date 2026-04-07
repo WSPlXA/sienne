@@ -12,6 +12,7 @@ import (
 	appdevice "idp-server/internal/application/device"
 	appmfa "idp-server/internal/application/mfa"
 	"idp-server/internal/application/oidc"
+	apprbac "idp-server/internal/application/rbac"
 	appregister "idp-server/internal/application/register"
 	appsession "idp-server/internal/application/session"
 
@@ -22,7 +23,7 @@ import (
 	"idp-server/pkg/rbac"
 )
 
-func NewRouter(authzService authz.Service, consentService appconsent.Manager, registerService appregister.Registrar, clientCreator appclient.Creator, clientRedirectRegistrar appclient.Registrar, clientPostLogoutRedirectRegistrar appclient.PostLogoutRegistrar, logoutRedirectValidator appclient.LogoutRedirectValidator, authnService authn.Authenticator, federatedOIDCEnabled bool, sessionService appsession.Manager, clientAuthenticator appclientauth.Authenticator, grantRegistry *pluginregistry.GrantRegistry, deviceService *appdevice.Service, mfaService appmfa.Manager, oidcService *oidc.Service, authMiddleware *middleware.AuthMiddleware, adminMiddleware *middleware.SessionPermissionMiddleware) *gin.Engine {
+func NewRouter(authzService authz.Service, consentService appconsent.Manager, registerService appregister.Registrar, clientCreator appclient.Creator, clientRedirectRegistrar appclient.Registrar, clientPostLogoutRedirectRegistrar appclient.PostLogoutRegistrar, logoutRedirectValidator appclient.LogoutRedirectValidator, authnService authn.Authenticator, federatedOIDCEnabled bool, sessionService appsession.Manager, rbacService apprbac.Manager, clientAuthenticator appclientauth.Authenticator, grantRegistry *pluginregistry.GrantRegistry, deviceService *appdevice.Service, mfaService appmfa.Manager, oidcService *oidc.Service, authMiddleware *middleware.AuthMiddleware, adminMiddleware *middleware.SessionPermissionMiddleware) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(middleware.NewLoggingMiddleware(log.Default()).Handler())
@@ -38,6 +39,7 @@ func NewRouter(authzService authz.Service, consentService appconsent.Manager, re
 	logoutHandler := handler.NewLogoutHandler(sessionService)
 	logoutAllHandler := handler.NewLogoutAllHandler(sessionService)
 	adminUserLogoutHandler := handler.NewAdminUserLogoutHandler(sessionService)
+	rbacHandler := handler.NewRBACHandler(rbacService)
 	totpSetupHandler := handler.NewTOTPSetupHandler(mfaService)
 	endSessionHandler := handler.NewEndSessionHandler(sessionService, logoutRedirectValidator)
 	tokenHandler := handler.NewTokenHandler(clientAuthenticator, grantRegistry)
@@ -88,6 +90,14 @@ func NewRouter(authzService authz.Service, consentService appconsent.Manager, re
 	if adminMiddleware != nil {
 		admin := router.Group("/admin")
 		admin.Use(adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.UserManage))
+		admin.GET("/rbac/roles", rbacHandler.ListRoles)
+		admin.GET("/rbac/roles/:role_code/users", rbacHandler.ListUsersByRole)
+		admin.GET("/rbac/usage", rbacHandler.RoleUsage)
+		admin.POST("/rbac/bootstrap", adminMiddleware.RequireSessionPermissions(rbac.OpsManage), rbacHandler.Bootstrap)
+		admin.POST("/rbac/roles", adminMiddleware.RequireSessionPermissions(rbac.OpsManage), rbacHandler.CreateRole)
+		admin.PUT("/rbac/roles/:role_code", adminMiddleware.RequireSessionPermissions(rbac.OpsManage), rbacHandler.UpdateRole)
+		admin.DELETE("/rbac/roles/:role_code", adminMiddleware.RequireSessionPermissions(rbac.OpsManage), rbacHandler.DeleteRole)
+		admin.POST("/users/:user_id/role", rbacHandler.AssignRole)
 		admin.POST("/users/:user_id/logout-all", adminUserLogoutHandler.Handle)
 	}
 

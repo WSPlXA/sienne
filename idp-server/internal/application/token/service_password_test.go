@@ -31,6 +31,15 @@ func (s *stubTokenUserRepository) FindByUsername(_ context.Context, username str
 	}
 	return s.model, nil
 }
+func (s *stubTokenUserRepository) ListByRoleCode(context.Context, string, int) ([]*userdomain.Model, error) {
+	return nil, nil
+}
+func (s *stubTokenUserRepository) CountByRoleCode(context.Context, string) (int64, error) {
+	return 0, nil
+}
+func (s *stubTokenUserRepository) UpdateRoleAndPrivilege(context.Context, int64, string, uint32, string) error {
+	return nil
+}
 func (s *stubTokenUserRepository) IncrementFailedLogin(context.Context, int64) (int64, error) {
 	return 0, nil
 }

@@ -5,7 +5,10 @@ INSERT INTO users (
     email_verified,
     display_name,
     password_hash,
+    role_code,
+    privilege_mask,
+    tenant_scope,
     status,
     failed_login_count,
     last_login_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
