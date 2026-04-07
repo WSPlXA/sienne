@@ -10,6 +10,9 @@ type Model struct {
 	EmailVerified    bool
 	DisplayName      string
 	PasswordHash     string
+	RoleCode         string
+	PrivilegeMask    uint32
+	TenantScope      string
 	Status           string
 	FailedLoginCount int
 	LastLoginAt      *time.Time

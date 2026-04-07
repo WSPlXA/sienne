@@ -1,0 +1,147 @@
+package middleware
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	sessiondomain "idp-server/internal/domain/session"
+	userdomain "idp-server/internal/domain/user"
+	cacheport "idp-server/internal/ports/cache"
+	"idp-server/pkg/rbac"
+
+	"github.com/gin-gonic/gin"
+)
+
+type stubAdminSessionRepository struct {
+	session *sessiondomain.Model
+}
+
+func (s *stubAdminSessionRepository) Create(context.Context, *sessiondomain.Model) error {
+	return nil
+}
+
+func (s *stubAdminSessionRepository) FindBySessionID(context.Context, string) (*sessiondomain.Model, error) {
+	return s.session, nil
+}
+
+func (s *stubAdminSessionRepository) ListActiveByUserID(context.Context, int64) ([]*sessiondomain.Model, error) {
+	return nil, nil
+}
+
+func (s *stubAdminSessionRepository) LogoutBySessionID(context.Context, string, time.Time) error {
+	return nil
+}
+
+func (s *stubAdminSessionRepository) LogoutAllByUserID(context.Context, int64, time.Time) error {
+	return nil
+}
+
+type stubAdminSessionCache struct{}
+
+func (s *stubAdminSessionCache) Save(context.Context, cacheport.SessionCacheEntry, time.Duration) error {
+	return nil
+}
+func (s *stubAdminSessionCache) Get(context.Context, string) (*cacheport.SessionCacheEntry, error) {
+	return nil, nil
+}
+func (s *stubAdminSessionCache) Delete(context.Context, string) error { return nil }
+func (s *stubAdminSessionCache) AddUserSessionIndex(context.Context, string, string, time.Duration) error {
+	return nil
+}
+func (s *stubAdminSessionCache) ListUserSessionIDs(context.Context, string) ([]string, error) {
+	return nil, nil
+}
+func (s *stubAdminSessionCache) RemoveUserSessionIndex(context.Context, string, string) error {
+	return nil
+}
+
+type stubAdminUserRepository struct {
+	user *userdomain.Model
+}
+
+func (s *stubAdminUserRepository) Create(context.Context, *userdomain.Model) error { return nil }
+func (s *stubAdminUserRepository) FindByID(context.Context, int64) (*userdomain.Model, error) {
+	return s.user, nil
+}
+func (s *stubAdminUserRepository) FindByUserUUID(context.Context, string) (*userdomain.Model, error) {
+	return nil, nil
+}
+func (s *stubAdminUserRepository) FindByEmail(context.Context, string) (*userdomain.Model, error) {
+	return nil, nil
+}
+func (s *stubAdminUserRepository) FindByUsername(context.Context, string) (*userdomain.Model, error) {
+	return nil, nil
+}
+func (s *stubAdminUserRepository) IncrementFailedLogin(context.Context, int64) (int64, error) {
+	return 0, nil
+}
+func (s *stubAdminUserRepository) ResetFailedLogin(context.Context, int64, time.Time) error {
+	return nil
+}
+
+func TestRequireSessionPermissionsAllowsPrivilegedUser(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := gin.New()
+	mw := NewSessionPermissionMiddleware(
+		&stubAdminSessionRepository{session: &sessiondomain.Model{
+			SessionID: "session-1",
+			UserID:    7,
+			ExpiresAt: time.Now().UTC().Add(time.Hour),
+		}},
+		&stubAdminSessionCache{},
+		&stubAdminUserRepository{user: &userdomain.Model{
+			ID:            7,
+			Status:        "active",
+			PrivilegeMask: rbac.MaskSuperAdmin,
+		}},
+	)
+
+	router.POST("/admin", mw.RequireSessionPermissions(rbac.AuthExec, rbac.UserManage), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/admin", nil)
+	req.AddCookie(&http.Cookie{Name: "idp_session", Value: "session-1"})
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, req)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status code = %d, want %d", recorder.Code, http.StatusOK)
+	}
+}
+
+func TestRequireSessionPermissionsRejectsInsufficientPrivilege(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := gin.New()
+	mw := NewSessionPermissionMiddleware(
+		&stubAdminSessionRepository{session: &sessiondomain.Model{
+			SessionID: "session-1",
+			UserID:    7,
+			ExpiresAt: time.Now().UTC().Add(time.Hour),
+		}},
+		&stubAdminSessionCache{},
+		&stubAdminUserRepository{user: &userdomain.Model{
+			ID:            7,
+			Status:        "active",
+			PrivilegeMask: rbac.MaskSupport,
+		}},
+	)
+
+	router.POST("/admin", mw.RequireSessionPermissions(rbac.AuthExec, rbac.UserManage), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/admin", nil)
+	req.AddCookie(&http.Cookie{Name: "idp_session", Value: "session-1"})
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, req)
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status code = %d, want %d", recorder.Code, http.StatusForbidden)
+	}
+}

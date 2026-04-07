@@ -128,7 +128,7 @@ func Wire() (*App, error) {
 		UserLockThreshold:  int64(cfg.LoginUserLockThreshold),
 		UserLockTTL:        cfg.LoginUserLockTTL,
 	})
-	sessionService := appsession.NewService(sessionRepo, sessionCache)
+	sessionService := appsession.NewService(sessionRepo, sessionCache, tokenRepo, tokenCache)
 	mfaService := appmfa.NewService(sessionRepo, sessionCache, userRepo, totpRepo, mfaCache, totpProvider, cfg.Issuer, 10*time.Minute)
 	rotationConfig := infracrypto.RotationConfig{
 		WorkingDir:    cfg.WorkDir,
@@ -178,9 +178,10 @@ func Wire() (*App, error) {
 	clientAuthenticator := appclientauth.NewService(clientRepo, clientAuthRegistry)
 	oidcService := oidc.NewService(userRepo, tokenRepo, tokenCache, &jwtServiceAdapter{service: jwtService}, keyManagerAdapter{manager: keyManager}, cfg.Issuer)
 	authMiddleware := httpmiddleware.NewAuthMiddleware(&jwtMiddlewareAdapter{service: jwtService}, tokenCache, cfg.Issuer)
+	adminMiddleware := httpmiddleware.NewSessionPermissionMiddleware(sessionRepo, sessionCache, userRepo)
 
 	return &App{
-		Router: interfacehttp.NewRouter(authzService, consentService, registerService, clientService, clientService, clientService, clientService, authnService, federatedOIDCProvider != nil, sessionService, clientAuthenticator, grantRegistry, deviceService, mfaService, oidcService, authMiddleware),
+		Router: interfacehttp.NewRouter(authzService, consentService, registerService, clientService, clientService, clientService, clientService, authnService, federatedOIDCProvider != nil, sessionService, clientAuthenticator, grantRegistry, deviceService, mfaService, oidcService, authMiddleware, adminMiddleware),
 	}, nil
 }
 

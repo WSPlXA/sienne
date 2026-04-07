@@ -19,9 +19,10 @@ import (
 	"idp-server/internal/interfaces/http/handler"
 	"idp-server/internal/interfaces/http/middleware"
 	pluginregistry "idp-server/internal/plugins/registry"
+	"idp-server/pkg/rbac"
 )
 
-func NewRouter(authzService authz.Service, consentService appconsent.Manager, registerService appregister.Registrar, clientCreator appclient.Creator, clientRedirectRegistrar appclient.Registrar, clientPostLogoutRedirectRegistrar appclient.PostLogoutRegistrar, logoutRedirectValidator appclient.LogoutRedirectValidator, authnService authn.Authenticator, federatedOIDCEnabled bool, sessionService appsession.Manager, clientAuthenticator appclientauth.Authenticator, grantRegistry *pluginregistry.GrantRegistry, deviceService *appdevice.Service, mfaService appmfa.Manager, oidcService *oidc.Service, authMiddleware *middleware.AuthMiddleware) *gin.Engine {
+func NewRouter(authzService authz.Service, consentService appconsent.Manager, registerService appregister.Registrar, clientCreator appclient.Creator, clientRedirectRegistrar appclient.Registrar, clientPostLogoutRedirectRegistrar appclient.PostLogoutRegistrar, logoutRedirectValidator appclient.LogoutRedirectValidator, authnService authn.Authenticator, federatedOIDCEnabled bool, sessionService appsession.Manager, clientAuthenticator appclientauth.Authenticator, grantRegistry *pluginregistry.GrantRegistry, deviceService *appdevice.Service, mfaService appmfa.Manager, oidcService *oidc.Service, authMiddleware *middleware.AuthMiddleware, adminMiddleware *middleware.SessionPermissionMiddleware) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(middleware.NewLoggingMiddleware(log.Default()).Handler())
@@ -35,6 +36,8 @@ func NewRouter(authzService authz.Service, consentService appconsent.Manager, re
 	loginHandler := handler.NewLoginHandler(authnService, federatedOIDCEnabled)
 	loginTOTPHandler := handler.NewLoginTOTPHandler(authnService)
 	logoutHandler := handler.NewLogoutHandler(sessionService)
+	logoutAllHandler := handler.NewLogoutAllHandler(sessionService)
+	adminUserLogoutHandler := handler.NewAdminUserLogoutHandler(sessionService)
 	totpSetupHandler := handler.NewTOTPSetupHandler(mfaService)
 	endSessionHandler := handler.NewEndSessionHandler(sessionService, logoutRedirectValidator)
 	tokenHandler := handler.NewTokenHandler(clientAuthenticator, grantRegistry)
@@ -59,6 +62,7 @@ func NewRouter(authzService authz.Service, consentService appconsent.Manager, re
 	router.GET("/connect/logout", endSessionHandler.Get)
 	router.POST("/connect/logout", endSessionHandler.Post)
 	router.POST("/logout", logoutHandler.Handle)
+	router.POST("/logout/all", logoutAllHandler.Handle)
 	router.GET("/register", registerHandler.Handle)
 	router.POST("/register", registerHandler.Handle)
 	router.GET("/consent", consentHandler.Handle)
@@ -79,6 +83,12 @@ func NewRouter(authzService authz.Service, consentService appconsent.Manager, re
 		} else {
 			oauth2.GET("/userinfo", userInfoHandler.Handle)
 		}
+	}
+
+	if adminMiddleware != nil {
+		admin := router.Group("/admin")
+		admin.Use(adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.UserManage))
+		admin.POST("/users/:user_id/logout-all", adminUserLogoutHandler.Handle)
 	}
 
 	return router

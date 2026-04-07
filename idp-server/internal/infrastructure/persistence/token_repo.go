@@ -95,6 +95,58 @@ func (r *TokenRepository) FindActiveRefreshTokenBySHA256(ctx context.Context, to
 	return model, nil
 }
 
+func (r *TokenRepository) ListActiveAccessTokensByUserID(ctx context.Context, userID int64) ([]*tokendomain.AccessToken, error) {
+	rows, err := r.db.QueryContext(ctx, tokenRepositorySQL.listActiveAccessByUserID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tokens []*tokendomain.AccessToken
+	for rows.Next() {
+		model, err := scanAccessToken(rows)
+		if err != nil {
+			return nil, err
+		}
+		tokens = append(tokens, model)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return tokens, nil
+}
+
+func (r *TokenRepository) ListActiveRefreshTokensByUserID(ctx context.Context, userID int64) ([]*tokendomain.RefreshToken, error) {
+	rows, err := r.db.QueryContext(ctx, tokenRepositorySQL.listActiveRefreshByUserID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tokens []*tokendomain.RefreshToken
+	for rows.Next() {
+		model, err := scanRefreshToken(rows)
+		if err != nil {
+			return nil, err
+		}
+		tokens = append(tokens, model)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return tokens, nil
+}
+
+func (r *TokenRepository) RevokeAccessTokensByUserID(ctx context.Context, userID int64, revokedAt time.Time) error {
+	_, err := r.db.ExecContext(ctx, tokenRepositorySQL.revokeAccessByUserID, revokedAt, userID)
+	return err
+}
+
+func (r *TokenRepository) RevokeRefreshTokensByUserID(ctx context.Context, userID int64, revokedAt time.Time) error {
+	_, err := r.db.ExecContext(ctx, tokenRepositorySQL.revokeRefreshByUserID, revokedAt, userID)
+	return err
+}
+
 func (r *TokenRepository) RotateRefreshToken(ctx context.Context, oldTokenSHA256 string, revokedAt time.Time, newToken *tokendomain.RefreshToken) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
