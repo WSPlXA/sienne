@@ -174,17 +174,17 @@ func (s *Service) Authenticate(ctx context.Context, input AuthenticateInput) (*A
 		if err != nil {
 			return nil, err
 		}
-		if credential != nil {
+		passkeyCredentialJSON, err := s.lookupPasskeyCredentialJSON(ctx, user.ID)
+		if err != nil {
+			return nil, err
+		}
+		passkeyAvailable := len(passkeyCredentialJSON) > 0 && s.passkey != nil
+		if credential != nil || passkeyAvailable {
 			challengeID, err := s.createMFAChallenge(ctx, user, input)
 			if err != nil {
 				return nil, err
 			}
-			passkeyCredentialJSON, err := s.lookupPasskeyCredentialJSON(ctx, user.ID)
-			if err != nil {
-				return nil, err
-			}
 			mfaMode := MFAModeTOTPOnly
-			passkeyAvailable := len(passkeyCredentialJSON) > 0 && s.passkey != nil
 			if passkeyAvailable {
 				mfaMode = MFAModePasskeyTOTPFallback
 			}
