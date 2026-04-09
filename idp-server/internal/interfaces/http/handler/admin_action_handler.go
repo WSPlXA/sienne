@@ -167,7 +167,11 @@ func (h *AdminActionHandler) AssignRole(c *gin.Context) {
 		return
 	}
 	var privilegeMask *uint32
-	if rawMask := strings.TrimSpace(c.PostForm("privilege_mask")); rawMask != "" {
+	rawMask := strings.TrimSpace(c.PostForm("privilege_mask_custom"))
+	if rawMask == "" {
+		rawMask = strings.TrimSpace(c.PostForm("privilege_mask"))
+	}
+	if rawMask != "" {
 		mask, err := parseUint32Field(rawMask, "privilege_mask")
 		if err != nil {
 			h.redirectWithError(c, err.Error())

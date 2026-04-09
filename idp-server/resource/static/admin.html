@@ -189,7 +189,13 @@
             <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Assign Role To User</p>
             <input name="user_id" placeholder="user_id" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
             <input name="role_code" placeholder="role_code" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <input name="privilege_mask" placeholder="privilege_mask (optional)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <select name="privilege_mask" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white">
+              <option value="">Use role default (no privilege override)</option>
+              {{range .PrivilegePresets}}
+              <option value="{{.Value}}">{{.Label}} | {{.Value}} | {{.Composition}}</option>
+              {{end}}
+            </select>
+            <input name="privilege_mask_custom" placeholder="custom privilege_mask (optional, overrides dropdown)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
             <input name="tenant_scope" placeholder="tenant_scope (optional)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
             <button class="inline-flex items-center justify-center rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white" type="submit">Assign</button>
           </form>

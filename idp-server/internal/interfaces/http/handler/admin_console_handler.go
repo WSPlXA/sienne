@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -16,17 +17,24 @@ type AdminConsoleHandler struct {
 }
 
 type adminConsolePageData struct {
-	Username      string
-	RoleCode      string
-	PrivilegeMask uint32
-	TenantScope   string
-	Roles         []apprbac.RoleView
-	Usage         []apprbac.RoleUsageView
-	LookupRole    string
-	LookupUsers   []apprbac.RoleUserView
-	CSRFToken     string
-	Notice        string
-	Error         string
+	Username         string
+	RoleCode         string
+	PrivilegeMask    uint32
+	TenantScope      string
+	Roles            []apprbac.RoleView
+	PrivilegePresets []adminPrivilegePreset
+	Usage            []apprbac.RoleUsageView
+	LookupRole       string
+	LookupUsers      []apprbac.RoleUserView
+	CSRFToken        string
+	Notice           string
+	Error            string
+}
+
+type adminPrivilegePreset struct {
+	Label       string
+	Value       string
+	Composition string
 }
 
 func NewAdminConsoleHandler(rbacService apprbac.Manager) *AdminConsoleHandler {
@@ -60,6 +68,7 @@ func (h *AdminConsoleHandler) Handle(c *gin.Context) {
 	}
 	if rolesResult != nil {
 		data.Roles = rolesResult.Roles
+		data.PrivilegePresets = buildPrivilegePresets(rolesResult.Roles)
 	}
 
 	usageResult, err := h.rbacService.RoleUsage(c.Request.Context())
@@ -98,14 +107,83 @@ func (h *AdminConsoleHandler) Handle(c *gin.Context) {
 			"privilege_mask": data.PrivilegeMask,
 			"tenant_scope":   data.TenantScope,
 		},
-		"roles":         data.Roles,
-		"role_usage":    data.Usage,
-		"lookup_role":   data.LookupRole,
-		"lookup_users":  data.LookupUsers,
-		"notice":        data.Notice,
-		"csrf_issued":   data.CSRFToken != "",
-		"error_message": data.Error,
+		"roles":             data.Roles,
+		"privilege_presets": data.PrivilegePresets,
+		"role_usage":        data.Usage,
+		"lookup_role":       data.LookupRole,
+		"lookup_users":      data.LookupUsers,
+		"notice":            data.Notice,
+		"csrf_issued":       data.CSRFToken != "",
+		"error_message":     data.Error,
 	})
+}
+
+func buildPrivilegePresets(roles []apprbac.RoleView) []adminPrivilegePreset {
+	if len(roles) == 0 {
+		return nil
+	}
+	result := make([]adminPrivilegePreset, 0, len(roles))
+	for _, role := range roles {
+		label := strings.TrimSpace(role.RoleCode)
+		if displayName := strings.TrimSpace(role.DisplayName); displayName != "" && !strings.EqualFold(displayName, label) {
+			label += " (" + displayName + ")"
+		}
+		result = append(result, adminPrivilegePreset{
+			Label:       label,
+			Value:       fmt.Sprintf("0x%08X", role.PrivilegeMask),
+			Composition: formatPrivilegeComposition(role.PrivilegeMask),
+		})
+	}
+	return result
+}
+
+func formatPrivilegeComposition(mask uint32) string {
+	type domainBit struct {
+		name  string
+		shift uint
+	}
+	type actionBit struct {
+		name string
+		bit  uint32
+	}
+	domains := []domainBit{
+		{name: "AUTH", shift: 28},
+		{name: "OAUTH", shift: 24},
+		{name: "CLIENT", shift: 20},
+		{name: "USER", shift: 16},
+		{name: "AUDIT", shift: 12},
+		{name: "KEY", shift: 8},
+		{name: "TENANT", shift: 4},
+		{name: "OPS", shift: 0},
+	}
+	actions := []actionBit{
+		{name: "READ", bit: 0x8},
+		{name: "EXEC", bit: 0x4},
+		{name: "MANAGE", bit: 0x2},
+		{name: "PRIV", bit: 0x1},
+	}
+
+	segments := make([]string, 0, len(domains))
+	for _, domain := range domains {
+		nibble := (mask >> domain.shift) & 0xF
+		if nibble == 0 {
+			continue
+		}
+		setActions := make([]string, 0, len(actions))
+		for _, action := range actions {
+			if nibble&action.bit == action.bit {
+				setActions = append(setActions, action.name)
+			}
+		}
+		if len(setActions) == 0 {
+			continue
+		}
+		segments = append(segments, domain.name+":"+strings.Join(setActions, "+"))
+	}
+	if len(segments) == 0 {
+		return "NONE"
+	}
+	return strings.Join(segments, "; ")
 }
 
 func (h *AdminConsoleHandler) writeError(c *gin.Context, status int, message string, data adminConsolePageData) {
