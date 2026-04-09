@@ -47,7 +47,10 @@ services:
       APP_ENV: ${IDP_APP_ENV:-prod}
       FORCE_MFA_ENROLLMENT: ${IDP_FORCE_MFA_ENROLLMENT:-true}
       SESSION_TTL: ${IDP_SESSION_TTL:-8h}
-      ISSUER: ${IDP_ISSUER:-http://www.idpsienne.uk}
+      ISSUER: ${IDP_ISSUER:-https://www.idpsienne.uk}
+      PASSKEY_ENABLED: ${IDP_PASSKEY_ENABLED:-true}
+      PASSKEY_RP_ID: ${IDP_PASSKEY_RP_ID:-idpsienne.uk}
+      PASSKEY_RP_ORIGINS: ${IDP_PASSKEY_RP_ORIGINS:-https://www.idpsienne.uk https://idpsienne.uk}
       LISTEN_ADDR: :8080
       TOTP_SECRET_ENCRYPTION_KEY: ${IDP_TOTP_SECRET_ENCRYPTION_KEY:-AReplaceWithYour32+CharSecretKey}
       SIGNING_KEY_DIR: ${IDP_SIGNING_KEY_DIR:-/var/lib/idp/keys}

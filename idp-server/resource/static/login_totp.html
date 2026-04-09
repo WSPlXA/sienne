@@ -116,7 +116,7 @@
 
       passkeyMethodButton.addEventListener("click", function () { setMethod("passkey"); });
       totpMethodButton.addEventListener("click", function () { setMethod("totp"); });
-      setMethod(passkeyEnabled ? "passkey" : "totp");
+      setMethod("totp");
 
       function fromBase64URL(input) {
         const normalized = (input || "").replace(/-/g, "+").replace(/_/g, "/");
