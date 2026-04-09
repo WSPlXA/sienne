@@ -139,7 +139,8 @@
       }
 
       function parseRequestOptions(options) {
-        const out = Object.assign({}, options);
+        const source = options && options.publicKey ? options.publicKey : options;
+        const out = Object.assign({}, source || {});
         out.challenge = fromBase64URL(out.challenge);
         if (Array.isArray(out.allowCredentials)) {
           out.allowCredentials = out.allowCredentials.map(function (cred) {

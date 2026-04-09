@@ -77,7 +77,8 @@
       }
 
       function parseCreationOptions(options) {
-        const out = Object.assign({}, options);
+        const source = options && options.publicKey ? options.publicKey : options;
+        const out = Object.assign({}, source || {});
         out.challenge = fromBase64URL(out.challenge);
         if (out.user && out.user.id) {
           out.user = Object.assign({}, out.user, { id: fromBase64URL(out.user.id) });
