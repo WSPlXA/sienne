@@ -16,4 +16,6 @@ var TOTPSetupTemplate = template.Must(template.ParseFS(staticFiles, "static/totp
 var LogoutPageTemplate = template.Must(template.ParseFS(staticFiles, "static/logout.html"))
 var RegisterPageTemplate = template.Must(template.ParseFS(staticFiles, "static/register.html"))
 var AdminConsoleTemplate = template.Must(template.ParseFS(staticFiles, "static/admin.html"))
+var PortalTemplate = template.Must(template.ParseFS(staticFiles, "static/portal.html"))
+var WorkbenchTemplate = template.Must(template.ParseFS(staticFiles, "static/workbench.html"))
 var NotFoundTemplate = template.Must(template.ParseFS(staticFiles, "static/404.html"))

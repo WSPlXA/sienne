@@ -99,6 +99,8 @@ func TestRequireSessionPermissionsAllowsPrivilegedUser(t *testing.T) {
 		&stubAdminSessionRepository{session: &sessiondomain.Model{
 			SessionID: "session-1",
 			UserID:    7,
+			ACR:       "urn:idp:acr:mfa",
+			AMRJSON:   `["pwd","otp"]`,
 			ExpiresAt: time.Now().UTC().Add(time.Hour),
 		}},
 		&stubAdminSessionCache{},
@@ -131,6 +133,8 @@ func TestRequireSessionPermissionsRejectsInsufficientPrivilege(t *testing.T) {
 		&stubAdminSessionRepository{session: &sessiondomain.Model{
 			SessionID: "session-1",
 			UserID:    7,
+			ACR:       "urn:idp:acr:mfa",
+			AMRJSON:   `["pwd","otp"]`,
 			ExpiresAt: time.Now().UTC().Add(time.Hour),
 		}},
 		&stubAdminSessionCache{},
@@ -179,5 +183,78 @@ func TestRequireSessionPermissionsRedirectsHTMLWhenSessionMissing(t *testing.T) 
 	}
 	if got := recorder.Header().Get("Location"); got != "/login?return_to=%2Fadmin" {
 		t.Fatalf("location = %q, want /login?return_to=%%2Fadmin", got)
+	}
+}
+
+func TestRequireSessionPermissionsRejectsSessionWithoutOTP(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := gin.New()
+	mw := NewSessionPermissionMiddleware(
+		&stubAdminSessionRepository{session: &sessiondomain.Model{
+			SessionID: "session-1",
+			UserID:    7,
+			ACR:       "urn:idp:acr:pwd",
+			AMRJSON:   `["pwd"]`,
+			ExpiresAt: time.Now().UTC().Add(time.Hour),
+		}},
+		&stubAdminSessionCache{},
+		&stubAdminUserRepository{user: &userdomain.Model{
+			ID:            7,
+			Status:        "active",
+			PrivilegeMask: rbac.MaskSuperAdmin,
+		}},
+	)
+
+	router.GET("/admin", mw.RequireSessionPermissions(rbac.OpsRead), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/admin", nil)
+	req.Header.Set("Accept", "application/json")
+	req.AddCookie(&http.Cookie{Name: "idp_session", Value: "session-1"})
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, req)
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("status code = %d, want %d", recorder.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestRequireSessionPermissionsRedirectsToTotpSetupWhenSessionWithoutOTPAndHTML(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := gin.New()
+	mw := NewSessionPermissionMiddleware(
+		&stubAdminSessionRepository{session: &sessiondomain.Model{
+			SessionID: "session-1",
+			UserID:    7,
+			ACR:       "urn:idp:acr:pwd",
+			AMRJSON:   `["pwd"]`,
+			ExpiresAt: time.Now().UTC().Add(time.Hour),
+		}},
+		&stubAdminSessionCache{},
+		&stubAdminUserRepository{user: &userdomain.Model{
+			ID:            7,
+			Status:        "active",
+			PrivilegeMask: rbac.MaskSuperAdmin,
+		}},
+	)
+
+	router.GET("/admin", mw.RequireSessionPermissions(rbac.OpsRead), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/admin", nil)
+	req.Header.Set("Accept", "text/html")
+	req.AddCookie(&http.Cookie{Name: "idp_session", Value: "session-1"})
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, req)
+	if recorder.Code != http.StatusFound {
+		t.Fatalf("status code = %d, want %d", recorder.Code, http.StatusFound)
+	}
+	if got := recorder.Header().Get("Location"); got != "/mfa/totp/setup?return_to=%2Fadmin" {
+		t.Fatalf("location = %q, want /mfa/totp/setup?return_to=%%2Fadmin", got)
 	}
 }

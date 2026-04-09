@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Control Router</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ["Manrope", "sans-serif"] }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+</head>
+<body class="min-h-screen bg-[radial-gradient(circle_at_10%_10%,#bfdbfe_0%,transparent_30%),radial-gradient(circle_at_85%_12%,#a7f3d0_0%,transparent_28%),linear-gradient(135deg,#f8fafc_0%,#eef2ff_45%,#ecfeff_100%)] text-slate-900">
+  <div class="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <header class="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.10)] backdrop-blur sm:p-8">
+      <p class="text-xs font-bold uppercase tracking-[0.22em] text-slate-500">Sienne IDP</p>
+      <h1 class="mt-2 text-3xl font-extrabold tracking-tight">Entry Router</h1>
+      <p class="mt-2 text-sm text-slate-600">Use this page to route by permission domain instead of landing on 404.</p>
+      <div class="mt-5 flex flex-wrap gap-2">
+        <a href="/login" class="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white"><i class="fa-solid fa-arrow-right-to-bracket"></i>Sign In</a>
+        <a href="/register" class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700">Register</a>
+        <a href="/device" class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700">Device Flow</a>
+      </div>
+    </header>
+
+    <section class="mt-6 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_20px_70px_rgba(15,23,42,0.08)] backdrop-blur sm:p-8">
+      <h2 class="text-xl font-extrabold tracking-tight">RBAC 32-bit Domain Layout</h2>
+      <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {{range .Domains}}
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <p class="text-xs font-bold uppercase tracking-[0.15em] text-slate-500">{{.Bits}}</p>
+          <p class="mt-1 text-sm font-extrabold text-slate-900">{{.Name}}</p>
+          <p class="mt-1 text-xs text-slate-600">{{.Description}}</p>
+        </div>
+        {{end}}
+      </div>
+    </section>
+
+    <section class="mt-6 grid gap-6 lg:grid-cols-2">
+      {{range .Roles}}
+      <article class="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_20px_70px_rgba(15,23,42,0.08)] backdrop-blur">
+        <h3 class="text-lg font-extrabold tracking-tight">{{.Title}}</h3>
+        <p class="mt-2 text-sm text-slate-600">Role: <span class="font-semibold text-slate-800">{{.RoleCode}}</span></p>
+        <p class="mt-1 text-sm text-slate-600">Default Mask: <span class="font-mono text-slate-800">{{.DefaultMask}}</span></p>
+        <p class="mt-1 text-sm text-slate-600">Required Ability: <span class="font-semibold text-slate-800">{{.RequiredAbility}}</span></p>
+        <a href="{{.EntryPath}}" class="mt-4 inline-flex items-center justify-center rounded-xl bg-indigo-700 px-4 py-2 text-sm font-bold text-white">Open</a>
+      </article>
+      {{end}}
+    </section>
+  </div>
+</body>
+</html>

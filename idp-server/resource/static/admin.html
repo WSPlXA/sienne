@@ -9,9 +9,7 @@
     tailwind.config = {
       theme: {
         extend: {
-          fontFamily: {
-            sans: ["Manrope", "sans-serif"]
-          }
+          fontFamily: { sans: ["Manrope", "sans-serif"] }
         }
       }
     }
@@ -27,13 +25,19 @@
       <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p class="text-xs font-bold uppercase tracking-[0.22em] text-slate-500">Sienne IDP</p>
-          <h1 class="mt-2 text-3xl font-extrabold tracking-tight">Admin Console</h1>
-          <p class="mt-2 text-sm text-slate-600">RBAC status and privileged operations entrypoint.</p>
+          <h1 class="mt-2 text-3xl font-extrabold tracking-tight">RBAC Console</h1>
+          <p class="mt-2 text-sm text-slate-600">Operational control plane for role, privilege, and account actions.</p>
         </div>
-        <a href="/connect/logout" class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50">
-          <i class="fa-solid fa-arrow-right-from-bracket"></i>
-          Sign Out
-        </a>
+        <div class="flex flex-wrap gap-2">
+          <a href="/" class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50">
+            <i class="fa-solid fa-compass"></i>
+            Router
+          </a>
+          <a href="/connect/logout" class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50">
+            <i class="fa-solid fa-arrow-right-from-bracket"></i>
+            Sign Out
+          </a>
+        </div>
       </div>
 
       <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -55,6 +59,18 @@
         </div>
       </div>
 
+      <div class="mt-5 flex flex-wrap gap-2">
+        <a href="/admin/workbench/support" class="inline-flex items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold uppercase tracking-[0.14em] text-slate-700">Support Workbench</a>
+        <a href="/admin/workbench/oauth" class="inline-flex items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold uppercase tracking-[0.14em] text-slate-700">OAuth Workbench</a>
+        <a href="/admin/workbench/security" class="inline-flex items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold uppercase tracking-[0.14em] text-slate-700">Security Workbench</a>
+      </div>
+
+      {{if .Notice}}
+      <div class="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+        <i class="fa-solid fa-circle-check mr-2"></i>{{.Notice}}
+      </div>
+      {{end}}
+
       {{if .Error}}
       <div class="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
         <i class="fa-solid fa-circle-exclamation mr-2"></i>{{.Error}}
@@ -64,12 +80,9 @@
 
     <section class="mt-6 grid gap-6 lg:grid-cols-2">
       <article class="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_20px_70px_rgba(15,23,42,0.08)] backdrop-blur">
-        <div class="flex items-center justify-between gap-3">
-          <h2 class="text-xl font-extrabold tracking-tight">Roles</h2>
-          <a href="/admin/rbac/roles" class="text-xs font-bold uppercase tracking-[0.16em] text-indigo-700 hover:underline">JSON</a>
-        </div>
+        <h2 class="text-xl font-extrabold tracking-tight">Roles</h2>
         <div class="mt-4 overflow-x-auto">
-          <table class="w-full min-w-[520px] text-left text-sm">
+          <table class="w-full min-w-[560px] text-left text-sm">
             <thead>
               <tr class="border-b border-slate-200 text-xs uppercase tracking-[0.14em] text-slate-500">
                 <th class="px-2 py-2">Role</th>
@@ -95,12 +108,9 @@
       </article>
 
       <article class="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_20px_70px_rgba(15,23,42,0.08)] backdrop-blur">
-        <div class="flex items-center justify-between gap-3">
-          <h2 class="text-xl font-extrabold tracking-tight">Role Usage</h2>
-          <a href="/admin/rbac/usage" class="text-xs font-bold uppercase tracking-[0.16em] text-indigo-700 hover:underline">JSON</a>
-        </div>
+        <h2 class="text-xl font-extrabold tracking-tight">Role Usage</h2>
         <div class="mt-4 overflow-x-auto">
-          <table class="w-full min-w-[520px] text-left text-sm">
+          <table class="w-full min-w-[560px] text-left text-sm">
             <thead>
               <tr class="border-b border-slate-200 text-xs uppercase tracking-[0.14em] text-slate-500">
                 <th class="px-2 py-2">Role</th>
@@ -122,6 +132,100 @@
               {{end}}
             </tbody>
           </table>
+        </div>
+      </article>
+    </section>
+
+    <section class="mt-6 grid gap-6 lg:grid-cols-2">
+      <article class="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_20px_70px_rgba(15,23,42,0.08)] backdrop-blur">
+        <h3 class="text-lg font-extrabold tracking-tight">Role Operations</h3>
+        <div class="mt-4 space-y-4">
+          <form method="post" action="/admin/actions/rbac/bootstrap" class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Bootstrap System Roles</p>
+            <button class="mt-3 inline-flex items-center justify-center rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white" type="submit">Bootstrap</button>
+          </form>
+
+          <form method="post" action="/admin/actions/rbac/roles/create" class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Create Role</p>
+            <input name="role_code" placeholder="role_code" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <input name="display_name" placeholder="Display Name" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <input name="description" placeholder="Description" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <input name="privilege_mask" placeholder="Privilege Mask (uint32, supports 0x hex)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <button class="inline-flex items-center justify-center rounded-lg bg-indigo-700 px-3 py-2 text-xs font-bold text-white" type="submit">Create</button>
+          </form>
+
+          <form method="post" action="/admin/actions/rbac/roles/update" class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Update Role</p>
+            <input name="role_code" placeholder="role_code" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <input name="display_name" placeholder="Display Name" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <input name="description" placeholder="Description" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <input name="privilege_mask" placeholder="Privilege Mask (uint32, supports 0x hex)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <button class="inline-flex items-center justify-center rounded-lg bg-amber-600 px-3 py-2 text-xs font-bold text-white" type="submit">Update</button>
+          </form>
+
+          <form method="post" action="/admin/actions/rbac/roles/delete" class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Delete Role</p>
+            <input name="role_code" placeholder="role_code" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <button class="inline-flex items-center justify-center rounded-lg bg-rose-700 px-3 py-2 text-xs font-bold text-white" type="submit">Delete</button>
+          </form>
+        </div>
+      </article>
+
+      <article class="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_20px_70px_rgba(15,23,42,0.08)] backdrop-blur">
+        <h3 class="text-lg font-extrabold tracking-tight">User Operations</h3>
+        <div class="mt-4 space-y-4">
+          <form method="get" action="/admin" class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+            <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Lookup Users By Role</p>
+            <input name="role_code" value="{{.LookupRole}}" placeholder="role_code" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <button class="inline-flex items-center justify-center rounded-lg bg-slate-700 px-3 py-2 text-xs font-bold text-white" type="submit">Lookup</button>
+          </form>
+
+          <form method="post" action="/admin/actions/users/assign-role" class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Assign Role To User</p>
+            <input name="user_id" placeholder="user_id" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <input name="role_code" placeholder="role_code" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <input name="privilege_mask" placeholder="privilege_mask (optional)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <input name="tenant_scope" placeholder="tenant_scope (optional)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <button class="inline-flex items-center justify-center rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white" type="submit">Assign</button>
+          </form>
+
+          <form method="post" action="/admin/actions/users/logout-all" class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Force Logout User</p>
+            <input name="user_id" placeholder="user_id" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <button class="inline-flex items-center justify-center rounded-lg bg-rose-700 px-3 py-2 text-xs font-bold text-white" type="submit">Logout All Sessions</button>
+          </form>
+
+          {{if .LookupUsers}}
+          <div class="rounded-xl border border-slate-200 bg-white p-4 overflow-x-auto">
+            <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Users in role {{.LookupRole}}</p>
+            <table class="mt-3 w-full min-w-[560px] text-left text-sm">
+              <thead>
+                <tr class="border-b border-slate-200 text-xs uppercase tracking-[0.14em] text-slate-500">
+                  <th class="px-2 py-2">User ID</th>
+                  <th class="px-2 py-2">Username</th>
+                  <th class="px-2 py-2">Status</th>
+                  <th class="px-2 py-2">Mask</th>
+                </tr>
+              </thead>
+              <tbody>
+                {{range .LookupUsers}}
+                <tr class="border-b border-slate-100">
+                  <td class="px-2 py-2">{{.UserID}}</td>
+                  <td class="px-2 py-2">{{.Username}}</td>
+                  <td class="px-2 py-2">{{.Status}}</td>
+                  <td class="px-2 py-2 font-mono">{{.PrivilegeMask}}</td>
+                </tr>
+                {{end}}
+              </tbody>
+            </table>
+          </div>
+          {{end}}
         </div>
       </article>
     </section>

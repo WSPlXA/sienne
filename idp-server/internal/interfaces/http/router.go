@@ -60,7 +60,9 @@ func NewRouter(authzService authz.Service, consentService appconsent.Manager, re
 	logoutAllHandler := handler.NewLogoutAllHandler(sessionService)
 	adminUserLogoutHandler := handler.NewAdminUserLogoutHandler(sessionService, auditRepo)
 	adminConsoleHandler := handler.NewAdminConsoleHandler(rbacService)
+	adminActionHandler := handler.NewAdminActionHandler(rbacService, sessionService, auditRepo)
 	rbacHandler := handler.NewRBACHandler(rbacService, auditRepo)
+	portalHandler := handler.NewPortalHandler()
 	totpSetupHandler := handler.NewTOTPSetupHandler(mfaService)
 	endSessionHandler := handler.NewEndSessionHandler(sessionService, logoutRedirectValidator)
 	tokenHandler := handler.NewTokenHandler(clientAuthenticator, grantRegistry)
@@ -73,6 +75,7 @@ func NewRouter(authzService authz.Service, consentService appconsent.Manager, re
 	router.GET("/healthz", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
+	router.GET("/", portalHandler.Home)
 	router.GET("/.well-known/openid-configuration", oidcMetadataHandler.Discovery)
 	router.GET("/login", loginHandler.Handle)
 	router.POST("/login", loginHandler.Handle)
@@ -112,6 +115,9 @@ func NewRouter(authzService authz.Service, consentService appconsent.Manager, re
 		admin := router.Group("/admin")
 		admin.GET("", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.OpsRead), adminConsoleHandler.Handle)
 		admin.GET("/", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.OpsRead), adminConsoleHandler.Handle)
+		admin.GET("/workbench/support", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.OpsRead), portalHandler.SupportWorkbench)
+		admin.GET("/workbench/oauth", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.OAuthRead, rbac.ClientRead), portalHandler.OAuthWorkbench)
+		admin.GET("/workbench/security", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.AuditRead, rbac.KeyRead), portalHandler.SecurityWorkbench)
 		admin.GET("/rbac/roles", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.OpsRead), rbacHandler.ListRoles)
 		admin.GET("/rbac/roles/:role_code/users", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.OpsRead), rbacHandler.ListUsersByRole)
 		admin.GET("/rbac/usage", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.OpsRead), rbacHandler.RoleUsage)
@@ -121,6 +127,12 @@ func NewRouter(authzService authz.Service, consentService appconsent.Manager, re
 		admin.DELETE("/rbac/roles/:role_code", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.OpsManage), rbacHandler.DeleteRole)
 		admin.POST("/users/:user_id/role", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.UserManage), rbacHandler.AssignRole)
 		admin.POST("/users/:user_id/logout-all", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.UserManage), adminUserLogoutHandler.Handle)
+		admin.POST("/actions/rbac/bootstrap", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.OpsManage), adminActionHandler.BootstrapRoles)
+		admin.POST("/actions/rbac/roles/create", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.OpsManage), adminActionHandler.CreateRole)
+		admin.POST("/actions/rbac/roles/update", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.OpsManage), adminActionHandler.UpdateRole)
+		admin.POST("/actions/rbac/roles/delete", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.OpsManage), adminActionHandler.DeleteRole)
+		admin.POST("/actions/users/assign-role", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.UserManage), adminActionHandler.AssignRole)
+		admin.POST("/actions/users/logout-all", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.UserManage), adminActionHandler.LogoutUser)
 	}
 
 	return router

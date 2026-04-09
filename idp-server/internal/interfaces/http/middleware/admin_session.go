@@ -56,6 +56,10 @@ func (m *SessionPermissionMiddleware) RequireSessionPermissions(required ...uint
 			m.abortUnauthorized(c, "session expired")
 			return
 		}
+		if !sessionHasOTP(sessionModel) {
+			m.abortUnauthorized(c, "mfa required")
+			return
+		}
 
 		user, err := m.users.FindByID(c.Request.Context(), sessionModel.UserID)
 		if err != nil {
@@ -79,6 +83,11 @@ func (m *SessionPermissionMiddleware) RequireSessionPermissions(required ...uint
 
 func (m *SessionPermissionMiddleware) abortUnauthorized(c *gin.Context, message string) {
 	if wantsAdminHTML(c.GetHeader("Accept")) {
+		if strings.EqualFold(strings.TrimSpace(message), "mfa required") {
+			c.Redirect(http.StatusFound, "/mfa/totp/setup?return_to="+url.QueryEscape(c.Request.URL.RequestURI()))
+			c.Abort()
+			return
+		}
 		c.Redirect(http.StatusFound, "/login?return_to="+url.QueryEscape(c.Request.URL.RequestURI()))
 		c.Abort()
 		return
@@ -135,4 +144,15 @@ func CurrentAdminSession(c *gin.Context) *sessiondomain.Model {
 	value, _ := c.Get(ContextAdminSession)
 	sessionModel, _ := value.(*sessiondomain.Model)
 	return sessionModel
+}
+
+func sessionHasOTP(sessionModel *sessiondomain.Model) bool {
+	if sessionModel == nil {
+		return false
+	}
+	amr := strings.ToLower(strings.TrimSpace(sessionModel.AMRJSON))
+	if strings.Contains(amr, "\"otp\"") {
+		return true
+	}
+	return strings.EqualFold(strings.TrimSpace(sessionModel.ACR), "urn:idp:acr:mfa")
 }

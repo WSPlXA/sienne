@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Title}}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ["Manrope", "sans-serif"] }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+</head>
+<body class="min-h-screen bg-[radial-gradient(circle_at_15%_10%,#dbeafe_0%,transparent_30%),radial-gradient(circle_at_85%_90%,#bbf7d0_0%,transparent_28%),linear-gradient(135deg,#f8fafc_0%,#eef2ff_52%,#ecfeff_100%)] text-slate-900">
+  <div class="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+    <header class="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.10)] backdrop-blur sm:p-8">
+      <p class="text-xs font-bold uppercase tracking-[0.22em] text-slate-500">Privilege Workbench</p>
+      <h1 class="mt-2 text-3xl font-extrabold tracking-tight">{{.Title}}</h1>
+      <p class="mt-2 text-sm text-slate-600">{{.Subtitle}}</p>
+
+      <div class="mt-5 grid gap-3 sm:grid-cols-3">
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
+          <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Current User</p>
+          <p class="mt-1 font-bold text-slate-900">{{if .CurrentUser}}{{.CurrentUser}}{{else}}-{{end}}</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
+          <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Current Role</p>
+          <p class="mt-1 font-bold text-slate-900">{{if .CurrentRole}}{{.CurrentRole}}{{else}}-{{end}}</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
+          <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Privilege Mask</p>
+          <p class="mt-1 font-mono font-bold text-slate-900">{{.PrivilegeMask}}</p>
+        </div>
+      </div>
+
+      <div class="mt-5 flex flex-wrap gap-2">
+        <a href="/" class="inline-flex items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold uppercase tracking-[0.14em] text-slate-700">Back to Router</a>
+        <a href="/admin" class="inline-flex items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold uppercase tracking-[0.14em] text-slate-700">Open RBAC Console</a>
+      </div>
+    </header>
+
+    <section class="mt-6 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_20px_70px_rgba(15,23,42,0.08)] backdrop-blur">
+      <h2 class="text-xl font-extrabold tracking-tight">Suggested Actions</h2>
+      <div class="mt-4 overflow-x-auto">
+        <table class="w-full min-w-[700px] text-left text-sm">
+          <thead>
+            <tr class="border-b border-slate-200 text-xs uppercase tracking-[0.14em] text-slate-500">
+              <th class="px-2 py-2">Method</th>
+              <th class="px-2 py-2">Path</th>
+              <th class="px-2 py-2">Required Privilege</th>
+              <th class="px-2 py-2">Purpose</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .Actions}}
+            <tr class="border-b border-slate-100 align-top">
+              <td class="px-2 py-2"><span class="inline-flex rounded bg-slate-900 px-2 py-1 text-xs font-bold text-white">{{.Method}}</span></td>
+              <td class="px-2 py-2 font-mono text-xs text-slate-700">{{.Path}}</td>
+              <td class="px-2 py-2 text-xs font-semibold text-slate-700">{{.Required}}</td>
+              <td class="px-2 py-2 text-slate-700">{{.Purpose}}</td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

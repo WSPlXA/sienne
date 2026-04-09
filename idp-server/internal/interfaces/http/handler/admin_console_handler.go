@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strings"
 
 	apprbac "idp-server/internal/application/rbac"
 	httpmiddleware "idp-server/internal/interfaces/http/middleware"
@@ -21,6 +22,10 @@ type adminConsolePageData struct {
 	TenantScope   string
 	Roles         []apprbac.RoleView
 	Usage         []apprbac.RoleUsageView
+	LookupRole    string
+	LookupUsers   []apprbac.RoleUserView
+	CSRFToken     string
+	Notice        string
 	Error         string
 }
 
@@ -42,6 +47,11 @@ func (h *AdminConsoleHandler) Handle(c *gin.Context) {
 		data.PrivilegeMask = adminUser.PrivilegeMask
 		data.TenantScope = adminUser.TenantScope
 	}
+	data.Notice = strings.TrimSpace(c.Query("notice"))
+	data.Error = strings.TrimSpace(c.Query("error"))
+	if csrfToken, err := ensureCSRFToken(c); err == nil {
+		data.CSRFToken = csrfToken
+	}
 
 	rolesResult, err := h.rbacService.ListRoles(c.Request.Context())
 	if err != nil {
@@ -60,6 +70,19 @@ func (h *AdminConsoleHandler) Handle(c *gin.Context) {
 	if usageResult != nil {
 		data.Usage = usageResult.Roles
 	}
+	if roleCode := strings.TrimSpace(c.Query("role_code")); roleCode != "" {
+		usersResult, err := h.rbacService.ListUsersByRole(c.Request.Context(), apprbac.ListUsersByRoleInput{
+			RoleCode: roleCode,
+			Limit:    100,
+		})
+		if err != nil {
+			data.Error = "failed to load users by role: " + err.Error()
+			data.LookupRole = roleCode
+		} else if usersResult != nil {
+			data.LookupRole = usersResult.RoleCode
+			data.LookupUsers = usersResult.Users
+		}
+	}
 
 	if wantsHTML(c.GetHeader("Accept")) {
 		c.Header("Content-Type", "text/html; charset=utf-8")
@@ -75,8 +98,13 @@ func (h *AdminConsoleHandler) Handle(c *gin.Context) {
 			"privilege_mask": data.PrivilegeMask,
 			"tenant_scope":   data.TenantScope,
 		},
-		"roles":      data.Roles,
-		"role_usage": data.Usage,
+		"roles":         data.Roles,
+		"role_usage":    data.Usage,
+		"lookup_role":   data.LookupRole,
+		"lookup_users":  data.LookupUsers,
+		"notice":        data.Notice,
+		"csrf_issued":   data.CSRFToken != "",
+		"error_message": data.Error,
 	})
 }
 
