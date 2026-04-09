@@ -152,7 +152,7 @@ func Wire() (*App, error) {
 	}
 	sessionService := appsession.NewService(sessionRepo, sessionCache, tokenRepo, tokenCache)
 	rbacService := apprbac.NewService(operatorRoleRepo, userRepo)
-	mfaService := appmfa.NewService(sessionRepo, sessionCache, userRepo, totpRepo, mfaCache, totpProvider, cfg.Issuer, 10*time.Minute)
+	mfaService := appmfa.NewService(sessionRepo, sessionCache, userRepo, totpRepo, mfaCache, totpProvider, resolveTOTPIssuer(cfg), 10*time.Minute)
 	var passkeyService apppasskey.Manager
 	if passkeyProvider != nil {
 		passkeyService = apppasskey.NewService(sessionRepo, sessionCache, userRepo, passkeyRepo, mfaCache, passkeyProvider, 10*time.Minute)
@@ -222,6 +222,7 @@ type config struct {
 	AppEnv                        string
 	SessionTTL                    time.Duration
 	Issuer                        string
+	TOTPIssuer                    string
 	JWTKeyID                      string
 	WorkDir                       string
 	SigningKeyDir                 string
@@ -263,6 +264,7 @@ func loadConfigFromEnv() (*config, error) {
 		AppEnv:                        getEnvString("APP_ENV", "dev"),
 		SessionTTL:                    getEnvDuration("SESSION_TTL", 8*time.Hour),
 		Issuer:                        getEnvString("ISSUER", "http://localhost:8080"),
+		TOTPIssuer:                    strings.TrimSpace(os.Getenv("TOTP_ISSUER")),
 		JWTKeyID:                      getEnvString("JWT_KEY_ID", "kid-2026-01-rs256"),
 		WorkDir:                       getWorkingDir(),
 		SigningKeyDir:                 getEnvString("SIGNING_KEY_DIR", "scripts/dev_keys"),
@@ -483,6 +485,28 @@ func resolvePasskeyRPConfig(cfg *config) (string, string, []string, error) {
 	}
 
 	return rpID, displayName, origins, nil
+}
+
+func resolveTOTPIssuer(cfg *config) string {
+	if cfg == nil {
+		return ""
+	}
+	display := strings.TrimSpace(cfg.TOTPIssuer)
+	if display != "" {
+		return display
+	}
+	issuer := strings.TrimSpace(cfg.Issuer)
+	if issuer == "" {
+		return ""
+	}
+	issuerURL, err := neturl.Parse(issuer)
+	if err == nil {
+		host := strings.TrimSpace(issuerURL.Hostname())
+		if host != "" {
+			return host
+		}
+	}
+	return issuer
 }
 
 // jwtServiceAdapter和jwtMiddlewareAdapter是适配器结构体，用于将infracrypto.JWTService适配为应用程序中使用的JWT服务接口。这些适配器实现了相应的接口方法，并将调用委托给infracrypto.JWTService实例。

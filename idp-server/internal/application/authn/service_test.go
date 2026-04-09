@@ -6,11 +6,13 @@ import (
 	"testing"
 	"time"
 
+	passkeydomain "idp-server/internal/domain/passkey"
 	sessiondomain "idp-server/internal/domain/session"
 	userdomain "idp-server/internal/domain/user"
 	pluginregistry "idp-server/internal/plugins/registry"
 	cacheport "idp-server/internal/ports/cache"
 	pluginport "idp-server/internal/ports/plugin"
+	securityport "idp-server/internal/ports/security"
 )
 
 type stubAuthnUserRepository struct {
@@ -191,6 +193,84 @@ func (s *stubAuthnRateLimitRepository) SetUserLock(_ context.Context, userID str
 
 func (s *stubAuthnRateLimitRepository) IsUserLocked(_ context.Context, userID string) (bool, error) {
 	return s.lockedUsers[userID], nil
+}
+
+type stubAuthnMFARepository struct {
+	challenges map[string]cacheport.MFAChallengeEntry
+}
+
+func (s *stubAuthnMFARepository) SaveTOTPEnrollment(context.Context, cacheport.TOTPEnrollmentEntry, time.Duration) error {
+	return nil
+}
+
+func (s *stubAuthnMFARepository) GetTOTPEnrollment(context.Context, string) (*cacheport.TOTPEnrollmentEntry, error) {
+	return nil, nil
+}
+
+func (s *stubAuthnMFARepository) DeleteTOTPEnrollment(context.Context, string) error {
+	return nil
+}
+
+func (s *stubAuthnMFARepository) ReserveTOTPStepUse(context.Context, string, string, int64, time.Duration) (bool, error) {
+	return true, nil
+}
+
+func (s *stubAuthnMFARepository) SaveMFAChallenge(_ context.Context, entry cacheport.MFAChallengeEntry, _ time.Duration) error {
+	if s.challenges == nil {
+		s.challenges = map[string]cacheport.MFAChallengeEntry{}
+	}
+	s.challenges[entry.ChallengeID] = entry
+	return nil
+}
+
+func (s *stubAuthnMFARepository) GetMFAChallenge(_ context.Context, challengeID string) (*cacheport.MFAChallengeEntry, error) {
+	entry, ok := s.challenges[challengeID]
+	if !ok {
+		return nil, nil
+	}
+	copy := entry
+	return &copy, nil
+}
+
+func (s *stubAuthnMFARepository) DeleteMFAChallenge(_ context.Context, challengeID string) error {
+	delete(s.challenges, challengeID)
+	return nil
+}
+
+type stubAuthnPasskeyCredentialRepository struct {
+	credentialsByUserID map[int64][]*passkeydomain.Model
+	listByUserIDCalls   int
+}
+
+func (s *stubAuthnPasskeyCredentialRepository) ListByUserID(_ context.Context, userID int64) ([]*passkeydomain.Model, error) {
+	s.listByUserIDCalls++
+	return s.credentialsByUserID[userID], nil
+}
+
+func (s *stubAuthnPasskeyCredentialRepository) Upsert(context.Context, *passkeydomain.Model) error {
+	return nil
+}
+
+func (s *stubAuthnPasskeyCredentialRepository) TouchByCredentialID(context.Context, string, time.Time) error {
+	return nil
+}
+
+type stubAuthnPasskeyProvider struct{}
+
+func (s *stubAuthnPasskeyProvider) BeginRegistration(securityport.PasskeyUser, []string) ([]byte, []byte, error) {
+	return nil, nil, nil
+}
+
+func (s *stubAuthnPasskeyProvider) FinishRegistration(securityport.PasskeyUser, []string, []byte, []byte) (string, string, error) {
+	return "", "", nil
+}
+
+func (s *stubAuthnPasskeyProvider) BeginLogin(securityport.PasskeyUser, []string) ([]byte, []byte, error) {
+	return nil, nil, nil
+}
+
+func (s *stubAuthnPasskeyProvider) FinishLogin(securityport.PasskeyUser, []string, []byte, []byte) (string, string, error) {
+	return "", "", nil
 }
 
 type stubAuthnPasswordVerifier struct{}
@@ -470,5 +550,95 @@ func TestAuthenticatePasswordRequiresEnrollmentWhenForcedAndNoTOTP(t *testing.T)
 	}
 	if sessionRepo.createCalls != 1 {
 		t.Fatalf("session create calls = %d, want 1", sessionRepo.createCalls)
+	}
+}
+
+func TestAuthenticatePasswordRequiresMFAWhenPasskeyExistsWithoutTOTP(t *testing.T) {
+	now := time.Date(2026, 4, 9, 9, 17, 41, 0, time.UTC)
+	user := &userdomain.Model{
+		ID:           42,
+		UserUUID:     "user-42",
+		Username:     "alice",
+		Email:        "alice@example.com",
+		DisplayName:  "Alice",
+		PasswordHash: "hashed:secret",
+		Status:       "active",
+	}
+	userRepo := &stubAuthnUserRepository{
+		usersByUsername: map[string]*userdomain.Model{"alice": user},
+		usersByUUID:     map[string]*userdomain.Model{"user-42": user},
+		usersByEmail:    map[string]*userdomain.Model{"alice@example.com": user},
+	}
+	sessionRepo := &stubAuthnSessionRepository{}
+	sessionCache := &stubAuthnSessionCache{}
+	rateLimits := &stubAuthnRateLimitRepository{
+		userFailures: map[string]int64{},
+		ipFailures:   map[string]int64{},
+		lockedUsers:  map[string]bool{},
+	}
+	mfaCache := &stubAuthnMFARepository{challenges: map[string]cacheport.MFAChallengeEntry{}}
+	passkeyRepo := &stubAuthnPasskeyCredentialRepository{
+		credentialsByUserID: map[int64][]*passkeydomain.Model{
+			42: {
+				{
+					UserID:         42,
+					CredentialID:   "cred-1",
+					CredentialJSON: `{"id":"cred-1","type":"public-key"}`,
+				},
+			},
+		},
+	}
+	service := NewService(
+		userRepo,
+		sessionRepo,
+		sessionCache,
+		rateLimits,
+		mfaCache,
+		pluginregistry.NewAuthnRegistry(&stubPasswordAuthnMethod{users: userRepo, passwords: &stubAuthnPasswordVerifier{}}),
+		nil,
+		nil,
+		8*time.Hour,
+		5*time.Minute,
+		true,
+		DefaultRateLimitPolicy(),
+	).WithPasskey(passkeyRepo, &stubAuthnPasskeyProvider{})
+	service.now = func() time.Time { return now }
+
+	result, err := service.Authenticate(context.Background(), AuthenticateInput{
+		Username:  "alice",
+		Password:  "secret",
+		IPAddress: "203.0.113.10",
+		UserAgent: "test-agent",
+		ReturnTo:  "/oauth2/authorize?client_id=demo",
+	})
+	if !errors.Is(err, ErrMFARequired) {
+		t.Fatalf("Authenticate() error = %v, want %v", err, ErrMFARequired)
+	}
+	if result == nil {
+		t.Fatalf("result = nil, want MFA challenge result")
+	}
+	if !result.MFARequired {
+		t.Fatalf("MFARequired = %v, want true", result.MFARequired)
+	}
+	if result.MFAEnrollmentRequired {
+		t.Fatalf("MFAEnrollmentRequired = %v, want false", result.MFAEnrollmentRequired)
+	}
+	if result.MFAChallengeID == "" {
+		t.Fatalf("MFAChallengeID is empty, want non-empty challenge id")
+	}
+	if result.MFAMode != MFAModePasskeyTOTPFallback {
+		t.Fatalf("MFAMode = %q, want %q", result.MFAMode, MFAModePasskeyTOTPFallback)
+	}
+	if !result.PasskeyAvailable {
+		t.Fatalf("PasskeyAvailable = %v, want true", result.PasskeyAvailable)
+	}
+	if sessionRepo.createCalls != 0 {
+		t.Fatalf("session create calls = %d, want 0", sessionRepo.createCalls)
+	}
+	if passkeyRepo.listByUserIDCalls != 1 {
+		t.Fatalf("ListByUserID calls = %d, want 1", passkeyRepo.listByUserIDCalls)
+	}
+	if _, ok := mfaCache.challenges[result.MFAChallengeID]; !ok {
+		t.Fatalf("challenge %q not stored in mfa cache", result.MFAChallengeID)
 	}
 }

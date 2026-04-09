@@ -48,6 +48,7 @@ services:
       FORCE_MFA_ENROLLMENT: ${IDP_FORCE_MFA_ENROLLMENT:-true}
       SESSION_TTL: ${IDP_SESSION_TTL:-8h}
       ISSUER: ${IDP_ISSUER:-https://www.idpsienne.uk}
+      TOTP_ISSUER: ${IDP_TOTP_ISSUER:-IDP Sienne}
       PASSKEY_ENABLED: ${IDP_PASSKEY_ENABLED:-true}
       PASSKEY_RP_ID: ${IDP_PASSKEY_RP_ID:-idpsienne.uk}
       PASSKEY_RP_ORIGINS: ${IDP_PASSKEY_RP_ORIGINS:-https://www.idpsienne.uk https://idpsienne.uk}

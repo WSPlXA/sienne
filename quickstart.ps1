@@ -54,6 +54,7 @@ services:
       APP_ENV: ${IDP_APP_ENV:-dev}
       SESSION_TTL: ${IDP_SESSION_TTL:-8h}
       ISSUER: ${IDP_ISSUER:-http://localhost:8080}
+      TOTP_ISSUER: ${IDP_TOTP_ISSUER:-IDP Sienne}
       LISTEN_ADDR: :8080
       SIGNING_KEY_DIR: scripts/dev_keys
       SIGNING_KEY_CHECK_INTERVAL: ${IDP_SIGNING_KEY_CHECK_INTERVAL:-1h}

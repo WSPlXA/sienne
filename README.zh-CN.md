@@ -147,6 +147,7 @@ go test ./...
 
 ### 运行时
 - `ISSUER`（默认 `http://localhost:8080`）
+- `TOTP_ISSUER`（可选，认证器中显示名称；未设置时自动回退为 `ISSUER` 的域名）
 - `LISTEN_ADDR`（默认 `:8080`）
 - `SESSION_TTL`（默认 `8h`）
 - `APP_ENV`（默认 `dev`）

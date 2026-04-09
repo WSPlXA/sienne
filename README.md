@@ -147,6 +147,7 @@ Config bootstrap source: `idp-server/internal/bootstrap/wire.go`
 
 ### Core Runtime
 - `ISSUER` (default `http://localhost:8080`)
+- `TOTP_ISSUER` (optional display name in authenticator apps; fallback is host from `ISSUER`)
 - `LISTEN_ADDR` (default `:8080`)
 - `SESSION_TTL` (default `8h`)
 - `APP_ENV` (default `dev`)
