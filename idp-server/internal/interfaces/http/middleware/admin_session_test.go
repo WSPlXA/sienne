@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -156,6 +157,47 @@ func TestRequireSessionPermissionsRejectsInsufficientPrivilege(t *testing.T) {
 	router.ServeHTTP(recorder, req)
 	if recorder.Code != http.StatusForbidden {
 		t.Fatalf("status code = %d, want %d", recorder.Code, http.StatusForbidden)
+	}
+}
+
+func TestRequireSessionPermissionsShowsAlertForInsufficientPrivilegeHTML(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := gin.New()
+	mw := NewSessionPermissionMiddleware(
+		&stubAdminSessionRepository{session: &sessiondomain.Model{
+			SessionID: "session-1",
+			UserID:    7,
+			ACR:       "urn:idp:acr:mfa",
+			AMRJSON:   `["pwd","otp"]`,
+			ExpiresAt: time.Now().UTC().Add(time.Hour),
+		}},
+		&stubAdminSessionCache{},
+		&stubAdminUserRepository{user: &userdomain.Model{
+			ID:            7,
+			Status:        "active",
+			PrivilegeMask: rbac.MaskSupport,
+		}},
+	)
+
+	router.GET("/admin/secure", mw.RequireSessionPermissions(rbac.AuthExec, rbac.UserManage), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/secure", nil)
+	req.Header.Set("Accept", "text/html")
+	req.AddCookie(&http.Cookie{Name: "idp_session", Value: "session-1"})
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, req)
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status code = %d, want %d", recorder.Code, http.StatusForbidden)
+	}
+	if contentType := recorder.Header().Get("Content-Type"); !strings.Contains(contentType, "text/html") {
+		t.Fatalf("content-type = %q, want text/html", contentType)
+	}
+	if body := recorder.Body.String(); !strings.Contains(body, "window.alert") || !strings.Contains(body, "insufficient privilege") {
+		t.Fatalf("response body should contain popup script, got: %q", body)
 	}
 }
 

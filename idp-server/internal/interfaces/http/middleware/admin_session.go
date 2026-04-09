@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"strings"
@@ -67,11 +68,11 @@ func (m *SessionPermissionMiddleware) RequireSessionPermissions(required ...uint
 			return
 		}
 		if user == nil || user.Status != "active" {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "user unavailable"})
+			m.abortForbidden(c, "user unavailable")
 			return
 		}
 		if !rbac.HasAll(user.PrivilegeMask, required...) {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "insufficient privilege"})
+			m.abortForbidden(c, "insufficient privilege")
 			return
 		}
 
@@ -79,6 +80,18 @@ func (m *SessionPermissionMiddleware) RequireSessionPermissions(required ...uint
 		c.Set(ContextAdminSession, sessionModel)
 		c.Next()
 	}
+}
+
+func (m *SessionPermissionMiddleware) abortForbidden(c *gin.Context, message string) {
+	if wantsAdminHTML(c.GetHeader("Accept")) {
+		c.Header("Content-Type", "text/html; charset=utf-8")
+		c.Status(http.StatusForbidden)
+		payload, _ := json.Marshal(strings.TrimSpace(message))
+		_, _ = c.Writer.Write([]byte(`<!doctype html><html><head><meta charset="utf-8"><title>Forbidden</title></head><body><script>(function(){var msg=` + string(payload) + `||"insufficient privilege";window.alert(msg);if(window.history.length>1){window.history.back();return;}window.location.replace("/");})();</script></body></html>`))
+		c.Abort()
+		return
+	}
+	c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": message})
 }
 
 func (m *SessionPermissionMiddleware) abortUnauthorized(c *gin.Context, message string) {
