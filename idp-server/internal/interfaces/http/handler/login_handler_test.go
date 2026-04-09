@@ -15,9 +15,15 @@ import (
 )
 
 type stubAuthenticator struct {
-	result *authn.AuthenticateResult
-	err    error
-	input  authn.AuthenticateInput
+	result         *authn.AuthenticateResult
+	err            error
+	input          authn.AuthenticateInput
+	pollResult     *authn.PollMFAChallengeResult
+	pollErr        error
+	decideResult   *authn.PollMFAChallengeResult
+	decideErr      error
+	finalizeResult *authn.AuthenticateResult
+	finalizeErr    error
 }
 
 func (s *stubAuthenticator) Authenticate(_ context.Context, input authn.AuthenticateInput) (*authn.AuthenticateResult, error) {
@@ -26,6 +32,21 @@ func (s *stubAuthenticator) Authenticate(_ context.Context, input authn.Authenti
 }
 
 func (s *stubAuthenticator) VerifyTOTP(_ context.Context, _ authn.VerifyTOTPInput) (*authn.AuthenticateResult, error) {
+	return s.result, s.err
+}
+
+func (s *stubAuthenticator) PollMFAChallenge(_ context.Context, _ authn.PollMFAChallengeInput) (*authn.PollMFAChallengeResult, error) {
+	return s.pollResult, s.pollErr
+}
+
+func (s *stubAuthenticator) DecideMFAPush(_ context.Context, _ authn.DecideMFAPushInput) (*authn.PollMFAChallengeResult, error) {
+	return s.decideResult, s.decideErr
+}
+
+func (s *stubAuthenticator) FinalizeMFAPush(_ context.Context, _ authn.FinalizeMFAPushInput) (*authn.AuthenticateResult, error) {
+	if s.finalizeResult != nil || s.finalizeErr != nil {
+		return s.finalizeResult, s.finalizeErr
+	}
 	return s.result, s.err
 }
 

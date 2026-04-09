@@ -2,7 +2,9 @@ package authn
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -22,6 +24,9 @@ import (
 type Authenticator interface {
 	Authenticate(ctx context.Context, input AuthenticateInput) (*AuthenticateResult, error)
 	VerifyTOTP(ctx context.Context, input VerifyTOTPInput) (*AuthenticateResult, error)
+	PollMFAChallenge(ctx context.Context, input PollMFAChallengeInput) (*PollMFAChallengeResult, error)
+	DecideMFAPush(ctx context.Context, input DecideMFAPushInput) (*PollMFAChallengeResult, error)
+	FinalizeMFAPush(ctx context.Context, input FinalizeMFAPushInput) (*AuthenticateResult, error)
 }
 
 type Service struct {
@@ -170,6 +175,9 @@ func (s *Service) Authenticate(ctx context.Context, input AuthenticateInput) (*A
 				ReturnTo:       input.ReturnTo,
 				MFARequired:    true,
 				MFAChallengeID: challengeID,
+				MFAMode:        MFAModePushTOTPFallback,
+				PushStatus:     MFAPushStatusPending,
+				PushCode:       buildPushMatchCode(challengeID),
 			}, ErrMFARequired
 		}
 		if s.forceMFAEnrollment {
@@ -229,6 +237,119 @@ func (s *Service) VerifyTOTP(ctx context.Context, input VerifyTOTPInput) (*Authe
 	if err := s.mfaCache.DeleteMFAChallenge(ctx, challenge.ChallengeID); err != nil {
 		return nil, err
 	}
+	return s.createSession(ctx, user, pluginport.AuthnMethodTypePassword, challenge.IPAddress, challenge.UserAgent, challenge.RedirectURI, challenge.ReturnTo, now)
+}
+
+func (s *Service) PollMFAChallenge(ctx context.Context, input PollMFAChallengeInput) (*PollMFAChallengeResult, error) {
+	if s.mfaCache == nil {
+		return nil, ErrMFAChallengeExpired
+	}
+	now := s.now().UTC()
+	challenge, err := s.mfaCache.GetMFAChallenge(ctx, strings.TrimSpace(input.ChallengeID))
+	if err != nil {
+		return nil, err
+	}
+	if challenge == nil || !challenge.ExpiresAt.After(now) {
+		return nil, ErrMFAChallengeExpired
+	}
+	return &PollMFAChallengeResult{
+		ChallengeID: challenge.ChallengeID,
+		MFAMode:     normalizeMFAMode(challenge.MFAMode),
+		PushStatus:  normalizePushStatus(challenge.PushStatus),
+		PushCode:    challenge.PushCode,
+		ExpiresAt:   challenge.ExpiresAt,
+	}, nil
+}
+
+func (s *Service) DecideMFAPush(ctx context.Context, input DecideMFAPushInput) (*PollMFAChallengeResult, error) {
+	if s.mfaCache == nil {
+		return nil, ErrMFAChallengeExpired
+	}
+	action := strings.ToLower(strings.TrimSpace(input.Action))
+	if action != MFAPushStatusApproved && action != MFAPushStatusDenied {
+		return nil, ErrInvalidMFAAction
+	}
+
+	now := s.now().UTC()
+	challenge, err := s.mfaCache.GetMFAChallenge(ctx, strings.TrimSpace(input.ChallengeID))
+	if err != nil {
+		return nil, err
+	}
+	if challenge == nil || !challenge.ExpiresAt.After(now) {
+		return nil, ErrMFAChallengeExpired
+	}
+	if normalizeMFAMode(challenge.MFAMode) != MFAModePushTOTPFallback {
+		return nil, ErrInvalidMFAAction
+	}
+
+	approverUserID, err := s.resolveActiveSessionUserID(ctx, input.ApproverSessionID)
+	if err != nil {
+		return nil, err
+	}
+	challengeUserID, err := strconv.ParseInt(strings.TrimSpace(challenge.UserID), 10, 64)
+	if err != nil || challengeUserID <= 0 {
+		return nil, ErrMFAChallengeExpired
+	}
+	if approverUserID != challengeUserID {
+		return nil, ErrMFAApproverMismatch
+	}
+
+	if action == MFAPushStatusApproved {
+		if strings.TrimSpace(input.MatchCode) == "" || strings.TrimSpace(input.MatchCode) != strings.TrimSpace(challenge.PushCode) {
+			return nil, ErrInvalidPushMatchCode
+		}
+	}
+
+	challenge.PushStatus = action
+	challenge.ApproverUserID = strconv.FormatInt(approverUserID, 10)
+	challenge.DecidedAt = now
+	if err := s.mfaCache.SaveMFAChallenge(ctx, *challenge, ttlUntil(now, challenge.ExpiresAt)); err != nil {
+		return nil, err
+	}
+
+	return &PollMFAChallengeResult{
+		ChallengeID: challenge.ChallengeID,
+		MFAMode:     normalizeMFAMode(challenge.MFAMode),
+		PushStatus:  normalizePushStatus(challenge.PushStatus),
+		PushCode:    challenge.PushCode,
+		ExpiresAt:   challenge.ExpiresAt,
+	}, nil
+}
+
+func (s *Service) FinalizeMFAPush(ctx context.Context, input FinalizeMFAPushInput) (*AuthenticateResult, error) {
+	if s.mfaCache == nil {
+		return nil, ErrMFAChallengeExpired
+	}
+	now := s.now().UTC()
+	challenge, err := s.mfaCache.GetMFAChallenge(ctx, strings.TrimSpace(input.ChallengeID))
+	if err != nil {
+		return nil, err
+	}
+	if challenge == nil || !challenge.ExpiresAt.After(now) {
+		return nil, ErrMFAChallengeExpired
+	}
+	if normalizePushStatus(challenge.PushStatus) == MFAPushStatusDenied {
+		return nil, ErrMFAPushRejected
+	}
+	if normalizePushStatus(challenge.PushStatus) != MFAPushStatusApproved {
+		return nil, ErrMFAPushNotApproved
+	}
+
+	userID, err := strconv.ParseInt(strings.TrimSpace(challenge.UserID), 10, 64)
+	if err != nil || userID <= 0 {
+		return nil, ErrMFAChallengeExpired
+	}
+	user, err := s.userRepo.FindByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil || user.Status != "active" {
+		return nil, ErrInvalidCredentials
+	}
+	if err := s.mfaCache.DeleteMFAChallenge(ctx, challenge.ChallengeID); err != nil {
+		return nil, err
+	}
+
 	return s.createSession(ctx, user, pluginport.AuthnMethodTypePassword, challenge.IPAddress, challenge.UserAgent, challenge.RedirectURI, challenge.ReturnTo, now)
 }
 
@@ -425,6 +546,7 @@ func (s *Service) createMFAChallenge(ctx context.Context, user *userdomain.Model
 		return "", ErrMFARequired
 	}
 	challengeID := uuid.NewString()
+	pushCode := buildPushMatchCode(challengeID)
 	if s.mfaTTL <= 0 {
 		s.mfaTTL = 5 * time.Minute
 	}
@@ -437,6 +559,9 @@ func (s *Service) createMFAChallenge(ctx context.Context, user *userdomain.Model
 		UserAgent:   input.UserAgent,
 		ReturnTo:    input.ReturnTo,
 		RedirectURI: input.RedirectURI,
+		MFAMode:     MFAModePushTOTPFallback,
+		PushStatus:  MFAPushStatusPending,
+		PushCode:    pushCode,
 		ExpiresAt:   s.now().Add(s.mfaTTL),
 	}, s.mfaTTL)
 	return challengeID, err
@@ -493,4 +618,79 @@ func (s *Service) createSession(ctx context.Context, user *userdomain.Model, met
 		AuthenticatedAt: now,
 		ExpiresAt:       expiresAt,
 	}, nil
+}
+
+func (s *Service) resolveActiveSessionUserID(ctx context.Context, sessionID string) (int64, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return 0, ErrMFAApproverMismatch
+	}
+	now := s.now().UTC()
+	if s.sessionCache != nil {
+		entry, err := s.sessionCache.Get(ctx, sessionID)
+		if err != nil {
+			return 0, err
+		}
+		if entry != nil && entry.ExpiresAt.After(now) && strings.EqualFold(strings.TrimSpace(entry.Status), "active") {
+			userID, err := strconv.ParseInt(strings.TrimSpace(entry.UserID), 10, 64)
+			if err == nil && userID > 0 {
+				return userID, nil
+			}
+		}
+	}
+	sessionModel, err := s.sessionRepo.FindBySessionID(ctx, sessionID)
+	if err != nil {
+		return 0, err
+	}
+	if sessionModel == nil || sessionModel.LoggedOutAt != nil || !sessionModel.ExpiresAt.After(now) {
+		return 0, ErrMFAApproverMismatch
+	}
+	return sessionModel.UserID, nil
+}
+
+func normalizeMFAMode(mode string) string {
+	switch strings.TrimSpace(mode) {
+	case MFAModePushTOTPFallback:
+		return MFAModePushTOTPFallback
+	default:
+		return MFAModeTOTPOnly
+	}
+}
+
+func normalizePushStatus(status string) string {
+	switch strings.TrimSpace(strings.ToLower(status)) {
+	case MFAPushStatusApproved:
+		return MFAPushStatusApproved
+	case MFAPushStatusDenied:
+		return MFAPushStatusDenied
+	default:
+		return MFAPushStatusPending
+	}
+}
+
+func ttlUntil(now, expiresAt time.Time) time.Duration {
+	ttl := expiresAt.Sub(now)
+	if ttl <= 0 {
+		return time.Second
+	}
+	return ttl
+}
+
+func buildPushMatchCode(seed string) string {
+	if strings.TrimSpace(seed) == "" {
+		return randomTwoDigits()
+	}
+	sum := 0
+	for _, ch := range seed {
+		sum += int(ch)
+	}
+	return fmt.Sprintf("%02d", sum%90+10)
+}
+
+func randomTwoDigits() string {
+	var b [1]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "42"
+	}
+	return fmt.Sprintf("%02d", int(b[0])%90+10)
 }

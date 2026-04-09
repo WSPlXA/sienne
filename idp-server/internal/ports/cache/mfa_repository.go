@@ -31,13 +31,18 @@ type TOTPEnrollmentEntry struct {
 }
 
 type MFAChallengeEntry struct {
-	ChallengeID string
-	UserID      string
-	Subject     string
-	Username    string
-	IPAddress   string
-	UserAgent   string
-	ReturnTo    string
-	RedirectURI string
-	ExpiresAt   time.Time
+	ChallengeID    string
+	UserID         string
+	Subject        string
+	Username       string
+	IPAddress      string
+	UserAgent      string
+	ReturnTo       string
+	RedirectURI    string
+	MFAMode        string
+	PushStatus     string
+	PushCode       string
+	ApproverUserID string
+	DecidedAt      time.Time
+	ExpiresAt      time.Time
 }

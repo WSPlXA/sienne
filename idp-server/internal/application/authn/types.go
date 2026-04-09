@@ -16,6 +16,11 @@ var (
 	ErrInvalidTOTPCode       = errors.New("invalid totp code")
 	ErrTOTPCodeReused        = errors.New("totp code already used")
 	ErrMFAChallengeExpired   = errors.New("mfa challenge expired")
+	ErrMFAPushNotApproved    = errors.New("mfa push not approved")
+	ErrMFAPushRejected       = errors.New("mfa push rejected")
+	ErrInvalidMFAAction      = errors.New("invalid mfa action")
+	ErrMFAApproverMismatch   = errors.New("mfa approver mismatch")
+	ErrInvalidPushMatchCode  = errors.New("invalid push match code")
 )
 
 type RateLimitPolicy struct {
@@ -58,6 +63,9 @@ type AuthenticateResult struct {
 	MFARequired           bool
 	MFAEnrollmentRequired bool
 	MFAChallengeID        string
+	MFAMode               string
+	PushStatus            string
+	PushCode              string
 	AuthenticatedAt       time.Time
 	ExpiresAt             time.Time
 }
@@ -68,3 +76,36 @@ type VerifyTOTPInput struct {
 	IPAddress   string
 	UserAgent   string
 }
+
+type PollMFAChallengeInput struct {
+	ChallengeID string
+}
+
+type PollMFAChallengeResult struct {
+	ChallengeID string
+	MFAMode     string
+	PushStatus  string
+	PushCode    string
+	ExpiresAt   time.Time
+}
+
+type DecideMFAPushInput struct {
+	ChallengeID       string
+	ApproverSessionID string
+	Action            string
+	MatchCode         string
+	IPAddress         string
+	UserAgent         string
+}
+
+type FinalizeMFAPushInput struct {
+	ChallengeID string
+}
+
+const (
+	MFAModeTOTPOnly         = "totp_only"
+	MFAModePushTOTPFallback = "push_totp_fallback"
+	MFAPushStatusPending    = "pending"
+	MFAPushStatusApproved   = "approved"
+	MFAPushStatusDenied     = "denied"
+)

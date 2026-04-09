@@ -177,6 +177,9 @@ func (h *LoginHandler) handleAuthenticate(c *gin.Context, req dto.LoginRequest) 
 				"error":        err.Error(),
 				"mfa_required": true,
 				"challenge_id": result.MFAChallengeID,
+				"mfa_mode":     result.MFAMode,
+				"push_status":  result.PushStatus,
+				"push_code":    result.PushCode,
 				"redirect_uri": "/login/totp",
 				"return_to":    req.ReturnTo,
 			})

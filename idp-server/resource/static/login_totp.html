@@ -29,7 +29,23 @@
       </div>
       <p class="mt-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">MFA Check</p>
       <h1 class="mt-2 text-3xl font-extrabold tracking-tight">Enter 6-digit code</h1>
-      <p class="mt-2 text-sm text-slate-500">Use the code shown in your authenticator app.</p>
+      <p class="mt-2 text-sm text-slate-500">Push approval runs first. If pending/failed, use authenticator code as fallback.</p>
+
+      {{if .PushEnabled}}
+      <section class="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4" data-push-enabled="true">
+        <p class="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">Push Challenge</p>
+        <p class="mt-2 text-sm text-slate-700">Approve on trusted device with this number.</p>
+        <div class="mt-3 flex items-center justify-between rounded-xl bg-white px-4 py-3">
+          <span class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Number Match</span>
+          <span id="push-code" class="text-2xl font-black text-emerald-700">{{.PushCode}}</span>
+        </div>
+        <div class="mt-3 text-xs text-slate-600">
+          <p>Challenge ID: <span class="font-mono">{{.ChallengeID}}</span></p>
+          <p id="push-status" class="mt-1">Status: {{.PushStatus}}</p>
+          <p class="mt-1">Trusted device URL: <a class="font-semibold text-emerald-700 underline" href="/mfa/push?challenge_id={{.ChallengeID}}&match_code={{.PushCode}}">/mfa/push?challenge_id={{.ChallengeID}}&match_code={{.PushCode}}</a></p>
+        </div>
+      </section>
+      {{end}}
 
       {{if .Error}}
       <div class="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -51,5 +67,41 @@
       </form>
     </main>
   </div>
+  {{if .PushEnabled}}
+  <script>
+    (function () {
+      const statusEl = document.getElementById("push-status");
+      if (!statusEl) return;
+
+      const poll = async () => {
+        try {
+          const res = await fetch("/login/totp?mode=status", {
+            method: "GET",
+            headers: { "Accept": "application/json" },
+            credentials: "same-origin"
+          });
+          const payload = await res.json();
+          if (!res.ok) {
+            statusEl.textContent = "Status: " + (payload.error || "unavailable");
+            return;
+          }
+          if (payload.status) {
+            statusEl.textContent = "Status: " + payload.status;
+          } else if (payload.push_status) {
+            statusEl.textContent = "Status: " + payload.push_status;
+          }
+          if (payload.authenticated && payload.redirect_uri) {
+            window.location.replace(payload.redirect_uri);
+          }
+        } catch (_e) {
+          statusEl.textContent = "Status: network_error";
+        }
+      };
+
+      poll();
+      window.setInterval(poll, 2500);
+    })();
+  </script>
+  {{end}}
 </body>
 </html>
