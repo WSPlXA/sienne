@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -22,12 +23,13 @@ type LoginTOTPHandler struct {
 const defaultPostLoginRedirect = "/"
 
 type loginTOTPPageData struct {
-	CSRFToken   string
-	Error       string
-	ChallengeID string
-	PushEnabled bool
-	PushStatus  string
-	PushCode    string
+	CSRFToken      string
+	Error          string
+	ChallengeID    string
+	PushEnabled    bool
+	PasskeyEnabled bool
+	PushStatus     string
+	PushCode       string
 }
 
 func NewLoginTOTPHandler(authnService authn.Authenticator) *LoginTOTPHandler {
@@ -56,6 +58,20 @@ func (h *LoginTOTPHandler) Handle(c *gin.Context) {
 		return
 	case "poll":
 		h.writePushStatus(c)
+		return
+	case "passkey_begin":
+		if err := validateCSRFToken(c, req.CSRFToken); err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": errInvalidCSRFToken.Error()})
+			return
+		}
+		h.handlePasskeyBegin(c, req)
+		return
+	case "passkey_finish":
+		if err := validateCSRFToken(c, req.CSRFToken); err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": errInvalidCSRFToken.Error()})
+			return
+		}
+		h.handlePasskeyFinish(c, req)
 		return
 	}
 	if err := validateCSRFToken(c, req.CSRFToken); err != nil {
@@ -107,6 +123,89 @@ func (h *LoginTOTPHandler) Handle(c *gin.Context) {
 		"user_id":    result.UserID,
 		"subject":    result.Subject,
 		"expires_at": result.ExpiresAt,
+	})
+}
+
+func (h *LoginTOTPHandler) handlePasskeyBegin(c *gin.Context, req dto.LoginTOTPRequest) {
+	challengeID := strings.TrimSpace(req.ChallengeID)
+	if challengeID == "" {
+		challengeID, _ = c.Cookie(mfaChallengeCookieName)
+	}
+	result, err := h.authnService.BeginMFAPasskey(c.Request.Context(), authn.BeginMFAPasskeyInput{
+		ChallengeID: challengeID,
+	})
+	if err != nil {
+		status := http.StatusBadRequest
+		switch {
+		case errors.Is(err, authn.ErrMFAChallengeExpired):
+			status = http.StatusUnauthorized
+			c.SetCookie(mfaChallengeCookieName, "", -1, "/", "", false, true)
+		case errors.Is(err, authn.ErrPasskeyUnavailable), errors.Is(err, authn.ErrPasskeySessionMissing):
+			status = http.StatusBadRequest
+		default:
+			status = http.StatusInternalServerError
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
+		return
+	}
+	var options any
+	if err := json.Unmarshal(result.OptionsJSON, &options); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid passkey options payload"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"challenge_id": result.ChallengeID,
+		"options":      options,
+		"expires_at":   result.ExpiresAt,
+	})
+}
+
+func (h *LoginTOTPHandler) handlePasskeyFinish(c *gin.Context, req dto.LoginTOTPRequest) {
+	challengeID := strings.TrimSpace(req.ChallengeID)
+	if challengeID == "" {
+		challengeID, _ = c.Cookie(mfaChallengeCookieName)
+	}
+	responseJSON := strings.TrimSpace(req.ResponseJSON)
+	if responseJSON == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing passkey response payload"})
+		return
+	}
+	result, err := h.authnService.VerifyMFAPasskey(c.Request.Context(), authn.VerifyMFAPasskeyInput{
+		ChallengeID:  challengeID,
+		ResponseJSON: []byte(responseJSON),
+	})
+	if err != nil {
+		status := http.StatusBadRequest
+		switch {
+		case errors.Is(err, authn.ErrMFAChallengeExpired):
+			status = http.StatusUnauthorized
+			c.SetCookie(mfaChallengeCookieName, "", -1, "/", "", false, true)
+		case errors.Is(err, authn.ErrPasskeyUnavailable), errors.Is(err, authn.ErrPasskeySessionMissing), errors.Is(err, authn.ErrInvalidCredentials):
+			status = http.StatusUnauthorized
+		default:
+			status = http.StatusInternalServerError
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.SetCookie(mfaChallengeCookieName, "", -1, "/", "", false, true)
+	maxAge := int(time.Until(result.ExpiresAt).Seconds())
+	c.SetCookie("idp_session", result.SessionID, maxAge, "/", "", false, true)
+	redirectURI := result.ReturnTo
+	if redirectURI == "" {
+		redirectURI = result.RedirectURI
+	}
+	if redirectURI == "" {
+		redirectURI = defaultPostLoginRedirect
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"authenticated": true,
+		"redirect_uri":  redirectURI,
+		"session_id":    result.SessionID,
+		"user_id":       result.UserID,
+		"subject":       result.Subject,
+		"expires_at":    result.ExpiresAt,
 	})
 }
 
@@ -188,25 +287,27 @@ func (h *LoginTOTPHandler) writePushStatus(c *gin.Context) {
 				redirectURI = defaultPostLoginRedirect
 			}
 			c.JSON(http.StatusOK, gin.H{
-				"authenticated": true,
-				"status":        authn.MFAPushStatusApproved,
-				"redirect_uri":  redirectURI,
-				"session_id":    result.SessionID,
-				"user_id":       result.UserID,
-				"subject":       result.Subject,
-				"expires_at":    result.ExpiresAt,
+				"authenticated":     true,
+				"status":            authn.MFAPushStatusApproved,
+				"passkey_available": state.PasskeyAvailable,
+				"redirect_uri":      redirectURI,
+				"session_id":        result.SessionID,
+				"user_id":           result.UserID,
+				"subject":           result.Subject,
+				"expires_at":        result.ExpiresAt,
 			})
 			return
 		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"authenticated": false,
-		"challenge_id":  state.ChallengeID,
-		"mfa_mode":      state.MFAMode,
-		"push_status":   state.PushStatus,
-		"push_code":     state.PushCode,
-		"expires_at":    state.ExpiresAt,
+		"authenticated":     false,
+		"challenge_id":      state.ChallengeID,
+		"mfa_mode":          state.MFAMode,
+		"passkey_available": state.PasskeyAvailable,
+		"push_status":       state.PushStatus,
+		"push_code":         state.PushCode,
+		"expires_at":        state.ExpiresAt,
 	})
 }
 
@@ -230,6 +331,7 @@ func (h *LoginTOTPHandler) loadChallengeData(c *gin.Context) loginTOTPPageData {
 	}
 	data.ChallengeID = state.ChallengeID
 	data.PushEnabled = state.MFAMode == authn.MFAModePushTOTPFallback
+	data.PasskeyEnabled = state.PasskeyAvailable
 	data.PushStatus = state.PushStatus
 	data.PushCode = state.PushCode
 	return data
@@ -246,11 +348,12 @@ func (h *LoginTOTPHandler) render(c *gin.Context, status int, data loginTOTPPage
 		return
 	}
 	c.JSON(status, gin.H{
-		"csrf_token":   data.CSRFToken,
-		"error":        data.Error,
-		"challenge_id": data.ChallengeID,
-		"push_enabled": data.PushEnabled,
-		"push_status":  data.PushStatus,
-		"push_code":    data.PushCode,
+		"csrf_token":      data.CSRFToken,
+		"error":           data.Error,
+		"challenge_id":    data.ChallengeID,
+		"push_enabled":    data.PushEnabled,
+		"passkey_enabled": data.PasskeyEnabled,
+		"push_status":     data.PushStatus,
+		"push_code":       data.PushCode,
 	})
 }

@@ -66,20 +66,21 @@ func (r *MFARepository) SaveMFAChallenge(ctx context.Context, entry cacheport.MF
 	key := r.key.MFAChallenge(entry.ChallengeID)
 	pipe := r.rdb.TxPipeline()
 	pipe.HSet(ctx, key, map[string]any{
-		"challenge_id":     entry.ChallengeID,
-		"user_id":          entry.UserID,
-		"subject":          entry.Subject,
-		"username":         entry.Username,
-		"ip_address":       entry.IPAddress,
-		"user_agent":       entry.UserAgent,
-		"return_to":        entry.ReturnTo,
-		"redirect_uri":     entry.RedirectURI,
-		"mfa_mode":         entry.MFAMode,
-		"push_status":      entry.PushStatus,
-		"push_code":        entry.PushCode,
-		"approver_user_id": entry.ApproverUserID,
-		"decided_at":       formatTime(entry.DecidedAt),
-		"expires_at":       formatTime(entry.ExpiresAt),
+		"challenge_id":         entry.ChallengeID,
+		"user_id":              entry.UserID,
+		"subject":              entry.Subject,
+		"username":             entry.Username,
+		"ip_address":           entry.IPAddress,
+		"user_agent":           entry.UserAgent,
+		"return_to":            entry.ReturnTo,
+		"redirect_uri":         entry.RedirectURI,
+		"mfa_mode":             entry.MFAMode,
+		"push_status":          entry.PushStatus,
+		"push_code":            entry.PushCode,
+		"approver_user_id":     entry.ApproverUserID,
+		"decided_at":           formatTime(entry.DecidedAt),
+		"passkey_session_json": entry.PasskeySessionJSON,
+		"expires_at":           formatTime(entry.ExpiresAt),
 	})
 	pipe.Expire(ctx, key, ttl)
 	_, err := pipe.Exec(ctx)
@@ -95,20 +96,21 @@ func (r *MFARepository) GetMFAChallenge(ctx context.Context, challengeID string)
 		return nil, nil
 	}
 	return &cacheport.MFAChallengeEntry{
-		ChallengeID:    values["challenge_id"],
-		UserID:         values["user_id"],
-		Subject:        values["subject"],
-		Username:       values["username"],
-		IPAddress:      values["ip_address"],
-		UserAgent:      values["user_agent"],
-		ReturnTo:       values["return_to"],
-		RedirectURI:    values["redirect_uri"],
-		MFAMode:        values["mfa_mode"],
-		PushStatus:     values["push_status"],
-		PushCode:       values["push_code"],
-		ApproverUserID: values["approver_user_id"],
-		DecidedAt:      parseTime(values["decided_at"]),
-		ExpiresAt:      parseTime(values["expires_at"]),
+		ChallengeID:        values["challenge_id"],
+		UserID:             values["user_id"],
+		Subject:            values["subject"],
+		Username:           values["username"],
+		IPAddress:          values["ip_address"],
+		UserAgent:          values["user_agent"],
+		ReturnTo:           values["return_to"],
+		RedirectURI:        values["redirect_uri"],
+		MFAMode:            values["mfa_mode"],
+		PushStatus:         values["push_status"],
+		PushCode:           values["push_code"],
+		ApproverUserID:     values["approver_user_id"],
+		DecidedAt:          parseTime(values["decided_at"]),
+		PasskeySessionJSON: values["passkey_session_json"],
+		ExpiresAt:          parseTime(values["expires_at"]),
 	}, nil
 }
 

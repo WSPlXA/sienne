@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	appdevice "idp-server/internal/application/device"
 	appmfa "idp-server/internal/application/mfa"
 	"idp-server/internal/application/oidc"
+	apppasskey "idp-server/internal/application/passkey"
 	apprbac "idp-server/internal/application/rbac"
 	appregister "idp-server/internal/application/register"
 	appsession "idp-server/internal/application/session"
@@ -104,6 +106,7 @@ func Wire() (*App, error) {
 	// repositories代表应用程序中与数据存储相关的组件，负责与数据库或缓存系统交互以存储和检索数据。这些存储库实例将被服务层使用，以实现应用程序的业务逻辑。
 	// cacheRepositories代表应用程序中与缓存相关的组件，负责与缓存系统（如Redis）交互以存储和检索数据。这些缓存存储库实例将被服务层使用，以提高应用程序的性能和响应速度。
 	totpRepo := persistence.NewTOTPRepository(db, secretCodec)
+	passkeyRepo := persistence.NewPasskeyCredentialRepository(db)
 	// 比如sessionCache是一个会话缓存存储库实例，用于与Redis交互以管理会话缓存数据。它使用redisClient和keyBuilder进行初始化。
 	sessionCache := cacheRedis.NewSessionCacheRepository(redisClient, keyBuilder)
 	tokenCache := cacheRedis.NewTokenCacheRepository(redisClient, keyBuilder)
@@ -131,9 +134,29 @@ func Wire() (*App, error) {
 		UserLockThreshold:  int64(cfg.LoginUserLockThreshold),
 		UserLockTTL:        cfg.LoginUserLockTTL,
 	})
+	var passkeyProvider *infrasecurity.PasskeyProvider
+	if cfg.PasskeyEnabled {
+		rpID, rpDisplayName, rpOrigins, err := resolvePasskeyRPConfig(cfg)
+		if err != nil {
+			_ = db.Close()
+			_ = redisClient.Close()
+			return nil, fmt.Errorf("resolve passkey rp config: %w", err)
+		}
+		passkeyProvider, err = infrasecurity.NewPasskeyProvider(rpID, rpDisplayName, rpOrigins)
+		if err != nil {
+			_ = db.Close()
+			_ = redisClient.Close()
+			return nil, fmt.Errorf("init passkey provider: %w", err)
+		}
+		authnService.WithPasskey(passkeyRepo, passkeyProvider)
+	}
 	sessionService := appsession.NewService(sessionRepo, sessionCache, tokenRepo, tokenCache)
 	rbacService := apprbac.NewService(operatorRoleRepo, userRepo)
 	mfaService := appmfa.NewService(sessionRepo, sessionCache, userRepo, totpRepo, mfaCache, totpProvider, cfg.Issuer, 10*time.Minute)
+	var passkeyService apppasskey.Manager
+	if passkeyProvider != nil {
+		passkeyService = apppasskey.NewService(sessionRepo, sessionCache, userRepo, passkeyRepo, mfaCache, passkeyProvider, 10*time.Minute)
+	}
 	rotationConfig := infracrypto.RotationConfig{
 		WorkingDir:    cfg.WorkDir,
 		StorageDir:    cfg.SigningKeyDir,
@@ -185,7 +208,7 @@ func Wire() (*App, error) {
 	adminMiddleware := httpmiddleware.NewSessionPermissionMiddleware(sessionRepo, sessionCache, userRepo)
 
 	return &App{
-		Router: interfacehttp.NewRouter(authzService, consentService, registerService, clientService, clientService, clientService, clientService, authnService, federatedOIDCProvider != nil, sessionService, rbacService, auditEventRepo, clientAuthenticator, grantRegistry, deviceService, mfaService, oidcService, authMiddleware, adminMiddleware),
+		Router: interfacehttp.NewRouter(authzService, consentService, registerService, clientService, clientService, clientService, clientService, authnService, federatedOIDCProvider != nil, sessionService, rbacService, auditEventRepo, clientAuthenticator, grantRegistry, deviceService, mfaService, passkeyService, oidcService, authMiddleware, adminMiddleware),
 	}, nil
 }
 
@@ -222,6 +245,10 @@ type config struct {
 	LoginUserLockThreshold        int
 	LoginUserLockTTL              time.Duration
 	ForceMFAEnrollment            bool
+	PasskeyEnabled                bool
+	PasskeyRPID                   string
+	PasskeyRPDisplayName          string
+	PasskeyRPOrigins              []string
 	TOTPSecretEncryptionKey       string
 }
 
@@ -259,6 +286,10 @@ func loadConfigFromEnv() (*config, error) {
 		LoginUserLockThreshold:        getEnvInt("LOGIN_USER_LOCK_THRESHOLD", 5),
 		LoginUserLockTTL:              getEnvDuration("LOGIN_USER_LOCK_TTL", 30*time.Minute),
 		ForceMFAEnrollment:            getEnvBool("FORCE_MFA_ENROLLMENT", true),
+		PasskeyEnabled:                getEnvBool("PASSKEY_ENABLED", true),
+		PasskeyRPID:                   strings.TrimSpace(os.Getenv("PASSKEY_RP_ID")),
+		PasskeyRPDisplayName:          getEnvString("PASSKEY_RP_DISPLAY_NAME", "IDP Server"),
+		PasskeyRPOrigins:              getEnvFields("PASSKEY_RP_ORIGINS", nil),
 		TOTPSecretEncryptionKey:       strings.TrimSpace(os.Getenv("TOTP_SECRET_ENCRYPTION_KEY")),
 	}
 	// 如果加载配置失败，返回错误。
@@ -408,6 +439,50 @@ func buildFederatedOIDCProvider(cfg *config, replayCache cacheport.ReplayProtect
 		EmailClaim:       cfg.FederatedOIDCEmailClaim,
 		StateTTL:         cfg.FederatedOIDCStateTTL,
 	}, replayCache)
+}
+
+func resolvePasskeyRPConfig(cfg *config) (string, string, []string, error) {
+	if cfg == nil {
+		return "", "", nil, fmt.Errorf("missing config")
+	}
+	issuer := strings.TrimSpace(cfg.Issuer)
+	if issuer == "" {
+		return "", "", nil, fmt.Errorf("missing issuer")
+	}
+	issuerURL, err := neturl.Parse(issuer)
+	if err != nil {
+		return "", "", nil, fmt.Errorf("parse issuer: %w", err)
+	}
+	if issuerURL.Scheme == "" || issuerURL.Host == "" {
+		return "", "", nil, fmt.Errorf("invalid issuer origin")
+	}
+
+	rpID := strings.TrimSpace(cfg.PasskeyRPID)
+	if rpID == "" {
+		rpID = strings.TrimSpace(issuerURL.Hostname())
+	}
+	if rpID == "" {
+		return "", "", nil, fmt.Errorf("missing passkey rp id")
+	}
+
+	origins := make([]string, 0, len(cfg.PasskeyRPOrigins)+1)
+	for _, origin := range cfg.PasskeyRPOrigins {
+		origin = strings.TrimSpace(origin)
+		if origin == "" {
+			continue
+		}
+		origins = append(origins, origin)
+	}
+	if len(origins) == 0 {
+		origins = append(origins, issuerURL.Scheme+"://"+issuerURL.Host)
+	}
+
+	displayName := strings.TrimSpace(cfg.PasskeyRPDisplayName)
+	if displayName == "" {
+		displayName = "IDP Server"
+	}
+
+	return rpID, displayName, origins, nil
 }
 
 // jwtServiceAdapter和jwtMiddlewareAdapter是适配器结构体，用于将infracrypto.JWTService适配为应用程序中使用的JWT服务接口。这些适配器实现了相应的接口方法，并将调用委托给infracrypto.JWTService实例。

@@ -174,14 +174,15 @@ func (h *LoginHandler) handleAuthenticate(c *gin.Context, req dto.LoginRequest) 
 				return
 			}
 			c.JSON(status, gin.H{
-				"error":        err.Error(),
-				"mfa_required": true,
-				"challenge_id": result.MFAChallengeID,
-				"mfa_mode":     result.MFAMode,
-				"push_status":  result.PushStatus,
-				"push_code":    result.PushCode,
-				"redirect_uri": "/login/totp",
-				"return_to":    req.ReturnTo,
+				"error":             err.Error(),
+				"mfa_required":      true,
+				"challenge_id":      result.MFAChallengeID,
+				"mfa_mode":          result.MFAMode,
+				"passkey_available": result.PasskeyAvailable,
+				"push_status":       result.PushStatus,
+				"push_code":         result.PushCode,
+				"redirect_uri":      "/login/totp",
+				"return_to":         req.ReturnTo,
 			})
 			return
 		}
@@ -246,9 +247,9 @@ func (h *LoginHandler) handleAuthenticate(c *gin.Context, req dto.LoginRequest) 
 
 func buildMFASetupURI(returnTo string) string {
 	if returnTo == "" {
-		return "/mfa/totp/setup"
+		return "/mfa/passkey/setup"
 	}
-	return withReturnTo("/mfa/totp/setup", returnTo)
+	return withReturnTo("/mfa/passkey/setup", returnTo)
 }
 
 func shouldProcessLoginGET(req dto.LoginRequest) bool {

@@ -15,15 +15,19 @@ import (
 )
 
 type stubAuthenticator struct {
-	result         *authn.AuthenticateResult
-	err            error
-	input          authn.AuthenticateInput
-	pollResult     *authn.PollMFAChallengeResult
-	pollErr        error
-	decideResult   *authn.PollMFAChallengeResult
-	decideErr      error
-	finalizeResult *authn.AuthenticateResult
-	finalizeErr    error
+	result              *authn.AuthenticateResult
+	err                 error
+	input               authn.AuthenticateInput
+	beginPasskeyResult  *authn.BeginMFAPasskeyResult
+	beginPasskeyErr     error
+	verifyPasskeyResult *authn.AuthenticateResult
+	verifyPasskeyErr    error
+	pollResult          *authn.PollMFAChallengeResult
+	pollErr             error
+	decideResult        *authn.PollMFAChallengeResult
+	decideErr           error
+	finalizeResult      *authn.AuthenticateResult
+	finalizeErr         error
 }
 
 func (s *stubAuthenticator) Authenticate(_ context.Context, input authn.AuthenticateInput) (*authn.AuthenticateResult, error) {
@@ -32,6 +36,17 @@ func (s *stubAuthenticator) Authenticate(_ context.Context, input authn.Authenti
 }
 
 func (s *stubAuthenticator) VerifyTOTP(_ context.Context, _ authn.VerifyTOTPInput) (*authn.AuthenticateResult, error) {
+	return s.result, s.err
+}
+
+func (s *stubAuthenticator) BeginMFAPasskey(_ context.Context, _ authn.BeginMFAPasskeyInput) (*authn.BeginMFAPasskeyResult, error) {
+	return s.beginPasskeyResult, s.beginPasskeyErr
+}
+
+func (s *stubAuthenticator) VerifyMFAPasskey(_ context.Context, _ authn.VerifyMFAPasskeyInput) (*authn.AuthenticateResult, error) {
+	if s.verifyPasskeyResult != nil || s.verifyPasskeyErr != nil {
+		return s.verifyPasskeyResult, s.verifyPasskeyErr
+	}
 	return s.result, s.err
 }
 
@@ -160,7 +175,7 @@ func TestLoginHandlerHandlePostRedirectsToMFASetupWhenEnrollmentRequired(t *test
 	if recorder.Code != http.StatusFound {
 		t.Fatalf("status code = %d, want %d", recorder.Code, http.StatusFound)
 	}
-	if got := recorder.Header().Get("Location"); got != "/mfa/totp/setup?return_to=%2Foauth2%2Fauthorize%3Fclient_id%3Ddemo" {
+	if got := recorder.Header().Get("Location"); got != "/mfa/passkey/setup?return_to=%2Foauth2%2Fauthorize%3Fclient_id%3Ddemo" {
 		t.Fatalf("location = %q, want mfa setup with return_to", got)
 	}
 	if cookie := findCookie(recorder.Result().Cookies(), "idp_session"); cookie == nil || cookie.Value != "session-enroll-1" {

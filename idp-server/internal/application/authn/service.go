@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	passkeydomain "idp-server/internal/domain/passkey"
 	"idp-server/internal/domain/session"
 	totpdomain "idp-server/internal/domain/totp"
 	userdomain "idp-server/internal/domain/user"
@@ -24,6 +25,8 @@ import (
 type Authenticator interface {
 	Authenticate(ctx context.Context, input AuthenticateInput) (*AuthenticateResult, error)
 	VerifyTOTP(ctx context.Context, input VerifyTOTPInput) (*AuthenticateResult, error)
+	BeginMFAPasskey(ctx context.Context, input BeginMFAPasskeyInput) (*BeginMFAPasskeyResult, error)
+	VerifyMFAPasskey(ctx context.Context, input VerifyMFAPasskeyInput) (*AuthenticateResult, error)
 	PollMFAChallenge(ctx context.Context, input PollMFAChallengeInput) (*PollMFAChallengeResult, error)
 	DecideMFAPush(ctx context.Context, input DecideMFAPushInput) (*PollMFAChallengeResult, error)
 	FinalizeMFAPush(ctx context.Context, input FinalizeMFAPushInput) (*AuthenticateResult, error)
@@ -36,8 +39,10 @@ type Service struct {
 	mfaCache           cache.MFARepository
 	userRepo           repository.UserRepository
 	totpRepo           repository.TOTPRepository
+	passkeyRepo        repository.PasskeyCredentialRepository
 	registry           *pluginregistry.AuthnRegistry
 	totp               securityport.TOTPProvider
+	passkey            securityport.PasskeyProvider
 	sessionTTL         time.Duration
 	mfaTTL             time.Duration
 	forceMFAEnrollment bool
@@ -82,6 +87,12 @@ func NewService(
 			return time.Now().UTC()
 		},
 	}
+}
+
+func (s *Service) WithPasskey(passkeyRepo repository.PasskeyCredentialRepository, passkey securityport.PasskeyProvider) *Service {
+	s.passkeyRepo = passkeyRepo
+	s.passkey = passkey
+	return s
 }
 
 func (s *Service) Authenticate(ctx context.Context, input AuthenticateInput) (*AuthenticateResult, error) {
@@ -168,16 +179,29 @@ func (s *Service) Authenticate(ctx context.Context, input AuthenticateInput) (*A
 			if err != nil {
 				return nil, err
 			}
+			passkeyCredentialJSON, err := s.lookupPasskeyCredentialJSON(ctx, user.ID)
+			if err != nil {
+				return nil, err
+			}
+			mfaMode := MFAModeTOTPOnly
+			passkeyAvailable := len(passkeyCredentialJSON) > 0 && s.passkey != nil
+			if passkeyAvailable {
+				mfaMode = MFAModePasskeyTOTPFallback
+			}
+			if err := s.updateMFAChallengeMode(ctx, challengeID, mfaMode); err != nil {
+				return nil, err
+			}
 			return &AuthenticateResult{
-				UserID:         user.ID,
-				Subject:        user.UserUUID,
-				RedirectURI:    authnResult.RedirectURI,
-				ReturnTo:       input.ReturnTo,
-				MFARequired:    true,
-				MFAChallengeID: challengeID,
-				MFAMode:        MFAModePushTOTPFallback,
-				PushStatus:     MFAPushStatusPending,
-				PushCode:       buildPushMatchCode(challengeID),
+				UserID:           user.ID,
+				Subject:          user.UserUUID,
+				RedirectURI:      authnResult.RedirectURI,
+				ReturnTo:         input.ReturnTo,
+				MFARequired:      true,
+				MFAChallengeID:   challengeID,
+				MFAMode:          mfaMode,
+				PasskeyAvailable: passkeyAvailable,
+				PushStatus:       MFAPushStatusPending,
+				PushCode:         buildPushMatchCode(challengeID),
 			}, ErrMFARequired
 		}
 		if s.forceMFAEnrollment {
@@ -240,6 +264,116 @@ func (s *Service) VerifyTOTP(ctx context.Context, input VerifyTOTPInput) (*Authe
 	return s.createSession(ctx, user, pluginport.AuthnMethodTypePassword, challenge.IPAddress, challenge.UserAgent, challenge.RedirectURI, challenge.ReturnTo, now)
 }
 
+func (s *Service) BeginMFAPasskey(ctx context.Context, input BeginMFAPasskeyInput) (*BeginMFAPasskeyResult, error) {
+	if s.mfaCache == nil || s.passkey == nil || s.passkeyRepo == nil {
+		return nil, ErrPasskeyUnavailable
+	}
+	now := s.now().UTC()
+	challenge, err := s.mfaCache.GetMFAChallenge(ctx, strings.TrimSpace(input.ChallengeID))
+	if err != nil {
+		return nil, err
+	}
+	if challenge == nil || !challenge.ExpiresAt.After(now) {
+		return nil, ErrMFAChallengeExpired
+	}
+	if normalizeMFAMode(challenge.MFAMode) != MFAModePasskeyTOTPFallback {
+		return nil, ErrPasskeyUnavailable
+	}
+	userID, err := strconv.ParseInt(strings.TrimSpace(challenge.UserID), 10, 64)
+	if err != nil || userID <= 0 {
+		return nil, ErrMFAChallengeExpired
+	}
+	user, err := s.userRepo.FindByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil || user.Status != "active" {
+		return nil, ErrInvalidCredentials
+	}
+	credentialJSON, err := s.lookupPasskeyCredentialJSON(ctx, user.ID)
+	if err != nil {
+		return nil, err
+	}
+	if len(credentialJSON) == 0 {
+		return nil, ErrPasskeyUnavailable
+	}
+	optionsJSON, sessionJSON, err := s.passkey.BeginLogin(toPasskeyUser(user), credentialJSON)
+	if err != nil {
+		return nil, err
+	}
+	challenge.PasskeySessionJSON = string(sessionJSON)
+	if err := s.mfaCache.SaveMFAChallenge(ctx, *challenge, ttlUntil(now, challenge.ExpiresAt)); err != nil {
+		return nil, err
+	}
+	return &BeginMFAPasskeyResult{
+		ChallengeID: challenge.ChallengeID,
+		OptionsJSON: optionsJSON,
+		ExpiresAt:   challenge.ExpiresAt,
+	}, nil
+}
+
+func (s *Service) VerifyMFAPasskey(ctx context.Context, input VerifyMFAPasskeyInput) (*AuthenticateResult, error) {
+	if s.mfaCache == nil || s.passkey == nil || s.passkeyRepo == nil {
+		return nil, ErrPasskeyUnavailable
+	}
+	now := s.now().UTC()
+	challenge, err := s.mfaCache.GetMFAChallenge(ctx, strings.TrimSpace(input.ChallengeID))
+	if err != nil {
+		return nil, err
+	}
+	if challenge == nil || !challenge.ExpiresAt.After(now) {
+		return nil, ErrMFAChallengeExpired
+	}
+	if normalizeMFAMode(challenge.MFAMode) != MFAModePasskeyTOTPFallback {
+		return nil, ErrPasskeyUnavailable
+	}
+	if strings.TrimSpace(challenge.PasskeySessionJSON) == "" {
+		return nil, ErrPasskeySessionMissing
+	}
+	userID, err := strconv.ParseInt(strings.TrimSpace(challenge.UserID), 10, 64)
+	if err != nil || userID <= 0 {
+		return nil, ErrMFAChallengeExpired
+	}
+	user, err := s.userRepo.FindByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil || user.Status != "active" {
+		return nil, ErrInvalidCredentials
+	}
+	credentialJSON, err := s.lookupPasskeyCredentialJSON(ctx, user.ID)
+	if err != nil {
+		return nil, err
+	}
+	if len(credentialJSON) == 0 {
+		return nil, ErrPasskeyUnavailable
+	}
+	credentialID, updatedCredentialJSON, err := s.passkey.FinishLogin(
+		toPasskeyUser(user),
+		credentialJSON,
+		[]byte(challenge.PasskeySessionJSON),
+		input.ResponseJSON,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(credentialID) != "" && strings.TrimSpace(updatedCredentialJSON) != "" {
+		lastUsedAt := now
+		_ = s.passkeyRepo.Upsert(ctx, &passkeydomain.Model{
+			UserID:         user.ID,
+			CredentialID:   strings.TrimSpace(credentialID),
+			CredentialJSON: strings.TrimSpace(updatedCredentialJSON),
+			LastUsedAt:     &lastUsedAt,
+			UpdatedAt:      now,
+			CreatedAt:      now,
+		})
+	}
+	if err := s.mfaCache.DeleteMFAChallenge(ctx, challenge.ChallengeID); err != nil {
+		return nil, err
+	}
+	return s.createSession(ctx, user, pluginport.AuthnMethodTypePassword, challenge.IPAddress, challenge.UserAgent, challenge.RedirectURI, challenge.ReturnTo, now)
+}
+
 func (s *Service) PollMFAChallenge(ctx context.Context, input PollMFAChallengeInput) (*PollMFAChallengeResult, error) {
 	if s.mfaCache == nil {
 		return nil, ErrMFAChallengeExpired
@@ -253,11 +387,12 @@ func (s *Service) PollMFAChallenge(ctx context.Context, input PollMFAChallengeIn
 		return nil, ErrMFAChallengeExpired
 	}
 	return &PollMFAChallengeResult{
-		ChallengeID: challenge.ChallengeID,
-		MFAMode:     normalizeMFAMode(challenge.MFAMode),
-		PushStatus:  normalizePushStatus(challenge.PushStatus),
-		PushCode:    challenge.PushCode,
-		ExpiresAt:   challenge.ExpiresAt,
+		ChallengeID:      challenge.ChallengeID,
+		MFAMode:          normalizeMFAMode(challenge.MFAMode),
+		PasskeyAvailable: normalizeMFAMode(challenge.MFAMode) == MFAModePasskeyTOTPFallback,
+		PushStatus:       normalizePushStatus(challenge.PushStatus),
+		PushCode:         challenge.PushCode,
+		ExpiresAt:        challenge.ExpiresAt,
 	}, nil
 }
 
@@ -541,6 +676,54 @@ func (s *Service) lookupTOTP(ctx context.Context, userID int64) (*totpdomain.Mod
 	return s.totpRepo.FindByUserID(ctx, userID)
 }
 
+func (s *Service) lookupPasskeyCredentialJSON(ctx context.Context, userID int64) ([]string, error) {
+	if s.passkeyRepo == nil || userID <= 0 {
+		return nil, nil
+	}
+	credentials, err := s.passkeyRepo.ListByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if len(credentials) == 0 {
+		return nil, nil
+	}
+	result := make([]string, 0, len(credentials))
+	for _, credential := range credentials {
+		if credential == nil {
+			continue
+		}
+		raw := strings.TrimSpace(credential.CredentialJSON)
+		if raw == "" {
+			continue
+		}
+		result = append(result, raw)
+	}
+	if len(result) == 0 {
+		return nil, nil
+	}
+	return result, nil
+}
+
+func (s *Service) updateMFAChallengeMode(ctx context.Context, challengeID, mode string) error {
+	if s.mfaCache == nil {
+		return ErrMFAChallengeExpired
+	}
+	challengeID = strings.TrimSpace(challengeID)
+	if challengeID == "" {
+		return ErrMFAChallengeExpired
+	}
+	now := s.now().UTC()
+	challenge, err := s.mfaCache.GetMFAChallenge(ctx, challengeID)
+	if err != nil {
+		return err
+	}
+	if challenge == nil || !challenge.ExpiresAt.After(now) {
+		return ErrMFAChallengeExpired
+	}
+	challenge.MFAMode = normalizeMFAMode(mode)
+	return s.mfaCache.SaveMFAChallenge(ctx, *challenge, ttlUntil(now, challenge.ExpiresAt))
+}
+
 func (s *Service) createMFAChallenge(ctx context.Context, user *userdomain.Model, input AuthenticateInput) (string, error) {
 	if s.mfaCache == nil || user == nil {
 		return "", ErrMFARequired
@@ -559,7 +742,7 @@ func (s *Service) createMFAChallenge(ctx context.Context, user *userdomain.Model
 		UserAgent:   input.UserAgent,
 		ReturnTo:    input.ReturnTo,
 		RedirectURI: input.RedirectURI,
-		MFAMode:     MFAModePushTOTPFallback,
+		MFAMode:     MFAModeTOTPOnly,
 		PushStatus:  MFAPushStatusPending,
 		PushCode:    pushCode,
 		ExpiresAt:   s.now().Add(s.mfaTTL),
@@ -650,10 +833,35 @@ func (s *Service) resolveActiveSessionUserID(ctx context.Context, sessionID stri
 
 func normalizeMFAMode(mode string) string {
 	switch strings.TrimSpace(mode) {
+	case MFAModePasskeyTOTPFallback:
+		return MFAModePasskeyTOTPFallback
 	case MFAModePushTOTPFallback:
 		return MFAModePushTOTPFallback
 	default:
 		return MFAModeTOTPOnly
+	}
+}
+
+func toPasskeyUser(user *userdomain.Model) securityport.PasskeyUser {
+	if user == nil {
+		return securityport.PasskeyUser{}
+	}
+	handle := []byte(strings.TrimSpace(user.UserUUID))
+	if len(handle) == 0 && user.ID > 0 {
+		handle = []byte(strconv.FormatInt(user.ID, 10))
+	}
+	username := strings.TrimSpace(user.Username)
+	if username == "" && user.ID > 0 {
+		username = strconv.FormatInt(user.ID, 10)
+	}
+	displayName := strings.TrimSpace(user.DisplayName)
+	if displayName == "" {
+		displayName = username
+	}
+	return securityport.PasskeyUser{
+		UserHandle:  handle,
+		Username:    username,
+		DisplayName: displayName,
 	}
 }
 

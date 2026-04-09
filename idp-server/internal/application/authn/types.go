@@ -21,6 +21,8 @@ var (
 	ErrInvalidMFAAction      = errors.New("invalid mfa action")
 	ErrMFAApproverMismatch   = errors.New("mfa approver mismatch")
 	ErrInvalidPushMatchCode  = errors.New("invalid push match code")
+	ErrPasskeyUnavailable    = errors.New("passkey unavailable")
+	ErrPasskeySessionMissing = errors.New("passkey session missing")
 )
 
 type RateLimitPolicy struct {
@@ -64,6 +66,7 @@ type AuthenticateResult struct {
 	MFAEnrollmentRequired bool
 	MFAChallengeID        string
 	MFAMode               string
+	PasskeyAvailable      bool
 	PushStatus            string
 	PushCode              string
 	AuthenticatedAt       time.Time
@@ -82,11 +85,27 @@ type PollMFAChallengeInput struct {
 }
 
 type PollMFAChallengeResult struct {
+	ChallengeID      string
+	MFAMode          string
+	PasskeyAvailable bool
+	PushStatus       string
+	PushCode         string
+	ExpiresAt        time.Time
+}
+
+type BeginMFAPasskeyInput struct {
 	ChallengeID string
-	MFAMode     string
-	PushStatus  string
-	PushCode    string
+}
+
+type BeginMFAPasskeyResult struct {
+	ChallengeID string
+	OptionsJSON []byte
 	ExpiresAt   time.Time
+}
+
+type VerifyMFAPasskeyInput struct {
+	ChallengeID  string
+	ResponseJSON []byte
 }
 
 type DecideMFAPushInput struct {
@@ -103,9 +122,10 @@ type FinalizeMFAPushInput struct {
 }
 
 const (
-	MFAModeTOTPOnly         = "totp_only"
-	MFAModePushTOTPFallback = "push_totp_fallback"
-	MFAPushStatusPending    = "pending"
-	MFAPushStatusApproved   = "approved"
-	MFAPushStatusDenied     = "denied"
+	MFAModeTOTPOnly            = "totp_only"
+	MFAModePushTOTPFallback    = "push_totp_fallback"
+	MFAModePasskeyTOTPFallback = "passkey_totp_fallback"
+	MFAPushStatusPending       = "pending"
+	MFAPushStatusApproved      = "approved"
+	MFAPushStatusDenied        = "denied"
 )

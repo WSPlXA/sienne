@@ -13,6 +13,7 @@ var LoginTOTPTemplate = template.Must(template.ParseFS(staticFiles, "static/logi
 var LoginPushTemplate = template.Must(template.ParseFS(staticFiles, "static/login_push.html"))
 var ConsentPageTemplate = template.Must(template.ParseFS(staticFiles, "static/consent.html"))
 var DevicePageTemplate = template.Must(template.ParseFS(staticFiles, "static/device.html"))
+var PasskeySetupTemplate = template.Must(template.ParseFS(staticFiles, "static/passkey_setup.html"))
 var TOTPSetupTemplate = template.Must(template.ParseFS(staticFiles, "static/totp_setup.html"))
 var LogoutPageTemplate = template.Must(template.ParseFS(staticFiles, "static/logout.html"))
 var RegisterPageTemplate = template.Must(template.ParseFS(staticFiles, "static/register.html"))

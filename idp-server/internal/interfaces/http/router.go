@@ -13,6 +13,7 @@ import (
 	appdevice "idp-server/internal/application/device"
 	appmfa "idp-server/internal/application/mfa"
 	"idp-server/internal/application/oidc"
+	apppasskey "idp-server/internal/application/passkey"
 	apprbac "idp-server/internal/application/rbac"
 	appregister "idp-server/internal/application/register"
 	appsession "idp-server/internal/application/session"
@@ -26,7 +27,7 @@ import (
 	"idp-server/resource"
 )
 
-func NewRouter(authzService authz.Service, consentService appconsent.Manager, registerService appregister.Registrar, clientCreator appclient.Creator, clientRedirectRegistrar appclient.Registrar, clientPostLogoutRedirectRegistrar appclient.PostLogoutRegistrar, logoutRedirectValidator appclient.LogoutRedirectValidator, authnService authn.Authenticator, federatedOIDCEnabled bool, sessionService appsession.Manager, rbacService apprbac.Manager, auditRepo repository.AuditEventRepository, clientAuthenticator appclientauth.Authenticator, grantRegistry *pluginregistry.GrantRegistry, deviceService *appdevice.Service, mfaService appmfa.Manager, oidcService *oidc.Service, authMiddleware *middleware.AuthMiddleware, adminMiddleware *middleware.SessionPermissionMiddleware) *gin.Engine {
+func NewRouter(authzService authz.Service, consentService appconsent.Manager, registerService appregister.Registrar, clientCreator appclient.Creator, clientRedirectRegistrar appclient.Registrar, clientPostLogoutRedirectRegistrar appclient.PostLogoutRegistrar, logoutRedirectValidator appclient.LogoutRedirectValidator, authnService authn.Authenticator, federatedOIDCEnabled bool, sessionService appsession.Manager, rbacService apprbac.Manager, auditRepo repository.AuditEventRepository, clientAuthenticator appclientauth.Authenticator, grantRegistry *pluginregistry.GrantRegistry, deviceService *appdevice.Service, mfaService appmfa.Manager, passkeyService apppasskey.Manager, oidcService *oidc.Service, authMiddleware *middleware.AuthMiddleware, adminMiddleware *middleware.SessionPermissionMiddleware) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(middleware.NewLoggingMiddleware(log.Default()).Handler())
@@ -72,6 +73,7 @@ func NewRouter(authzService authz.Service, consentService appconsent.Manager, re
 	rbacHandler := handler.NewRBACHandler(rbacService, auditRepo)
 	portalHandler := handler.NewPortalHandler()
 	totpSetupHandler := handler.NewTOTPSetupHandler(mfaService)
+	passkeySetupHandler := handler.NewPasskeySetupHandler(passkeyService)
 	endSessionHandler := handler.NewEndSessionHandler(sessionService, logoutRedirectValidator)
 	tokenHandler := handler.NewTokenHandler(clientAuthenticator, grantRegistry)
 	deviceAuthorizeHandler := handler.NewDeviceAuthorizeHandler(clientAuthenticator, deviceService)
@@ -91,6 +93,8 @@ func NewRouter(authzService authz.Service, consentService appconsent.Manager, re
 	router.POST("/login/totp", loginTOTPHandler.Handle)
 	router.GET("/mfa/push", loginPushHandler.Handle)
 	router.POST("/mfa/push", loginPushHandler.Handle)
+	router.GET("/mfa/passkey/setup", passkeySetupHandler.Handle)
+	router.POST("/mfa/passkey/setup", passkeySetupHandler.Handle)
 	router.GET("/mfa/totp/setup", totpSetupHandler.Handle)
 	router.POST("/mfa/totp/setup", totpSetupHandler.Handle)
 	router.GET("/device", deviceVerificationHandler.Handle)

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MFA Code</title>
+  <title>MFA Verification</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -28,13 +28,25 @@
         <i class="fa-solid fa-mobile-screen-button"></i>
       </div>
       <p class="mt-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">MFA Check</p>
-      <h1 class="mt-2 text-3xl font-extrabold tracking-tight">Enter 6-digit code</h1>
-      <p class="mt-2 text-sm text-slate-500">Push approval runs first. If pending/failed, use authenticator code as fallback.</p>
+      <h1 class="mt-2 text-3xl font-extrabold tracking-tight">Verify Sign-in</h1>
+      <p class="mt-2 text-sm text-slate-500">Use passkey first. If passkey is unavailable, enter your authenticator code.</p>
+
+      {{if .PasskeyEnabled}}
+      <section class="mt-5 rounded-2xl border border-cyan-200 bg-cyan-50/60 p-4">
+        <p class="text-xs font-bold uppercase tracking-[0.18em] text-cyan-700">Passkey</p>
+        <p class="mt-2 text-sm text-slate-700">Click continue. Your browser may show a QR code so you can scan and approve on your phone.</p>
+        <button id="passkey-button" type="button" class="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-600 to-sky-700 px-4 py-3 text-sm font-bold text-white shadow-[0_14px_30px_rgba(8,145,178,0.25)] transition hover:brightness-105">
+          <i class="fa-solid fa-key"></i>
+          Continue With Passkey
+        </button>
+        <p id="passkey-status" class="mt-2 text-xs text-slate-600"></p>
+      </section>
+      {{end}}
 
       {{if .PushEnabled}}
       <section class="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4" data-push-enabled="true">
         <p class="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">Push Challenge</p>
-        <p class="mt-2 text-sm text-slate-700">Approve on trusted device with this number.</p>
+        <p class="mt-2 text-sm text-slate-700">Approve on your trusted device with this number.</p>
         <div class="mt-3 flex items-center justify-between rounded-xl bg-white px-4 py-3">
           <span class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Number Match</span>
           <span id="push-code" class="text-2xl font-black text-emerald-700">{{.PushCode}}</span>
@@ -42,7 +54,6 @@
         <div class="mt-3 text-xs text-slate-600">
           <p>Challenge ID: <span class="font-mono">{{.ChallengeID}}</span></p>
           <p id="push-status" class="mt-1">Status: {{.PushStatus}}</p>
-          <p class="mt-1">Trusted device URL: <a class="font-semibold text-emerald-700 underline" href="/mfa/push?challenge_id={{.ChallengeID}}&match_code={{.PushCode}}">/mfa/push?challenge_id={{.ChallengeID}}&match_code={{.PushCode}}</a></p>
         </div>
       </section>
       {{end}}
@@ -54,7 +65,8 @@
       {{end}}
 
       <form method="post" class="mt-6 space-y-5">
-        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <input type="hidden" name="csrf_token" id="csrf-token" value="{{.CSRFToken}}">
+        <input type="hidden" id="challenge-id" value="{{.ChallengeID}}">
         <label class="block">
           <span class="mb-2 block text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Authenticator Code</span>
           <input id="code" name="code" maxlength="6" autocomplete="one-time-code" inputmode="numeric" placeholder="123456" class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-center text-2xl font-bold tracking-[0.35em] outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100">
@@ -62,46 +74,150 @@
 
         <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 px-4 py-3 text-sm font-bold text-white shadow-[0_14px_30px_rgba(5,150,105,0.25)] transition hover:brightness-105">
           <i class="fa-solid fa-check"></i>
-          Verify and Continue
+          Verify With TOTP
         </button>
       </form>
     </main>
   </div>
-  {{if .PushEnabled}}
   <script>
     (function () {
-      const statusEl = document.getElementById("push-status");
-      if (!statusEl) return;
+      const challengeID = (document.getElementById("challenge-id") || {}).value || "";
+      const csrfToken = (document.getElementById("csrf-token") || {}).value || "";
 
-      const poll = async () => {
-        try {
-          const res = await fetch("/login/totp?mode=status", {
-            method: "GET",
-            headers: { "Accept": "application/json" },
-            credentials: "same-origin"
+      function fromBase64URL(input) {
+        const normalized = (input || "").replace(/-/g, "+").replace(/_/g, "/");
+        const padded = normalized + "===".slice((normalized.length + 3) % 4);
+        const binary = atob(padded);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i += 1) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes.buffer;
+      }
+
+      function toBase64URL(buffer) {
+        const bytes = new Uint8Array(buffer);
+        let binary = "";
+        for (let i = 0; i < bytes.byteLength; i += 1) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+      }
+
+      function parseRequestOptions(options) {
+        const out = Object.assign({}, options);
+        out.challenge = fromBase64URL(out.challenge);
+        if (Array.isArray(out.allowCredentials)) {
+          out.allowCredentials = out.allowCredentials.map(function (cred) {
+            return Object.assign({}, cred, { id: fromBase64URL(cred.id) });
           });
-          const payload = await res.json();
-          if (!res.ok) {
-            statusEl.textContent = "Status: " + (payload.error || "unavailable");
+        }
+        return out;
+      }
+
+      function serializeAssertion(credential) {
+        const response = credential.response || {};
+        const result = {
+          id: credential.id,
+          type: credential.type,
+          rawId: toBase64URL(credential.rawId),
+          authenticatorAttachment: credential.authenticatorAttachment || "",
+          clientExtensionResults: credential.getClientExtensionResults ? credential.getClientExtensionResults() : {},
+          response: {
+            clientDataJSON: toBase64URL(response.clientDataJSON),
+            authenticatorData: toBase64URL(response.authenticatorData),
+            signature: toBase64URL(response.signature)
+          }
+        };
+        if (response.userHandle) {
+          result.response.userHandle = toBase64URL(response.userHandle);
+        }
+        return result;
+      }
+
+      async function postForm(payload) {
+        const body = new URLSearchParams(payload);
+        const res = await fetch("/login/totp", {
+          method: "POST",
+          headers: { "Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded" },
+          credentials: "same-origin",
+          body: body.toString()
+        });
+        const data = await res.json().catch(function () { return {}; });
+        if (!res.ok) {
+          throw new Error(data.error || "request_failed");
+        }
+        return data;
+      }
+
+      const passkeyButton = document.getElementById("passkey-button");
+      const passkeyStatus = document.getElementById("passkey-status");
+      if (passkeyButton && passkeyStatus) {
+        passkeyButton.addEventListener("click", async function () {
+          if (!window.PublicKeyCredential || !navigator.credentials || !navigator.credentials.get) {
+            passkeyStatus.textContent = "Passkey is not available in this browser.";
             return;
           }
-          if (payload.status) {
-            statusEl.textContent = "Status: " + payload.status;
-          } else if (payload.push_status) {
-            statusEl.textContent = "Status: " + payload.push_status;
+          passkeyButton.disabled = true;
+          passkeyStatus.textContent = "Starting passkey challenge...";
+          try {
+            const begin = await postForm({
+              action: "passkey_begin",
+              challenge_id: challengeID,
+              csrf_token: csrfToken
+            });
+            const requestOptions = parseRequestOptions(begin.options || {});
+            passkeyStatus.textContent = "Waiting for passkey confirmation...";
+            const credential = await navigator.credentials.get({ publicKey: requestOptions });
+            const payload = serializeAssertion(credential);
+            const finish = await postForm({
+              action: "passkey_finish",
+              challenge_id: challengeID,
+              csrf_token: csrfToken,
+              response_json: JSON.stringify(payload)
+            });
+            passkeyStatus.textContent = "Passkey verified. Redirecting...";
+            if (finish.redirect_uri) {
+              window.location.replace(finish.redirect_uri);
+              return;
+            }
+            window.location.replace("/");
+          } catch (err) {
+            passkeyStatus.textContent = err && err.message ? err.message : "Passkey verification failed.";
+            passkeyButton.disabled = false;
           }
-          if (payload.authenticated && payload.redirect_uri) {
-            window.location.replace(payload.redirect_uri);
-          }
-        } catch (_e) {
-          statusEl.textContent = "Status: network_error";
-        }
-      };
+        });
+      }
 
-      poll();
-      window.setInterval(poll, 2500);
+      const pushStatusEl = document.getElementById("push-status");
+      if (pushStatusEl) {
+        const poll = async () => {
+          try {
+            const res = await fetch("/login/totp?mode=status", {
+              method: "GET",
+              headers: { "Accept": "application/json" },
+              credentials: "same-origin"
+            });
+            const payload = await res.json();
+            if (!res.ok) {
+              pushStatusEl.textContent = "Status: " + (payload.error || "unavailable");
+              return;
+            }
+            if (payload.push_status) {
+              pushStatusEl.textContent = "Status: " + payload.push_status;
+            }
+            if (payload.authenticated && payload.redirect_uri) {
+              window.location.replace(payload.redirect_uri);
+            }
+          } catch (_e) {
+            pushStatusEl.textContent = "Status: network_error";
+          }
+        };
+
+        poll();
+        window.setInterval(poll, 2500);
+      }
     })();
   </script>
-  {{end}}
 </body>
 </html>

@@ -27,6 +27,7 @@ DROP TABLE IF EXISTS oauth_authorization_codes;
 DROP TABLE IF EXISTS login_sessions;
 
 DROP TABLE IF EXISTS user_totp_credentials;
+DROP TABLE IF EXISTS user_webauthn_credentials;
 
 DROP TABLE IF EXISTS operator_roles;
 
@@ -109,6 +110,23 @@ CREATE TABLE user_totp_credentials (
     UNIQUE KEY uk_user_totp_credentials_user_id (user_id),
     CONSTRAINT fk_user_totp_credentials_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'user totp mfa credentials';
+
+-- =========================================================
+-- 2.1.1 User WebAuthn credentials (passkeys/security keys)
+-- =========================================================
+CREATE TABLE user_webauthn_credentials (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id BIGINT UNSIGNED NOT NULL,
+    credential_id VARCHAR(255) NOT NULL COMMENT 'base64url credential id',
+    credential_json JSON NOT NULL COMMENT 'serialized webauthn credential record',
+    last_used_at DATETIME NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_user_webauthn_credentials_credential_id (credential_id),
+    KEY idx_user_webauthn_credentials_user_id (user_id),
+    CONSTRAINT fk_user_webauthn_credentials_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'user webauthn passkey credentials';
 
 -- =========================================================
 -- 2.2 Operator roles / RBAC presets
