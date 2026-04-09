@@ -7,6 +7,7 @@ import (
 
 	apprbac "idp-server/internal/application/rbac"
 	httpmiddleware "idp-server/internal/interfaces/http/middleware"
+	"idp-server/internal/ports/repository"
 	"idp-server/resource"
 
 	"github.com/gin-gonic/gin"
@@ -14,6 +15,7 @@ import (
 
 type AdminConsoleHandler struct {
 	rbacService apprbac.Manager
+	users       repository.UserRepository
 }
 
 type adminConsolePageData struct {
@@ -26,9 +28,24 @@ type adminConsolePageData struct {
 	Usage            []apprbac.RoleUsageView
 	LookupRole       string
 	LookupUsers      []apprbac.RoleUserView
+	LookupUsername   string
+	LookupUser       *adminUserLookupView
+	LookupUserError  string
 	CSRFToken        string
 	Notice           string
 	Error            string
+}
+
+type adminUserLookupView struct {
+	UserID        int64
+	UserUUID      string
+	Username      string
+	Email         string
+	DisplayName   string
+	Status        string
+	RoleCode      string
+	PrivilegeMask uint32
+	TenantScope   string
 }
 
 type adminPrivilegePreset struct {
@@ -37,8 +54,8 @@ type adminPrivilegePreset struct {
 	Composition string
 }
 
-func NewAdminConsoleHandler(rbacService apprbac.Manager) *AdminConsoleHandler {
-	return &AdminConsoleHandler{rbacService: rbacService}
+func NewAdminConsoleHandler(rbacService apprbac.Manager, users repository.UserRepository) *AdminConsoleHandler {
+	return &AdminConsoleHandler{rbacService: rbacService, users: users}
 }
 
 func (h *AdminConsoleHandler) Handle(c *gin.Context) {
@@ -92,6 +109,31 @@ func (h *AdminConsoleHandler) Handle(c *gin.Context) {
 			data.LookupUsers = usersResult.Users
 		}
 	}
+	if lookupUsername := strings.TrimSpace(c.Query("lookup_username")); lookupUsername != "" {
+		data.LookupUsername = lookupUsername
+		if h.users == nil {
+			data.LookupUserError = "user lookup service unavailable"
+		} else {
+			userModel, err := h.users.FindByUsername(c.Request.Context(), lookupUsername)
+			if err != nil {
+				data.LookupUserError = "failed to lookup user: " + err.Error()
+			} else if userModel == nil {
+				data.LookupUserError = "user not found: " + lookupUsername
+			} else {
+				data.LookupUser = &adminUserLookupView{
+					UserID:        userModel.ID,
+					UserUUID:      userModel.UserUUID,
+					Username:      userModel.Username,
+					Email:         userModel.Email,
+					DisplayName:   userModel.DisplayName,
+					Status:        userModel.Status,
+					RoleCode:      userModel.RoleCode,
+					PrivilegeMask: userModel.PrivilegeMask,
+					TenantScope:   userModel.TenantScope,
+				}
+			}
+		}
+	}
 
 	if wantsHTML(c.GetHeader("Accept")) {
 		c.Header("Content-Type", "text/html; charset=utf-8")
@@ -112,6 +154,9 @@ func (h *AdminConsoleHandler) Handle(c *gin.Context) {
 		"role_usage":        data.Usage,
 		"lookup_role":       data.LookupRole,
 		"lookup_users":      data.LookupUsers,
+		"lookup_username":   data.LookupUsername,
+		"lookup_user":       data.LookupUser,
+		"lookup_user_error": data.LookupUserError,
 		"notice":            data.Notice,
 		"csrf_issued":       data.CSRFToken != "",
 		"error_message":     data.Error,

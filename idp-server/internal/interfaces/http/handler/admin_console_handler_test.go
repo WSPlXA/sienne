@@ -30,7 +30,7 @@ func TestAdminConsoleHandlerHandleHTML(t *testing.T) {
 		})
 		c.Next()
 	})
-	router.GET("/admin", NewAdminConsoleHandler(&stubRBACManager{}).Handle)
+	router.GET("/admin", NewAdminConsoleHandler(&stubRBACManager{}, nil).Handle)
 
 	req := httptest.NewRequest(http.MethodGet, "/admin", nil)
 	req.Header.Set("Accept", "text/html")
