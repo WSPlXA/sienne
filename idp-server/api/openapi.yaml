@@ -54,8 +54,13 @@ paths:
   /register:
     get:
       tags: [authn]
-      summary: Registration endpoint description
+      summary: Registration endpoint description (admin only)
+      description: |
+        Requires an authenticated admin session (`idp_session`) with
+        `auth.exec` and `user.manage` permissions.
       operationId: getRegisterInfo
+      parameters:
+        - $ref: '#/components/parameters/IdpSessionCookie'
       responses:
         '200':
           description: Registration usage hint and CSRF token
@@ -74,15 +79,30 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Login required, session expired, or MFA required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Insufficient privilege
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     post:
       tags: [authn]
-      summary: Register a new user
+      summary: Register a new user (admin only)
       description: |
+        Requires an authenticated admin session (`idp_session`) with
+        `auth.exec` and `user.manage` permissions.
         Submit registration data with a CSRF token. The CSRF token may be
         provided in the body as `csrf_token` or in the `X-CSRF-Token` header,
         and must match the `idp_csrf_token` cookie set by `GET /register`.
       operationId: registerUser
       parameters:
+        - $ref: '#/components/parameters/IdpSessionCookie'
         - $ref: '#/components/parameters/XCSRFToken'
       requestBody:
         required: true
@@ -107,7 +127,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: Invalid CSRF token
+          description: Invalid CSRF token or insufficient privilege
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Login required, session expired, or MFA required
           content:
             application/json:
               schema:

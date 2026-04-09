@@ -96,8 +96,17 @@ func NewRouter(authzService authz.Service, consentService appconsent.Manager, re
 	router.POST("/connect/logout", endSessionHandler.Post)
 	router.POST("/logout", logoutHandler.Handle)
 	router.POST("/logout/all", logoutAllHandler.Handle)
-	router.GET("/register", registerHandler.Handle)
-	router.POST("/register", registerHandler.Handle)
+	if adminMiddleware != nil {
+		router.GET("/register", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.UserManage), registerHandler.Handle)
+		router.POST("/register", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.UserManage), registerHandler.Handle)
+	} else {
+		router.GET("/register", func(c *gin.Context) {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "register disabled: admin middleware unavailable"})
+		})
+		router.POST("/register", func(c *gin.Context) {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "register disabled: admin middleware unavailable"})
+		})
+	}
 	router.GET("/consent", consentHandler.Handle)
 	router.POST("/consent", consentHandler.Handle)
 
