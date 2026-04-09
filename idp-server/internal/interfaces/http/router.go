@@ -60,7 +60,14 @@ func NewRouter(authzService authz.Service, consentService appconsent.Manager, re
 	logoutAllHandler := handler.NewLogoutAllHandler(sessionService)
 	adminUserLogoutHandler := handler.NewAdminUserLogoutHandler(sessionService, auditRepo)
 	adminConsoleHandler := handler.NewAdminConsoleHandler(rbacService)
-	adminActionHandler := handler.NewAdminActionHandler(rbacService, sessionService, auditRepo)
+	adminActionHandler := handler.NewAdminActionHandler(
+		rbacService,
+		sessionService,
+		clientCreator,
+		clientRedirectRegistrar,
+		clientPostLogoutRedirectRegistrar,
+		auditRepo,
+	)
 	rbacHandler := handler.NewRBACHandler(rbacService, auditRepo)
 	portalHandler := handler.NewPortalHandler()
 	totpSetupHandler := handler.NewTOTPSetupHandler(mfaService)
@@ -98,9 +105,15 @@ func NewRouter(authzService authz.Service, consentService appconsent.Manager, re
 	{
 		oauth2.GET("/authorize", gin.WrapF(authorizeHandler.ServeHTTP))
 		oauth2.GET("/jwks", oidcMetadataHandler.JWKS)
-		oauth2.POST("/clients", clientHandler.Create)
-		oauth2.POST("/clients/:client_id/redirect-uris", clientRedirectURIHandler.Handle)
-		oauth2.POST("/clients/:client_id/post-logout-redirect-uris", clientPostLogoutRedirectURIHandler.Handle)
+		if adminMiddleware != nil {
+			oauth2.POST("/clients", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.ClientManage), clientHandler.Create)
+			oauth2.POST("/clients/:client_id/redirect-uris", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.ClientManage), clientRedirectURIHandler.Handle)
+			oauth2.POST("/clients/:client_id/post-logout-redirect-uris", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.ClientManage), clientPostLogoutRedirectURIHandler.Handle)
+		} else {
+			oauth2.POST("/clients", clientHandler.Create)
+			oauth2.POST("/clients/:client_id/redirect-uris", clientRedirectURIHandler.Handle)
+			oauth2.POST("/clients/:client_id/post-logout-redirect-uris", clientPostLogoutRedirectURIHandler.Handle)
+		}
 		oauth2.POST("/token", tokenHandler.Handle)
 		oauth2.POST("/device/authorize", deviceAuthorizeHandler.Handle)
 		oauth2.POST("/introspect", introspectionHandler.Handle)
@@ -133,6 +146,9 @@ func NewRouter(authzService authz.Service, consentService appconsent.Manager, re
 		admin.POST("/actions/rbac/roles/delete", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.OpsManage), adminActionHandler.DeleteRole)
 		admin.POST("/actions/users/assign-role", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.UserManage), adminActionHandler.AssignRole)
 		admin.POST("/actions/users/logout-all", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.UserManage), adminActionHandler.LogoutUser)
+		admin.POST("/actions/clients/create", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.ClientManage), adminActionHandler.CreateOAuthClient)
+		admin.POST("/actions/clients/redirect-uris", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.ClientManage), adminActionHandler.RegisterClientRedirectURIs)
+		admin.POST("/actions/clients/post-logout-redirect-uris", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.ClientManage), adminActionHandler.RegisterClientPostLogoutRedirectURIs)
 	}
 
 	return router
