@@ -37,6 +37,13 @@ type workbenchAction struct {
 	Required string
 }
 
+type oauthWorkbenchTools struct {
+	CreateClientPath         string
+	RegisterRedirectBasePath string
+	DiscoveryPath            string
+	JWKSPath                 string
+}
+
 type workbenchPageData struct {
 	Title         string
 	Subtitle      string
@@ -44,6 +51,7 @@ type workbenchPageData struct {
 	CurrentRole   string
 	PrivilegeMask uint32
 	Actions       []workbenchAction
+	OAuthTools    *oauthWorkbenchTools
 }
 
 func NewPortalHandler() *PortalHandler {
@@ -112,6 +120,12 @@ func (h *PortalHandler) OAuthWorkbench(c *gin.Context) {
 			{Method: "POST", Path: "/oauth2/clients/:client_id/redirect-uris", Purpose: "Register callback URIs for authorization code flow.", Required: "CLIENT.MANAGE"},
 			{Method: "GET", Path: "/.well-known/openid-configuration", Purpose: "Verify discovery metadata exposure.", Required: "OAUTH.READ"},
 			{Method: "GET", Path: "/oauth2/jwks", Purpose: "Check issuer keyset used by downstream services.", Required: "OAUTH.READ"},
+		},
+		OAuthTools: &oauthWorkbenchTools{
+			CreateClientPath:         "/oauth2/clients",
+			RegisterRedirectBasePath: "/oauth2/clients",
+			DiscoveryPath:            "/.well-known/openid-configuration",
+			JWKSPath:                 "/oauth2/jwks",
 		},
 	})
 }
