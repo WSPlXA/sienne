@@ -50,6 +50,9 @@ func (s *stubAuditConsoleUserRepository) CountByRoleCode(context.Context, string
 func (s *stubAuditConsoleUserRepository) UpdateRoleAndPrivilege(context.Context, int64, string, uint32, string) error {
 	return nil
 }
+func (s *stubAuditConsoleUserRepository) UnlockAccount(context.Context, int64, time.Time) error {
+	return nil
+}
 func (s *stubAuditConsoleUserRepository) IncrementFailedLogin(context.Context, int64) (int64, error) {
 	return 0, nil
 }
