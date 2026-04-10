@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	httpmiddleware "idp-server/internal/interfaces/http/middleware"
+	"idp-server/pkg/rbac"
 	"idp-server/resource"
 
 	"github.com/gin-gonic/gin"
@@ -50,6 +51,7 @@ type workbenchPageData struct {
 	CurrentUser   string
 	CurrentRole   string
 	PrivilegeMask uint32
+	CanOpenRBAC   bool
 	Actions       []workbenchAction
 	OAuthTools    *oauthWorkbenchTools
 }
@@ -150,6 +152,7 @@ func (h *PortalHandler) renderWorkbench(c *gin.Context, data workbenchPageData) 
 		data.CurrentUser = adminUser.Username
 		data.CurrentRole = adminUser.RoleCode
 		data.PrivilegeMask = adminUser.PrivilegeMask
+		data.CanOpenRBAC = rbac.HasAll(adminUser.PrivilegeMask, rbac.AuthExec, rbac.OpsRead)
 	}
 	if !wantsHTML(c.GetHeader("Accept")) {
 		c.JSON(http.StatusOK, data)

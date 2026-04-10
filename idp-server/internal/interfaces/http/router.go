@@ -126,9 +126,9 @@ func NewRouter(authzService authz.Service, consentService appconsent.Manager, re
 		oauth2.GET("/authorize", gin.WrapF(authorizeHandler.ServeHTTP))
 		oauth2.GET("/jwks", oidcMetadataHandler.JWKS)
 		if adminMiddleware != nil {
-			oauth2.POST("/clients", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.ClientManage), clientHandler.Create)
-			oauth2.POST("/clients/:client_id/redirect-uris", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.ClientManage), clientRedirectURIHandler.Handle)
-			oauth2.POST("/clients/:client_id/post-logout-redirect-uris", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.ClientManage), clientPostLogoutRedirectURIHandler.Handle)
+			oauth2.POST("/clients", adminMiddleware.RequireSessionPermissions(rbac.ClientManage), clientHandler.Create)
+			oauth2.POST("/clients/:client_id/redirect-uris", adminMiddleware.RequireSessionPermissions(rbac.ClientManage), clientRedirectURIHandler.Handle)
+			oauth2.POST("/clients/:client_id/post-logout-redirect-uris", adminMiddleware.RequireSessionPermissions(rbac.ClientManage), clientPostLogoutRedirectURIHandler.Handle)
 		} else {
 			oauth2.POST("/clients", clientHandler.Create)
 			oauth2.POST("/clients/:client_id/redirect-uris", clientRedirectURIHandler.Handle)
@@ -149,7 +149,7 @@ func NewRouter(authzService authz.Service, consentService appconsent.Manager, re
 		admin.GET("", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.OpsRead), adminConsoleHandler.Handle)
 		admin.GET("/", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.OpsRead), adminConsoleHandler.Handle)
 		admin.GET("/workbench/support", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.OpsRead), portalHandler.SupportWorkbench)
-		admin.GET("/workbench/oauth", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.OAuthRead, rbac.ClientRead), portalHandler.OAuthWorkbench)
+		admin.GET("/workbench/oauth", adminMiddleware.RequireSessionPermissions(rbac.OAuthRead, rbac.ClientRead), portalHandler.OAuthWorkbench)
 		admin.GET("/workbench/security", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.AuditRead, rbac.KeyRead), portalHandler.SecurityWorkbench)
 		admin.GET("/rbac/roles", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.OpsRead), rbacHandler.ListRoles)
 		admin.GET("/rbac/roles/:role_code/users", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.OpsRead), rbacHandler.ListUsersByRole)
