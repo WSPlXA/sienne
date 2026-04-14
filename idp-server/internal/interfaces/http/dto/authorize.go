@@ -2,6 +2,7 @@ package dto
 
 import "strings"
 
+// AuthorizeRequest 对应 `/oauth2/authorize` 的查询参数视图。
 type AuthorizeRequest struct {
 	ResponseType        string `form:"response_type" json:"response_type" binding:"required"`
 	ClientID            string `form:"client_id" json:"client_id" binding:"required"`
@@ -14,6 +15,7 @@ type AuthorizeRequest struct {
 }
 
 func (r AuthorizeRequest) ScopeList() []string {
+	// authorize 请求里的 scope 同样采用空格分隔表示。
 	if strings.TrimSpace(r.Scope) == "" {
 		return nil
 	}

@@ -31,6 +31,8 @@ func NewPasskeySetupHandler(service apppasskey.Manager) *PasskeySetupHandler {
 }
 
 func (h *PasskeySetupHandler) Handle(c *gin.Context) {
+	// Passkey setup 页与 TOTP setup 类似，也采用 begin/finish 双阶段，
+	// 只是浏览器侧交互由 WebAuthn API 驱动。
 	sessionID, _ := c.Cookie("idp_session")
 	returnTo, err := validateLocalRedirectTarget(strings.TrimSpace(c.Query("return_to")))
 	if err != nil {
@@ -41,6 +43,7 @@ func (h *PasskeySetupHandler) Handle(c *gin.Context) {
 	}
 
 	if c.Request.Method == http.MethodGet {
+		// GET 只负责返回页面壳和 CSRF，不在这里提前生成 WebAuthn challenge。
 		h.render(c, http.StatusOK, passkeySetupPageData{ReturnTo: returnTo})
 		return
 	}
@@ -66,9 +69,11 @@ func (h *PasskeySetupHandler) Handle(c *gin.Context) {
 	action := strings.ToLower(strings.TrimSpace(req.Action))
 	switch action {
 	case "begin":
+		// begin 返回给前端 navigator.credentials.create() 所需的 options。
 		h.handleBegin(c, sessionID, returnTo)
 		return
 	case "finish":
+		// finish 消费浏览器回传的 attestation 响应，并真正落库 credential。
 		h.handleFinish(c, sessionID, returnTo, req)
 		return
 	default:
@@ -78,6 +83,7 @@ func (h *PasskeySetupHandler) Handle(c *gin.Context) {
 }
 
 func (h *PasskeySetupHandler) handleBegin(c *gin.Context, sessionID, returnTo string) {
+	// 如果部署未启用 passkey，这里会在入口处直接短路。
 	if h.service == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": apppasskey.ErrPasskeyDisabled.Error()})
 		return
@@ -101,6 +107,8 @@ func (h *PasskeySetupHandler) handleBegin(c *gin.Context, sessionID, returnTo st
 }
 
 func (h *PasskeySetupHandler) handleFinish(c *gin.Context, sessionID, returnTo string, req dto.PasskeySetupRequest) {
+	// 成功后这里只返回 redirect 目标，不主动改动登录态；
+	// 是否需要继续 MFA 登录由上游流程决定。
 	if h.service == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": apppasskey.ErrPasskeyDisabled.Error()})
 		return
@@ -128,6 +136,7 @@ func (h *PasskeySetupHandler) handleFinish(c *gin.Context, sessionID, returnTo s
 }
 
 func (h *PasskeySetupHandler) writeError(c *gin.Context, err error, returnTo string) {
+	// 登录失效时，Passkey setup 会把用户重新送回登录页，并保留 return_to 继续链路。
 	status := http.StatusInternalServerError
 	switch {
 	case errors.Is(err, apppasskey.ErrLoginRequired):
@@ -158,6 +167,7 @@ func (h *PasskeySetupHandler) writeError(c *gin.Context, err error, returnTo str
 }
 
 func (h *PasskeySetupHandler) render(c *gin.Context, status int, data passkeySetupPageData) {
+	// 与其他页面 handler 一样，同时兼容 HTML 页面和 JSON API 风格调用。
 	if token, err := ensureCSRFToken(c); err == nil {
 		data.CSRFToken = token
 	}

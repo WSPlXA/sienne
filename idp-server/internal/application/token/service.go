@@ -4,9 +4,11 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
+	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -28,18 +30,23 @@ type Exchanger interface {
 	Exchange(ctx context.Context, input ExchangeInput) (*ExchangeResult, error)
 }
 
+// Service 负责 OAuth2/OIDC 的 token 发放与轮换。
+// 它把不同 grant type 的交换流程统一收口到一个入口，
+// 对外表现为“给定规范化输入，返回访问令牌或错误”。
 type Service struct {
-	authCodes  repository.AuthorizationCodeRepository
-	clients    repository.ClientRepository
-	users      repository.UserRepository
-	tokens     repository.TokenRepository
-	tokenCache cacheport.TokenCacheRepository
+	authCodes   repository.AuthorizationCodeRepository
+	clients     repository.ClientRepository
+	users       repository.UserRepository
+	tokens      repository.TokenRepository
+	tokenCache  cacheport.TokenCacheRepository
 	deviceCodes cacheport.DeviceCodeRepository
-	passwords  securityport.PasswordVerifier
-	signer     securityport.Signer
-	issuer     string
-	now        func() time.Time
+	passwords   securityport.PasswordVerifier
+	signer      securityport.Signer
+	issuer      string
+	now         func() time.Time
 }
+
+const refreshTokenGracePeriod = 10 * time.Second
 
 func NewService(
 	authCodes repository.AuthorizationCodeRepository,
@@ -53,15 +60,15 @@ func NewService(
 	issuer string,
 ) *Service {
 	return &Service{
-		authCodes:  authCodes,
-		clients:    clients,
-		users:      users,
-		tokens:     tokens,
-		tokenCache: tokenCache,
+		authCodes:   authCodes,
+		clients:     clients,
+		users:       users,
+		tokens:      tokens,
+		tokenCache:  tokenCache,
 		deviceCodes: deviceCodes,
-		passwords:  passwords,
-		signer:     signer,
-		issuer:     issuer,
+		passwords:   passwords,
+		signer:      signer,
+		issuer:      issuer,
 		now: func() time.Time {
 			return time.Now().UTC()
 		},
@@ -69,6 +76,7 @@ func NewService(
 }
 
 func (s *Service) Exchange(ctx context.Context, input ExchangeInput) (*ExchangeResult, error) {
+	// 这里相当于 grant type 分发器：先识别协议语义，再进入各自的专属校验流程。
 	switch input.GrantType {
 	case pkgoauth2.GrantTypeAuthorizationCode:
 		return s.exchangeAuthorizationCode(ctx, input)
@@ -86,6 +94,8 @@ func (s *Service) Exchange(ctx context.Context, input ExchangeInput) (*ExchangeR
 }
 
 func (s *Service) exchangeAuthorizationCode(ctx context.Context, input ExchangeInput) (*ExchangeResult, error) {
+	// Authorization Code 模式是最严格的一条链路：
+	// 需要同时校验 client、redirect_uri、code 本身以及 PKCE。
 	if input.GrantType != pkgoauth2.GrantTypeAuthorizationCode {
 		return nil, ErrUnsupportedGrantType
 	}
@@ -134,12 +144,15 @@ func (s *Service) exchangeAuthorizationCode(ctx context.Context, input ExchangeI
 
 	now := s.now()
 	scopes := mustDecodeScopeJSON(code.ScopesJSON)
+	// access token / refresh token 的发放细节收敛到统一方法，
+	// 避免不同 grant type 在 token 结构上产生分叉。
 	result, err := s.issueUserGrantTokens(ctx, client, user, scopes, now)
 	if err != nil {
 		return nil, err
 	}
 
 	if contains(scopes, "openid") {
+		// 只有请求了 openid scope 才补发 ID Token，符合 OIDC 语义。
 		idToken, err := s.mintIDToken(client, user, code, now)
 		if err != nil {
 			return nil, err
@@ -151,6 +164,8 @@ func (s *Service) exchangeAuthorizationCode(ctx context.Context, input ExchangeI
 }
 
 func (s *Service) mintIDToken(client *clientdomain.Model, user *userdomain.Model, code *authorizationdomain.Model, now time.Time) (string, error) {
+	// ID Token TTL 默认跟随 access token；如果客户端没有显式配置，
+	// 再回退到 1 小时，避免生成永不过期的身份断言。
 	idTokenTTLSeconds := client.IDTokenTTLSeconds
 	if idTokenTTLSeconds <= 0 {
 		idTokenTTLSeconds = client.AccessTokenTTLSeconds
@@ -175,6 +190,7 @@ func (s *Service) mintIDToken(client *clientdomain.Model, user *userdomain.Model
 		pkgoidc.ClaimEmailVerified:     user.EmailVerified,
 	}
 	if code.NonceValue != "" {
+		// nonce 只在前端参与 OIDC 登录时有意义，用于把回调结果绑定到原始授权请求。
 		claims[pkgoidc.ClaimNonce] = code.NonceValue
 	}
 
@@ -182,6 +198,8 @@ func (s *Service) mintIDToken(client *clientdomain.Model, user *userdomain.Model
 }
 
 func (s *Service) exchangeRefreshToken(ctx context.Context, input ExchangeInput) (*ExchangeResult, error) {
+	// Refresh Token 流程重点不是“再发一次 access token”，
+	// 而是要安全地识别重放、做轮换，并在竞态窗口内给出可预测行为。
 	client, err := s.clients.FindByClientID(ctx, strings.TrimSpace(input.ClientID))
 	if err != nil {
 		return nil, err
@@ -198,11 +216,16 @@ func (s *Service) exchangeRefreshToken(ctx context.Context, input ExchangeInput)
 
 	oldSHA := sha256Hex(input.RefreshToken)
 	if s.tokenCache != nil {
-		revoked, err := s.tokenCache.IsRefreshTokenRevoked(ctx, oldSHA)
+		// 先查缓存层的重放检测结果，可以更快处理并发刷新请求，
+		// 避免所有竞争都打到数据库。
+		replay, err := s.tokenCache.CheckRefreshTokenReplay(ctx, oldSHA, strings.TrimSpace(input.ReplayFingerprint))
 		if err != nil {
 			return nil, err
 		}
-		if revoked {
+		if result := refreshReplayToExchangeResult(replay); result != nil {
+			return result, nil
+		}
+		if replay != nil && replay.Status == cacheport.RefreshTokenReplayRejected {
 			return nil, ErrInvalidRefreshToken
 		}
 	}
@@ -303,6 +326,14 @@ func (s *Service) exchangeRefreshToken(ctx context.Context, input ExchangeInput)
 		ExpiresAt:   refreshExpiresAt,
 	}
 	if err := s.tokens.RotateRefreshToken(ctx, oldSHA, now, newRefresh); err != nil {
+		// 这里常见的竞态是：同一个 refresh token 被两个请求几乎同时消费。
+		// 如果主旋转失败，会尝试进入 grace replay 逻辑，把“刚刚成功过”的结果复用回来。
+		if replayResult, replayErr := s.tryRefreshTokenGraceReplay(ctx, oldSHA, input.ReplayFingerprint); replayErr == nil && replayResult != nil {
+			return replayResult, nil
+		}
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrInvalidRefreshToken
+		}
 		return nil, err
 	}
 	if s.tokenCache != nil {
@@ -312,9 +343,17 @@ func (s *Service) exchangeRefreshToken(ctx context.Context, input ExchangeInput)
 			UserID:      int64StringPtr(oldRefresh.UserID),
 			Subject:     oldRefresh.Subject,
 			ScopesJSON:  string(scopesJSON),
+			FamilyID:    oldSHA,
 			IssuedAt:    newRefresh.IssuedAt,
 			ExpiresAt:   newRefresh.ExpiresAt,
-		}, time.Until(refreshExpiresAt), time.Until(oldRefresh.ExpiresAt))
+		}, cacheport.TokenResponseCacheEntry{
+			AccessToken:  result.AccessToken,
+			TokenType:    result.TokenType,
+			ExpiresIn:    result.ExpiresIn,
+			RefreshToken: newRefreshToken,
+			Scope:        result.Scope,
+			IDToken:      result.IDToken,
+		}, strings.TrimSpace(input.ReplayFingerprint), time.Until(refreshExpiresAt), refreshTokenGracePeriod)
 	}
 	result.RefreshToken = newRefreshToken
 	return result, nil
@@ -632,12 +671,44 @@ func (s *Service) issueUserGrantTokens(ctx context.Context, client *clientdomain
 			UserID:      int64String(userID),
 			Subject:     user.UserUUID,
 			ScopesJSON:  string(accessScopesJSON),
+			FamilyID:    refreshModel.TokenSHA256,
 			IssuedAt:    refreshModel.IssuedAt,
 			ExpiresAt:   refreshModel.ExpiresAt,
 		}, time.Until(refreshExpiresAt))
 	}
 	result.RefreshToken = refreshToken
 	return result, nil
+}
+
+func refreshReplayToExchangeResult(replay *cacheport.RefreshTokenReplayResult) *ExchangeResult {
+	if replay == nil || replay.Status != cacheport.RefreshTokenReplayGrace || replay.Response == nil {
+		return nil
+	}
+	return &ExchangeResult{
+		AccessToken:  replay.Response.AccessToken,
+		TokenType:    replay.Response.TokenType,
+		ExpiresIn:    replay.Response.ExpiresIn,
+		RefreshToken: replay.Response.RefreshToken,
+		Scope:        replay.Response.Scope,
+		IDToken:      replay.Response.IDToken,
+	}
+}
+
+func (s *Service) tryRefreshTokenGraceReplay(ctx context.Context, tokenSHA256, replayFingerprint string) (*ExchangeResult, error) {
+	if s.tokenCache == nil {
+		return nil, nil
+	}
+	replay, err := s.tokenCache.CheckRefreshTokenReplay(ctx, tokenSHA256, strings.TrimSpace(replayFingerprint))
+	if err != nil {
+		return nil, err
+	}
+	if result := refreshReplayToExchangeResult(replay); result != nil {
+		return result, nil
+	}
+	if replay != nil && replay.Status == cacheport.RefreshTokenReplayRejected {
+		return nil, ErrInvalidRefreshToken
+	}
+	return nil, nil
 }
 
 func mustDecodeScopeJSON(raw string) []string {

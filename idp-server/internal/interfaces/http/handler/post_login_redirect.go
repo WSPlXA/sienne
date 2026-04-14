@@ -7,6 +7,10 @@ import (
 )
 
 func resolveBrowserPostLoginRedirect(returnTo, upstreamRedirectURI, roleCode string) string {
+	// 登录后浏览器跳转优先级：
+	// 1. 显式 return_to；
+	// 2. 上游认证流程指定的 redirect；
+	// 3. 基于角色的后台默认入口。
 	if target := strings.TrimSpace(returnTo); target != "" {
 		return target
 	}

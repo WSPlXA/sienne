@@ -27,6 +27,8 @@ type ValidateOptions struct {
 	Issuer string
 }
 
+// AuthMiddleware 负责把 Bearer Token 校验结果注入 Gin 上下文。
+// 它位于 HTTP 边界层，因此只做协议相关判断，不直接碰业务仓储。
 type AuthMiddleware struct {
 	tokens     tokenValidator
 	tokenCache cacheport.TokenCacheRepository
@@ -43,6 +45,8 @@ func NewAuthMiddleware(tokens tokenValidator, tokenCache cacheport.TokenCacheRep
 
 func (m *AuthMiddleware) RequireBearerToken() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// 第一步只负责从 Authorization 头里提取 Bearer Token，
+		// 格式不对时直接在网关层返回 401。
 		token := extractBearerToken(c.GetHeader("Authorization"))
 		if token == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
@@ -52,6 +56,8 @@ func (m *AuthMiddleware) RequireBearerToken() gin.HandlerFunc {
 		}
 
 		if m.tokenCache != nil {
+			// 对 JWT 来说，“签名有效”不等于“还允许使用”。
+			// 这里额外查询撤销状态，覆盖主动登出/强制下线场景。
 			revoked, err := m.tokenCache.IsAccessTokenRevoked(c.Request.Context(), sha256Hex(token))
 			if err != nil {
 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
@@ -68,6 +74,8 @@ func (m *AuthMiddleware) RequireBearerToken() gin.HandlerFunc {
 		}
 
 		if m.tokens != nil {
+			// 签名和基础 claim 校验通过后，把常用 claim 挂进上下文，
+			// 后续 handler 就不用再次解析 token。
 			claims, err := m.tokens.ParseAndValidate(token, ValidateOptions{
 				Issuer: m.issuer,
 			})
@@ -92,6 +100,8 @@ func (m *AuthMiddleware) RequireBearerToken() gin.HandlerFunc {
 }
 
 func extractBearerToken(authorizationHeader string) string {
+	// 这里只接受标准的 "Bearer <token>" 形式，故意不做更宽松的兼容，
+	// 这样可以减少模糊输入带来的歧义。
 	if !strings.HasPrefix(authorizationHeader, "Bearer ") {
 		return ""
 	}

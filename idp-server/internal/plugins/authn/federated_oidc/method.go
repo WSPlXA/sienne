@@ -29,6 +29,8 @@ func (m *Method) Type() pluginport.AuthnMethodType {
 }
 
 func (m *Method) Authenticate(ctx context.Context, input pluginport.AuthenticateInput) (*pluginport.AuthenticateResult, error) {
+	// 这个插件本身不实现 OIDC 协议细节，
+	// 它只负责把插件输入转交给联邦连接器，并把结果翻译回统一认证结果。
 	if m.connector == nil {
 		return nil, appauthn.ErrUnsupportedMethod
 	}
@@ -47,6 +49,7 @@ func (m *Method) Authenticate(ctx context.Context, input pluginport.Authenticate
 		return nil, appauthn.ErrInvalidCredentials
 	}
 
+	// RedirectURI 既可能是“去上游登录”的第一跳，也可能是完成联邦登录后要回到的本地页面。
 	return &pluginport.AuthenticateResult{
 		Handled:          true,
 		Authenticated:    result.Authenticated,

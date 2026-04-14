@@ -31,6 +31,8 @@ type OIDCProviderConfig struct {
 	StateTTL         time.Duration
 }
 
+// OIDCProvider 封装与上游 OIDC 身份提供者的交互：
+// 拉 discovery、发起授权、交换 code、获取 userinfo，并做最基本的 claim 校验。
 type OIDCProvider struct {
 	cfg         OIDCProviderConfig
 	httpClient  *http.Client
@@ -58,6 +60,7 @@ func NewOIDCProvider(cfg OIDCProviderConfig) *OIDCProvider {
 }
 
 func NewOIDCProviderWithReplayCache(cfg OIDCProviderConfig, replayCache cacheport.ReplayProtectionRepository) *OIDCProvider {
+	// 配置在这里做一次标准化，保证后续请求路径不需要反复兜底默认值。
 	scopes := normalizeScopes(cfg.Scopes)
 	if len(scopes) == 0 {
 		scopes = []string{"openid", "profile", "email"}
@@ -86,6 +89,8 @@ func NewOIDCProviderWithReplayCache(cfg OIDCProviderConfig, replayCache cachepor
 }
 
 func (p *OIDCProvider) Authenticate(ctx context.Context, input federation.OIDCAuthenticateInput) (*federation.OIDCAuthenticateResult, error) {
+	// Authenticate 同时承载联邦登录的两段流程：
+	// 没有 code 时发起跳转，有 code 时完成回调兑换。
 	if strings.TrimSpace(p.cfg.Issuer) == "" || strings.TrimSpace(p.cfg.ClientID) == "" {
 		return nil, fmt.Errorf("oidc provider is not configured")
 	}
@@ -110,6 +115,8 @@ func (p *OIDCProvider) Authenticate(ctx context.Context, input federation.OIDCAu
 }
 
 func (p *OIDCProvider) beginAuthentication(ctx context.Context, metadata *oidcDiscoveryDocument, redirectURI, returnTo string) (*federation.OIDCAuthenticateResult, error) {
+	// state/nonce 都会先放进重放保护缓存里，
+	// 回调时必须消费这份状态，避免 CSRF 和旧回调重放。
 	if p.replayCache == nil {
 		return nil, fmt.Errorf("oidc replay cache is not configured")
 	}
@@ -140,6 +147,7 @@ func (p *OIDCProvider) beginAuthentication(ctx context.Context, metadata *oidcDi
 }
 
 func (p *OIDCProvider) completeAuthentication(ctx context.Context, metadata *oidcDiscoveryDocument, input federation.OIDCAuthenticateInput, redirectURI string) (*federation.OIDCAuthenticateResult, error) {
+	// 回调阶段先消费 state，再用 code 交换 token，最后提取并校验用户 claims。
 	savedState, err := p.consumeState(ctx, strings.TrimSpace(input.State))
 	if err != nil {
 		return nil, err
@@ -199,6 +207,7 @@ func (p *OIDCProvider) completeAuthentication(ctx context.Context, metadata *oid
 }
 
 func (p *OIDCProvider) loadDiscovery(ctx context.Context) (*oidcDiscoveryDocument, error) {
+	// discovery 文档会缓存在内存里，避免每次联邦登录都重新拉取上游元数据。
 	p.mu.RLock()
 	if p.metadata != nil {
 		defer p.mu.RUnlock()
@@ -238,6 +247,7 @@ func (p *OIDCProvider) loadDiscovery(ctx context.Context) (*oidcDiscoveryDocumen
 }
 
 func (p *OIDCProvider) exchangeCode(ctx context.Context, metadata *oidcDiscoveryDocument, code, redirectURI string) (*oidcTokenResponse, error) {
+	// 这里按配置选择 client_secret_post 或 client_secret_basic 与上游 token endpoint 交互。
 	form := url.Values{}
 	form.Set("grant_type", "authorization_code")
 	form.Set("code", code)
@@ -280,6 +290,8 @@ func (p *OIDCProvider) exchangeCode(ctx context.Context, metadata *oidcDiscovery
 }
 
 func (p *OIDCProvider) fetchUserInfo(ctx context.Context, endpoint, accessToken string) (map[string]any, error) {
+	// 如果上游提供 userinfo endpoint，优先从那里拿最新用户信息；
+	// 否则再退回到 ID Token 内的 claims。
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("build oidc userinfo request: %w", err)

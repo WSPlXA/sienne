@@ -17,6 +17,7 @@ var (
 	ErrUserUnlockFailed     = errors.New("user unlock is not supported by repository")
 )
 
+// RegisterInput 是创建本地用户时需要的最小输入集合。
 type RegisterInput struct {
 	Username      string
 	Email         string
@@ -26,6 +27,7 @@ type RegisterInput struct {
 	AutoActivate  bool
 }
 
+// RegisterResult 返回新建用户的核心公开字段，不暴露密码相关信息。
 type RegisterResult struct {
 	UserID        int64
 	UserUUID      string
@@ -37,6 +39,7 @@ type RegisterResult struct {
 	CreatedAt     time.Time
 }
 
+// AdminResetPasswordInput / Result 表示后台重置用户密码动作的输入输出。
 type AdminResetPasswordInput struct {
 	UserID      int64
 	NewPassword string
@@ -48,6 +51,7 @@ type AdminResetPasswordResult struct {
 	PasswordSetAt time.Time
 }
 
+// AdminUnlockUserInput / Result 表示后台解锁用户账号动作的输入输出。
 type AdminUnlockUserInput struct {
 	UserID int64
 }

@@ -25,6 +25,8 @@ func NewIntrospectionHandler(clientAuthenticator appclientauth.Authenticator, se
 }
 
 func (h *IntrospectionHandler) Handle(c *gin.Context) {
+	// introspection endpoint 面向“客户端查询 token 状态”的场景，
+	// 因此它要求调用方自己先完成 client authentication。
 	var req dto.IntrospectRequest
 	if err := c.ShouldBind(&req); err != nil {
 		c.JSON(http.StatusBadRequest, pkgoauth2.Error{
@@ -54,6 +56,7 @@ func (h *IntrospectionHandler) Handle(c *gin.Context) {
 		ClientSecret:        req.ClientSecret,
 	})
 	if err != nil || authResult == nil || authResult.Method == pluginport.ClientAuthMethodNone {
+		// introspection 不允许匿名客户端调用，即使该客户端在别的端点上允许 auth method = none。
 		description := "client authentication is required"
 		if err != nil {
 			description = err.Error()
@@ -69,6 +72,7 @@ func (h *IntrospectionHandler) Handle(c *gin.Context) {
 		AccessToken: req.Token,
 	})
 	if err != nil {
+		// introspection 本身失败属于服务端问题，不应伪装成 token inactive。
 		c.JSON(http.StatusInternalServerError, pkgoauth2.Error{
 			Code:        "server_error",
 			Description: "token introspection failed",

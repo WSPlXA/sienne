@@ -7,6 +7,8 @@ import (
 	"idp-server/internal/domain/user"
 )
 
+// UserRepository 定义用户实体在持久化层的核心读写能力。
+// 这个接口同时服务登录、后台管理和 RBAC 分配，因此既有查找也有状态更新方法。
 type UserRepository interface {
 	Create(ctx context.Context, model *user.Model) error
 	FindByID(ctx context.Context, id int64) (*user.Model, error)

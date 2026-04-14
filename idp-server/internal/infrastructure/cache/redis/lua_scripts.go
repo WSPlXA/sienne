@@ -12,20 +12,21 @@ import (
 )
 
 type scriptSet struct {
-	saveSession             *goredis.Script
-	deleteSession           *goredis.Script
+	saveSession              *goredis.Script
+	deleteSession            *goredis.Script
 	consumeAuthorizationCode *goredis.Script
-	saveOAuthState          *goredis.Script
-	reserveNonce            *goredis.Script
-	incrementWithTTL        *goredis.Script
-	revokeToken             *goredis.Script
-	rotateToken             *goredis.Script
+	saveOAuthState           *goredis.Script
+	reserveNonce             *goredis.Script
+	incrementWithTTL         *goredis.Script
+	revokeToken              *goredis.Script
+	checkRefreshReplay       *goredis.Script
+	rotateToken              *goredis.Script
 }
 
 var (
-	scriptsOnce sync.Once
+	scriptsOnce      sync.Once
 	scriptsSingleton *scriptSet
-	scriptsErr error
+	scriptsErr       error
 )
 
 func loadScripts() (*scriptSet, error) {
@@ -38,6 +39,7 @@ func loadScripts() (*scriptSet, error) {
 			reserveNonce:             mustLoadScript("reserve_nonce.lua"),
 			incrementWithTTL:         mustLoadScript("increment_with_ttl.lua"),
 			revokeToken:              mustLoadScript("revoke_token.lua"),
+			checkRefreshReplay:       mustLoadScript("check_refresh_replay.lua"),
 			rotateToken:              mustLoadScript("rotate_token.lua"),
 		}
 	})
@@ -89,6 +91,7 @@ func PreloadScripts(ctx context.Context, rdb *goredis.Client) error {
 		scripts.reserveNonce,
 		scripts.incrementWithTTL,
 		scripts.revokeToken,
+		scripts.checkRefreshReplay,
 		scripts.rotateToken,
 	} {
 		if err := script.Load(ctx, rdb).Err(); err != nil {

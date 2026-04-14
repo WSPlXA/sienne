@@ -1,5 +1,7 @@
 package dto
 
+// LoginRequest 是登录页/登录接口接收的统一请求体。
+// 它同时覆盖本地密码登录、联邦 OIDC 回调以及登录后回跳上下文。
 type LoginRequest struct {
 	Method      string `json:"method" form:"method"`
 	Username    string `json:"username" form:"username"`

@@ -33,6 +33,8 @@ func (m *Method) Type() pluginport.AuthnMethodType {
 }
 
 func (m *Method) Authenticate(ctx context.Context, input pluginport.AuthenticateInput) (*pluginport.AuthenticateResult, error) {
+	// 密码插件只关心“用户名 + 密码是否成立”；
+	// 限流、失败统计、MFA 和 session 创建都交给更上层 authn service。
 	username := strings.TrimSpace(input.Username)
 	if username == "" || input.Password == "" || m.users == nil || m.passwords == nil {
 		return nil, appauthn.ErrInvalidCredentials
@@ -40,6 +42,7 @@ func (m *Method) Authenticate(ctx context.Context, input pluginport.Authenticate
 
 	user := input.User
 	if user == nil {
+		// 上层可能已经为密码登录预取过用户（便于限流/锁定判断），这里优先复用。
 		var err error
 		user, err = m.users.FindByUsername(ctx, username)
 		if err != nil {

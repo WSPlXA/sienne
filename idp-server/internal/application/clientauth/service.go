@@ -27,6 +27,11 @@ type AuthenticateResult struct {
 	Method       pluginport.ClientAuthMethodType
 }
 
+// Service 负责 token/device/introspection 等端点上的 OAuth client 身份认证。
+// 它的职责不是直接比较所有可能输入，而是：
+// 1. 先定位 client；
+// 2. 根据 client 配置选择认证方法；
+// 3. 把具体校验委托给对应插件实现。
 type Service struct {
 	clients  repository.ClientRepository
 	registry *pluginregistry.ClientAuthRegistry
@@ -40,6 +45,8 @@ func NewService(clients repository.ClientRepository, registry *pluginregistry.Cl
 }
 
 func (s *Service) Authenticate(ctx context.Context, input AuthenticateInput) (*AuthenticateResult, error) {
+	// client 认证的第一步是先确定“请求声称自己是谁”。
+	// 对 Basic 来说 client_id 在 Authorization 头里，对 post/none 来说则在 body 中。
 	if s.clients == nil || s.registry == nil {
 		return nil, apptoken.ErrInvalidClient
 	}
@@ -57,6 +64,8 @@ func (s *Service) Authenticate(ctx context.Context, input AuthenticateInput) (*A
 		return nil, apptoken.ErrInvalidClient
 	}
 
+	// 真正采用哪种认证方式由 client 的注册配置决定，
+	// 而不是由请求随意声明，从而避免认证方法被降级。
 	methodType := normalizeClientAuthMethod(client.TokenEndpointAuthMethod, client.AuthMethods)
 	authenticator, ok := s.registry.Get(methodType)
 	if !ok || authenticator == nil {
@@ -75,6 +84,7 @@ func (s *Service) Authenticate(ctx context.Context, input AuthenticateInput) (*A
 	if result == nil || strings.TrimSpace(result.ClientID) == "" {
 		return nil, apptoken.ErrInvalidClient
 	}
+	// 即使底层插件验签/验密成功，也要再次核对返回的 client_id 与已加载 client 一致。
 	if result.ClientID != client.ClientID {
 		return nil, apptoken.ErrInvalidClient
 	}
@@ -87,6 +97,8 @@ func (s *Service) Authenticate(ctx context.Context, input AuthenticateInput) (*A
 }
 
 func extractClientID(authorizationHeader, bodyClientID string) string {
+	// 为了先查 client 配置，这里先做一次“轻量提取 client_id”，
+	// 真正的 secret 校验仍交给具体认证插件。
 	if strings.HasPrefix(authorizationHeader, "Basic ") {
 		payload := strings.TrimPrefix(authorizationHeader, "Basic ")
 		decoded, err := base64.StdEncoding.DecodeString(payload)
@@ -102,6 +114,7 @@ func extractClientID(authorizationHeader, bodyClientID string) string {
 }
 
 func normalizeClientAuthMethod(primary string, fallbacks []string) pluginport.ClientAuthMethodType {
+	// 优先使用主配置字段，缺失时再回退到兼容性的 authMethods 列表。
 	method := pluginport.ClientAuthMethodType(strings.ToLower(strings.TrimSpace(primary)))
 	if method != "" {
 		return method

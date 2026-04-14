@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+// SessionCacheRepository 定义会话缓存层接口。
+// 它既缓存单个 session，也维护 user -> sessionIDs 的索引，便于批量下线。
 type SessionCacheRepository interface {
 	Save(ctx context.Context, key SessionCacheEntry, ttl time.Duration) error
 	Get(ctx context.Context, sessionID string) (*SessionCacheEntry, error)
@@ -15,6 +17,7 @@ type SessionCacheRepository interface {
 	RemoveUserSessionIndex(ctx context.Context, userID string, sessionID string) error
 }
 
+// SessionCacheEntry 是写入 Redis 的会话快照。
 type SessionCacheEntry struct {
 	SessionID       string
 	UserID          string

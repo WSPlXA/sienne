@@ -41,6 +41,10 @@ func NewSessionPermissionMiddleware(sessions repository.SessionRepository, sessi
 
 func (m *SessionPermissionMiddleware) RequireSessionPermissions(required ...uint32) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// 后台接口保护分三层：
+		// 1. 有有效 session；
+		// 2. session 已完成 MFA；
+		// 3. 当前用户具备要求的 RBAC 权限。
 		sessionID, _ := c.Cookie("idp_session")
 		sessionID = strings.TrimSpace(sessionID)
 		if sessionID == "" {
@@ -58,6 +62,7 @@ func (m *SessionPermissionMiddleware) RequireSessionPermissions(required ...uint
 			return
 		}
 		if !sessionHasOTP(sessionModel) {
+			// 后台敏感操作要求带有 OTP/MFA 级别的登录会话。
 			m.abortUnauthorized(c, "mfa required")
 			return
 		}
@@ -78,11 +83,13 @@ func (m *SessionPermissionMiddleware) RequireSessionPermissions(required ...uint
 
 		c.Set(ContextAdminUser, user)
 		c.Set(ContextAdminSession, sessionModel)
+		// 通过后把当前管理员和会话对象挂进上下文，后续 handler 可直接复用。
 		c.Next()
 	}
 }
 
 func (m *SessionPermissionMiddleware) abortForbidden(c *gin.Context, message string) {
+	// HTML 后台页面优先弹窗并返回上一页，API 调用则给纯 JSON。
 	if wantsAdminHTML(c.GetHeader("Accept")) {
 		c.Header("Content-Type", "text/html; charset=utf-8")
 		c.Status(http.StatusForbidden)
@@ -95,6 +102,7 @@ func (m *SessionPermissionMiddleware) abortForbidden(c *gin.Context, message str
 }
 
 func (m *SessionPermissionMiddleware) abortUnauthorized(c *gin.Context, message string) {
+	// 未登录和缺少 MFA 都属于“先补前置条件再回来”的场景，因此这里会带上当前 URL 做回跳。
 	if wantsAdminHTML(c.GetHeader("Accept")) {
 		if strings.EqualFold(strings.TrimSpace(message), "mfa required") {
 			c.Redirect(http.StatusFound, "/mfa/totp/setup?return_to="+url.QueryEscape(c.Request.URL.RequestURI()))
@@ -109,6 +117,7 @@ func (m *SessionPermissionMiddleware) abortUnauthorized(c *gin.Context, message 
 }
 
 func (m *SessionPermissionMiddleware) findSession(c *gin.Context, sessionID string) (*sessiondomain.Model, error) {
+	// 管理后台读 session 也优先走缓存，减少每次页面访问都打数据库。
 	if m.sessionCache != nil {
 		entry, err := m.sessionCache.Get(c.Request.Context(), sessionID)
 		if err != nil {
@@ -132,6 +141,7 @@ func (m *SessionPermissionMiddleware) findSession(c *gin.Context, sessionID stri
 }
 
 func mustParseInt64(value string) int64 {
+	// 这是面向受信任缓存值的轻量解析器；遇到非法字符直接回退 0。
 	var result int64
 	for _, ch := range strings.TrimSpace(value) {
 		if ch < '0' || ch > '9' {
@@ -143,6 +153,7 @@ func mustParseInt64(value string) int64 {
 }
 
 func wantsAdminHTML(accept string) bool {
+	// 后台页只在明确声明 text/html 时走浏览器交互逻辑。
 	accept = strings.ToLower(strings.TrimSpace(accept))
 	return strings.Contains(accept, "text/html")
 }
@@ -160,6 +171,7 @@ func CurrentAdminSession(c *gin.Context) *sessiondomain.Model {
 }
 
 func sessionHasOTP(sessionModel *sessiondomain.Model) bool {
+	// 这里通过 ACR/AMR 判定该会话是否包含第二要素认证结果。
 	if sessionModel == nil {
 		return false
 	}

@@ -29,9 +29,15 @@ import (
 )
 
 func NewRouter(authzService authz.Service, consentService appconsent.Manager, registerService appregister.Registrar, passwordResetter appregister.PasswordResetter, accountUnlocker appregister.AccountUnlocker, userRepo repository.UserRepository, clientCreator appclient.Creator, clientRedirectRegistrar appclient.Registrar, clientPostLogoutRedirectRegistrar appclient.PostLogoutRegistrar, logoutRedirectValidator appclient.LogoutRedirectValidator, authnService authn.Authenticator, federatedOIDCEnabled bool, sessionService appsession.Manager, rbacService apprbac.Manager, keysService appkeys.Manager, auditRepo repository.AuditEventRepository, clientAuthenticator appclientauth.Authenticator, grantRegistry *pluginregistry.GrantRegistry, deviceService *appdevice.Service, mfaService appmfa.Manager, passkeyService apppasskey.Manager, oidcService *oidc.Service, authMiddleware *middleware.AuthMiddleware, adminMiddleware *middleware.SessionPermissionMiddleware) *gin.Engine {
+	// Router 是系统所有 HTTP 能力的装配入口。
+	// 这里不写业务逻辑，而是把 handler、中间件和 URL 空间组织起来，
+	// 让“协议层职责”和“应用层职责”保持清晰分离。
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(middleware.NewLoggingMiddleware(log.Default()).Handler())
+
+	// NoRoute 根据 Accept 头同时兼容浏览器和 API 客户端：
+	// 浏览器拿到 HTML 页面，脚本/SDK 拿到结构化 JSON 错误。
 	router.NoRoute(func(c *gin.Context) {
 		if routerWantsHTML(c.GetHeader("Accept")) {
 			c.Header("Content-Type", "text/html; charset=utf-8")
@@ -88,6 +94,7 @@ func NewRouter(authzService authz.Service, consentService appconsent.Manager, re
 	userInfoHandler := handler.NewUserInfoHandler(oidcService)
 	oidcMetadataHandler := handler.NewOIDCMetadataHandler(oidcService)
 
+	// 顶层公共路由：健康检查、登录页、MFA 页面、登出和 OIDC 元数据。
 	router.GET("/healthz", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
@@ -123,6 +130,7 @@ func NewRouter(authzService authz.Service, consentService appconsent.Manager, re
 	router.GET("/consent", consentHandler.Handle)
 	router.POST("/consent", consentHandler.Handle)
 
+	// /oauth2 下面放协议接口，主要给 OAuth/OIDC 客户端调用。
 	oauth2 := router.Group("/oauth2")
 	{
 		oauth2.GET("/authorize", gin.WrapF(authorizeHandler.ServeHTTP))
@@ -147,6 +155,8 @@ func NewRouter(authzService authz.Service, consentService appconsent.Manager, re
 	}
 
 	if adminMiddleware != nil {
+		// /admin 下面放运营后台入口，统一走基于会话的权限校验。
+		// 这里不是单纯“是否已登录”，而是必须具备对应 RBAC 权限。
 		admin := router.Group("/admin")
 		admin.GET("", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.OpsRead), adminConsoleHandler.Handle)
 		admin.GET("/", adminMiddleware.RequireSessionPermissions(rbac.AuthExec, rbac.OpsRead), adminConsoleHandler.Handle)
@@ -182,6 +192,8 @@ func NewRouter(authzService authz.Service, consentService appconsent.Manager, re
 }
 
 func routerWantsHTML(accept string) bool {
+	// 浏览器在很多情况下会发 text/html 或 */*，
+	// 这里用一个宽松判断让页面路由和 API 路由能共享同一个 404 入口。
 	accept = strings.ToLower(accept)
 	return accept == "" || strings.Contains(accept, "text/html") || strings.Contains(accept, "*/*")
 }

@@ -14,6 +14,7 @@ type UserInfoInput struct {
 	AccessToken string
 }
 
+// UserInfoOutput 对应 OIDC userinfo endpoint 返回的标准 claims 子集。
 type UserInfoOutput struct {
 	Subject       string `json:"sub"`
 	Name          string `json:"name,omitempty"`
@@ -22,6 +23,7 @@ type UserInfoOutput struct {
 	EmailVerified bool   `json:"email_verified,omitempty"`
 }
 
+// DiscoveryDocument 对应 `/.well-known/openid-configuration` 的响应结构。
 type DiscoveryDocument struct {
 	Issuer                                    string   `json:"issuer"`
 	AuthorizationEndpoint                     string   `json:"authorization_endpoint"`
@@ -40,10 +42,12 @@ type DiscoveryDocument struct {
 	CodeChallengeMethodsSupported             []string `json:"code_challenge_methods_supported"`
 }
 
+// JSONWebKeySet 是 JWKS endpoint 对外暴露的公钥集合。
 type JSONWebKeySet struct {
 	Keys []JSONWebKey `json:"keys"`
 }
 
+// JSONWebKey 表示单把 RSA 公钥的 JWK 视图。
 type JSONWebKey struct {
 	Kty string `json:"kty"`
 	Kid string `json:"kid"`
@@ -57,6 +61,7 @@ type IntrospectionInput struct {
 	AccessToken string
 }
 
+// IntrospectionOutput 对应 OAuth2 token introspection 的标准响应字段。
 type IntrospectionOutput struct {
 	Active    bool      `json:"active"`
 	Scope     string    `json:"scope,omitempty"`

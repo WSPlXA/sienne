@@ -43,7 +43,11 @@ func (s *stubAccessTokenCache) GetRefreshToken(context.Context, string) (*cachep
 	return nil, nil
 }
 
-func (s *stubAccessTokenCache) RotateRefreshToken(context.Context, string, cacheport.RefreshTokenCacheEntry, time.Duration, time.Duration) error {
+func (s *stubAccessTokenCache) CheckRefreshTokenReplay(context.Context, string, string) (*cacheport.RefreshTokenReplayResult, error) {
+	return &cacheport.RefreshTokenReplayResult{Status: cacheport.RefreshTokenReplayNone}, nil
+}
+
+func (s *stubAccessTokenCache) RotateRefreshToken(context.Context, string, cacheport.RefreshTokenCacheEntry, cacheport.TokenResponseCacheEntry, string, time.Duration, time.Duration) error {
 	return nil
 }
 

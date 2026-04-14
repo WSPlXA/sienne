@@ -1,5 +1,8 @@
 package dto
 
+// CreateClientRequest 对应后台创建 OAuth2/OIDC client 的输入载体。
+// 这层只负责把 HTTP 表单/JSON 绑定成结构体，真正的默认值补齐、
+// grant/auth method 兼容性校验和 secret 存储策略都在应用层处理。
 type CreateClientRequest struct {
 	ClientID                string   `json:"client_id" form:"client_id" binding:"required"`
 	ClientName              string   `json:"client_name" form:"client_name" binding:"required"`

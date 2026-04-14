@@ -43,6 +43,8 @@ func NewLoginTOTPHandler(authnService authn.Authenticator, auditRepo ...reposito
 }
 
 func (h *LoginTOTPHandler) Handle(c *gin.Context) {
+	// LoginTOTPHandler 承担“登录第二要素页”的多种动作：
+	// 展示挑战状态、校验 TOTP、处理 Passkey MFA，以及 Push MFA 的轮询/批准。
 	if c.Request.Method == http.MethodGet {
 		if strings.EqualFold(strings.TrimSpace(c.Query("mode")), "status") {
 			h.writePushStatus(c)
@@ -52,6 +54,8 @@ func (h *LoginTOTPHandler) Handle(c *gin.Context) {
 		h.render(c, http.StatusOK, data)
 		return
 	}
+	// POST 请求里的 action 会决定进入哪条 MFA 分支；
+	// 默认分支则是最常见的 TOTP 提交。
 	var req dto.LoginTOTPRequest
 	if err := c.ShouldBind(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid totp login request"})
@@ -87,6 +91,8 @@ func (h *LoginTOTPHandler) Handle(c *gin.Context) {
 		return
 	}
 	challengeID, _ := c.Cookie(mfaChallengeCookieName)
+	// 这里消费的是登录第一阶段留下来的 challenge cookie，
+	// 成功后才会正式补发 idp_session。
 	result, err := h.authnService.VerifyTOTP(c.Request.Context(), authn.VerifyTOTPInput{
 		ChallengeID: challengeID,
 		Code:        req.Code,
@@ -149,6 +155,7 @@ func (h *LoginTOTPHandler) Handle(c *gin.Context) {
 }
 
 func (h *LoginTOTPHandler) handlePasskeyBegin(c *gin.Context, req dto.LoginTOTPRequest) {
+	// Passkey MFA 登录同样分 begin/finish 两步，对应 WebAuthn challenge 的发起与回收。
 	challengeID := strings.TrimSpace(req.ChallengeID)
 	if challengeID == "" {
 		challengeID, _ = c.Cookie(mfaChallengeCookieName)
@@ -183,6 +190,7 @@ func (h *LoginTOTPHandler) handlePasskeyBegin(c *gin.Context, req dto.LoginTOTPR
 }
 
 func (h *LoginTOTPHandler) handlePasskeyFinish(c *gin.Context, req dto.LoginTOTPRequest) {
+	// Finish 成功后就可以像 TOTP 一样正式创建本地会话。
 	challengeID := strings.TrimSpace(req.ChallengeID)
 	if challengeID == "" {
 		challengeID, _ = c.Cookie(mfaChallengeCookieName)
@@ -230,6 +238,7 @@ func (h *LoginTOTPHandler) handlePasskeyFinish(c *gin.Context, req dto.LoginTOTP
 }
 
 func (h *LoginTOTPHandler) handlePushDecision(c *gin.Context, req dto.LoginTOTPRequest) {
+	// Push MFA 的 approve/deny 由已登录设备来做，因此这里还会带上 approver 的 session。
 	challengeID := strings.TrimSpace(req.ChallengeID)
 	if challengeID == "" {
 		challengeID, _ = c.Cookie(mfaChallengeCookieName)
@@ -268,6 +277,7 @@ func (h *LoginTOTPHandler) handlePushDecision(c *gin.Context, req dto.LoginTOTPR
 }
 
 func (h *LoginTOTPHandler) writePushStatus(c *gin.Context) {
+	// 轮询接口除了返回 push 状态外，在审批通过时还会顺手 finalize 挑战并补发 session。
 	challengeID, _ := c.Cookie(mfaChallengeCookieName)
 	challengeID = strings.TrimSpace(challengeID)
 	if challengeID == "" {

@@ -20,6 +20,8 @@ func NewLogoutAllHandler(service appsession.Manager) *LogoutAllHandler {
 }
 
 func (h *LogoutAllHandler) Handle(c *gin.Context) {
+	// LogoutAllHandler 处理“退出所有设备/所有会话”的浏览器入口。
+	// 它会比普通 logout 多一步：要求服务端同时撤销该用户的全部 session 和 token。
 	var req dto.LogoutRequest
 	if err := c.ShouldBind(&req); err != nil {
 		log.Printf("logout_all bind_failed ip=%s err=%v", c.ClientIP(), err)
@@ -42,6 +44,7 @@ func (h *LogoutAllHandler) Handle(c *gin.Context) {
 	sessionID, _ := c.Cookie("idp_session")
 	result := &appsession.LogoutAllResult{}
 	if h.service != nil {
+		// 这里从当前 session 反查所属用户，再扩散到整用户级别的退出。
 		result, err = h.service.LogoutAll(c.Request.Context(), appsession.LogoutAllInput{
 			SessionID: sessionID,
 		})
@@ -52,6 +55,7 @@ func (h *LogoutAllHandler) Handle(c *gin.Context) {
 		}
 	}
 
+	// 当前浏览器自己的 cookie 无论如何都要删掉，保证本地状态立即失效。
 	c.SetCookie("idp_session", "", -1, "/", "", false, true)
 	log.Printf("logout_all succeeded ip=%s session_present=%t revoked_sessions=%d revoked_access=%d revoked_refresh=%d return_to=%q",
 		c.ClientIP(),

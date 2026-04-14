@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"log"
 	"net/http"
@@ -28,6 +30,8 @@ func NewTokenHandler(clientAuthenticator appclientauth.Authenticator, grantRegis
 }
 
 func (h *TokenHandler) Handle(c *gin.Context) {
+	// TokenHandler 是 OAuth2 token endpoint 的 HTTP 适配层：
+	// 解析请求、认证 client、分发 grant type，再把结果序列化成标准响应。
 	var req dto.TokenRequest
 	if err := c.ShouldBind(&req); err != nil {
 		c.JSON(http.StatusBadRequest, pkgoauth2.Error{
@@ -59,6 +63,8 @@ func (h *TokenHandler) Handle(c *gin.Context) {
 		ClientSecret:        req.ClientSecret,
 	})
 	if err != nil {
+		// token endpoint 上 client 认证失败通常要按 invalid_client 语义返回，
+		// 只有真正的内部故障才升级成 server_error。
 		log.Printf("client authentication failed grant_type=%s client_id=%s err=%v", req.GrantType, req.ClientID, err)
 		status := http.StatusBadRequest
 		oauthErr := pkgoauth2.Error{
@@ -92,19 +98,22 @@ func (h *TokenHandler) Handle(c *gin.Context) {
 	}
 
 	result, err := grantHandler.Exchange(c.Request.Context(), pluginport.ExchangeInput{
-		GrantType:    grantType,
-		ClientID:     clientID,
-		ClientSecret: clientSecret,
-		Code:         req.Code,
-		RedirectURI:  req.RedirectURI,
-		CodeVerifier: req.CodeVerifier,
-		RefreshToken: req.RefreshToken,
-		DeviceCode:   req.DeviceCode,
-		Username:     req.Username,
-		Password:     req.Password,
-		Scopes:       req.ScopeList(),
+		// ReplayFingerprint 用于 refresh token 轮换时识别“同一客户端重试”与“异常重放”。
+		GrantType:         grantType,
+		ClientID:          clientID,
+		ClientSecret:      clientSecret,
+		ReplayFingerprint: buildRefreshReplayFingerprint(clientID, string(clientAuth.Method), c.ClientIP(), c.Request.UserAgent()),
+		Code:              req.Code,
+		RedirectURI:       req.RedirectURI,
+		CodeVerifier:      req.CodeVerifier,
+		RefreshToken:      req.RefreshToken,
+		DeviceCode:        req.DeviceCode,
+		Username:          req.Username,
+		Password:          req.Password,
+		Scopes:            req.ScopeList(),
 	})
 	if err != nil {
+		// 这里把应用层错误转换为 OAuth2 标准错误码，客户端才能按规范重试或报错。
 		log.Printf("token exchange failed grant_type=%s client_id=%s err=%v", req.GrantType, clientID, err)
 		status := http.StatusBadRequest
 		oauthErr := pkgoauth2.Error{
@@ -146,6 +155,7 @@ func (h *TokenHandler) Handle(c *gin.Context) {
 		return
 	}
 
+	// 成功时直接返回标准 token response。
 	c.JSON(http.StatusOK, pkgoauth2.TokenResponse{
 		AccessToken:  result.AccessToken,
 		TokenType:    result.TokenType,
@@ -154,4 +164,10 @@ func (h *TokenHandler) Handle(c *gin.Context) {
 		RefreshToken: result.RefreshToken,
 		IDToken:      result.IDToken,
 	})
+}
+
+func buildRefreshReplayFingerprint(clientID, authMethod, clientIP, userAgent string) string {
+	// 指纹不追求强身份认证，只用于把“同一个客户端环境的短时重试”聚合到一起。
+	sum := sha256.Sum256([]byte(clientID + "|" + authMethod + "|" + clientIP + "|" + userAgent))
+	return hex.EncodeToString(sum[:])
 }

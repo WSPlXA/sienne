@@ -151,7 +151,11 @@ func (s *stubTokenCache) GetRefreshToken(context.Context, string) (*cacheport.Re
 	return nil, nil
 }
 
-func (s *stubTokenCache) RotateRefreshToken(context.Context, string, cacheport.RefreshTokenCacheEntry, time.Duration, time.Duration) error {
+func (s *stubTokenCache) CheckRefreshTokenReplay(context.Context, string, string) (*cacheport.RefreshTokenReplayResult, error) {
+	return &cacheport.RefreshTokenReplayResult{Status: cacheport.RefreshTokenReplayNone}, nil
+}
+
+func (s *stubTokenCache) RotateRefreshToken(context.Context, string, cacheport.RefreshTokenCacheEntry, cacheport.TokenResponseCacheEntry, string, time.Duration, time.Duration) error {
 	return nil
 }
 

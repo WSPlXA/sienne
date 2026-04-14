@@ -18,6 +18,8 @@ type PasskeyProvider struct {
 }
 
 func NewPasskeyProvider(rpID, rpDisplayName string, rpOrigins []string) (*PasskeyProvider, error) {
+	// RP 配置是 WebAuthn 成败的基础：
+	// rpID、origin 和浏览器当前访问域名必须匹配，否则注册/登录都会失败。
 	rpID = strings.TrimSpace(rpID)
 	if rpID == "" {
 		return nil, fmt.Errorf("passkey rpid is required")
@@ -47,6 +49,9 @@ func NewPasskeyProvider(rpID, rpDisplayName string, rpOrigins []string) (*Passke
 }
 
 func (p *PasskeyProvider) BeginRegistration(user securityport.PasskeyUser, existingCredentialJSON []string) ([]byte, []byte, error) {
+	// BeginRegistration 产出两份数据：
+	// 1. 给浏览器的 options；
+	// 2. 服务端需要缓存的 sessionData。
 	adapter, err := newPasskeyUserAdapter(user, existingCredentialJSON)
 	if err != nil {
 		return nil, nil, err
@@ -67,6 +72,8 @@ func (p *PasskeyProvider) BeginRegistration(user securityport.PasskeyUser, exist
 }
 
 func (p *PasskeyProvider) FinishRegistration(user securityport.PasskeyUser, existingCredentialJSON []string, sessionJSON []byte, responseJSON []byte) (string, string, error) {
+	// FinishRegistration 会校验浏览器回传的 attestation/assertion 是否与 sessionData 匹配，
+	// 成功后把 credential 序列化，供后续登录时再次交给 WebAuthn 库。
 	adapter, err := newPasskeyUserAdapter(user, existingCredentialJSON)
 	if err != nil {
 		return "", "", err
@@ -91,6 +98,7 @@ func (p *PasskeyProvider) FinishRegistration(user securityport.PasskeyUser, exis
 }
 
 func (p *PasskeyProvider) BeginLogin(user securityport.PasskeyUser, credentialJSON []string) ([]byte, []byte, error) {
+	// 登录阶段和注册阶段类似，也是一份浏览器 options + 一份服务端 sessionData。
 	adapter, err := newPasskeyUserAdapter(user, credentialJSON)
 	if err != nil {
 		return nil, nil, err
@@ -111,6 +119,8 @@ func (p *PasskeyProvider) BeginLogin(user securityport.PasskeyUser, credentialJS
 }
 
 func (p *PasskeyProvider) FinishLogin(user securityport.PasskeyUser, credentialJSON []string, sessionJSON []byte, responseJSON []byte) (string, string, error) {
+	// FinishLogin 返回 credentialID 和最新 credential JSON，
+	// 上层可以用后者更新 sign count 等元数据。
 	adapter, err := newPasskeyUserAdapter(user, credentialJSON)
 	if err != nil {
 		return "", "", err
@@ -142,6 +152,7 @@ type passkeyUserAdapter struct {
 }
 
 func newPasskeyUserAdapter(user securityport.PasskeyUser, credentialJSON []string) (*passkeyUserAdapter, error) {
+	// WebAuthn 库要求实现自己的 User 接口，这里把仓储/应用层用户模型适配过去。
 	id := append([]byte(nil), user.UserHandle...)
 	if len(id) == 0 {
 		return nil, fmt.Errorf("passkey user handle is required")
@@ -191,6 +202,7 @@ func (u *passkeyUserAdapter) WebAuthnCredentials() []webauthnlib.Credential {
 }
 
 func buildWebAuthnRequest(responseJSON []byte) (*http.Request, error) {
+	// go-webauthn 直接消费 http.Request，这里构造一个最小 POST 请求作为适配层。
 	request, err := http.NewRequest(http.MethodPost, "/webauthn", bytes.NewReader(responseJSON))
 	if err != nil {
 		return nil, err

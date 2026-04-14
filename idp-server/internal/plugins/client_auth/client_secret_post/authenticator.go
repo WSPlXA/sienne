@@ -13,6 +13,9 @@ type Authenticator struct {
 	passwords securityport.PasswordVerifier
 }
 
+// NewAuthenticator 提供 client_secret_post 认证方式的插件实现。
+// token endpoint 会先根据 client 配置选择该插件，再把表单里的
+// client_id/client_secret 交给它完成校验。
 func NewAuthenticator(passwords securityport.PasswordVerifier) *Authenticator {
 	return &Authenticator{passwords: passwords}
 }
@@ -25,6 +28,9 @@ func (a *Authenticator) Type() pluginport.ClientAuthMethodType {
 	return pluginport.ClientAuthMethodClientSecretPost
 }
 
+// Authenticate 严格要求凭证来自请求体而不是 Authorization 头。
+// 这样可以避免 client_secret_post 和 client_secret_basic 混用，
+// 也让“客户端声明支持哪种认证方式”这一约束真正落到执行层。
 func (a *Authenticator) Authenticate(ctx context.Context, input pluginport.ClientAuthenticateInput) (*pluginport.ClientAuthenticateResult, error) {
 	_ = ctx
 	if input.Client == nil || a.passwords == nil {

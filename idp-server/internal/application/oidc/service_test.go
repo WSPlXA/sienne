@@ -84,7 +84,10 @@ func (s *stubOIDCTokenCache) SaveRefreshToken(context.Context, cacheport.Refresh
 func (s *stubOIDCTokenCache) GetRefreshToken(context.Context, string) (*cacheport.RefreshTokenCacheEntry, error) {
 	return nil, nil
 }
-func (s *stubOIDCTokenCache) RotateRefreshToken(context.Context, string, cacheport.RefreshTokenCacheEntry, time.Duration, time.Duration) error {
+func (s *stubOIDCTokenCache) CheckRefreshTokenReplay(context.Context, string, string) (*cacheport.RefreshTokenReplayResult, error) {
+	return &cacheport.RefreshTokenReplayResult{Status: cacheport.RefreshTokenReplayNone}, nil
+}
+func (s *stubOIDCTokenCache) RotateRefreshToken(context.Context, string, cacheport.RefreshTokenCacheEntry, cacheport.TokenResponseCacheEntry, string, time.Duration, time.Duration) error {
 	return nil
 }
 func (s *stubOIDCTokenCache) RevokeAccessToken(context.Context, string, time.Duration) error {

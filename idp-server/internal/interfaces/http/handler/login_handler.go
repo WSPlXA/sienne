@@ -42,6 +42,9 @@ func NewLoginHandler(authnService authn.Authenticator, federatedOIDCEnabled bool
 }
 
 func (h *LoginHandler) Handle(c *gin.Context) {
+	// LoginHandler 同时服务浏览器表单和 API/脚本调用：
+	// GET 负责展示页面或启动联邦登录，
+	// POST 负责校验 CSRF 后真正执行认证。
 	if c.Request.Method == http.MethodGet {
 		req := dto.LoginRequest{
 			Method:      c.Query("method"),
@@ -59,6 +62,8 @@ func (h *LoginHandler) Handle(c *gin.Context) {
 		}
 		req.ReturnTo = validatedReturnTo
 		if shouldProcessLoginGET(req) {
+			// 某些登录方式（例如联邦 OIDC 回调）会把 code/state 带回 GET 请求，
+			// 这里直接进入认证编排，而不是单纯渲染登录页。
 			h.handleAuthenticate(c, req)
 			return
 		}
@@ -90,6 +95,8 @@ func (h *LoginHandler) Handle(c *gin.Context) {
 		return
 	}
 
+	// POST 分支处理表单提交：先做输入绑定、return_to 校验和 CSRF 校验，
+	// 通过后再把请求交给应用层认证服务。
 	var req dto.LoginRequest
 	if err := c.ShouldBind(&req); err != nil {
 		log.Printf("login bind_failed method=%s ip=%s err=%v", c.Request.Method, c.ClientIP(), err)
@@ -123,6 +130,8 @@ func (h *LoginHandler) Handle(c *gin.Context) {
 }
 
 func (h *LoginHandler) handleAuthenticate(c *gin.Context, req dto.LoginRequest) {
+	// handleAuthenticate 是真正的桥接点：
+	// 把 HTTP 请求转换成 AuthenticateInput，再把应用层结果翻译回 cookie、跳转或 JSON。
 	result, err := h.authnService.Authenticate(c.Request.Context(), authn.AuthenticateInput{
 		Method:      req.Method,
 		Username:    req.Username,
@@ -158,6 +167,8 @@ func (h *LoginHandler) handleAuthenticate(c *gin.Context, req dto.LoginRequest) 
 		}
 
 		if errors.Is(err, authn.ErrMFAEnrollmentRequired) && result != nil && result.SessionID != "" {
+			// “要求补绑 MFA” 与“登录失败”不同：
+			// 用户第一要素已经通过，所以会先发会话，再把前端导向绑定页面。
 			maxAge := int(time.Until(result.ExpiresAt).Seconds())
 			c.SetCookie("idp_session", result.SessionID, maxAge, "/", "", false, true)
 			setupURI := buildMFASetupURI(req.ReturnTo)
@@ -175,6 +186,7 @@ func (h *LoginHandler) handleAuthenticate(c *gin.Context, req dto.LoginRequest) 
 		}
 
 		if errors.Is(err, authn.ErrMFARequired) && result != nil && result.MFAChallengeID != "" {
+			// MFA 挑战 ID 单独放在短时 cookie 中，让后续 TOTP / Passkey 页能继续这次挑战。
 			c.SetCookie(mfaChallengeCookieName, result.MFAChallengeID, 300, "/", "", false, true)
 			if wantsHTML(c.GetHeader("Accept")) {
 				c.Redirect(http.StatusFound, "/login/totp")
@@ -209,11 +221,14 @@ func (h *LoginHandler) handleAuthenticate(c *gin.Context, req dto.LoginRequest) 
 	}
 
 	if result != nil && result.SessionID == "" && result.RedirectURI != "" {
+		// 联邦登录第一跳的典型返回：没有本地 session，只有一个需要浏览器继续前往的上游地址。
 		log.Printf("login federated_redirect ip=%s redirect_uri=%q", c.ClientIP(), result.RedirectURI)
 		c.Redirect(http.StatusFound, result.RedirectURI)
 		return
 	}
 
+	// 本地登录完成后，最终跳转地址优先级通常是：
+	// return_to > 应用层指定 redirect > 基于角色的默认页面。
 	redirectURI := resolveBrowserPostLoginRedirect(req.ReturnTo, result.RedirectURI, result.RoleCode)
 	redirectURI, err = validateLocalRedirectTarget(redirectURI)
 	if err != nil {
@@ -227,6 +242,7 @@ func (h *LoginHandler) handleAuthenticate(c *gin.Context, req dto.LoginRequest) 
 		return
 	}
 	maxAge := int(time.Until(result.ExpiresAt).Seconds())
+	// session cookie 设置为 HttpOnly，减少前端脚本直接读取会话标识的机会。
 	c.SetCookie("idp_session", result.SessionID, maxAge, "/", "", false, true)
 	recordLoginSuccessAuditEvent(c.Request.Context(), h.auditRepo, c, result.UserID, result.Subject, result.RoleCode, req.Method, redirectURI)
 	log.Printf("login authenticate_succeeded method=%q ip=%s username=%q user_id=%d redirect_uri=%q", req.Method, c.ClientIP(), req.Username, result.UserID, redirectURI)
@@ -251,6 +267,7 @@ func (h *LoginHandler) handleAuthenticate(c *gin.Context, req dto.LoginRequest) 
 }
 
 func buildMFASetupURI(returnTo string) string {
+	// 绑定 MFA 后往往还要回到原始业务页面，所以这里也沿用 return_to 传递上下文。
 	if returnTo == "" {
 		return "/mfa/passkey/setup"
 	}
@@ -258,10 +275,13 @@ func buildMFASetupURI(returnTo string) string {
 }
 
 func shouldProcessLoginGET(req dto.LoginRequest) bool {
+	// GET 只在明显带有上游回调参数时才进入认证流程，
+	// 避免普通打开登录页时误触发认证逻辑。
 	return req.Code != "" || req.State != ""
 }
 
 func localizeLoginError(err error) string {
+	// HTML 页面面向终端用户，所以这里用更友好的文案替代内部错误码。
 	switch {
 	case errors.Is(err, authn.ErrInvalidCredentials):
 		return "Invalid username or password."
@@ -279,6 +299,7 @@ func localizeLoginError(err error) string {
 }
 
 func (h *LoginHandler) writeInvalidReturnTo(c *gin.Context) {
+	// return_to 只允许站内跳转，避免把登录流程变成开放重定向入口。
 	if wantsHTML(c.GetHeader("Accept")) {
 		h.renderLoginPage(c, http.StatusBadRequest, loginPageData{
 			Error:                "Invalid redirect target.",
@@ -290,6 +311,7 @@ func (h *LoginHandler) writeInvalidReturnTo(c *gin.Context) {
 }
 
 func (h *LoginHandler) writeInvalidCSRF(c *gin.Context, req dto.LoginRequest) {
+	// CSRF 失败时尽量保留用户名和 return_to，减少用户重新输入的成本。
 	if wantsHTML(c.GetHeader("Accept")) {
 		h.renderLoginPage(c, http.StatusForbidden, loginPageData{
 			Username:             req.Username,
@@ -303,6 +325,7 @@ func (h *LoginHandler) writeInvalidCSRF(c *gin.Context, req dto.LoginRequest) {
 }
 
 func (h *LoginHandler) renderLoginPage(c *gin.Context, status int, data loginPageData) {
+	// 渲染前兜底补一个 CSRF token，确保无论从哪个分支进入页面都能提交表单。
 	if data.CSRFToken == "" {
 		csrfToken, err := ensureCSRFToken(c)
 		if err != nil {

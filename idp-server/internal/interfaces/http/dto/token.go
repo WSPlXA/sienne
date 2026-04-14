@@ -7,6 +7,8 @@ import (
 	pkgoauth2 "idp-server/pkg/oauth2"
 )
 
+// TokenRequest 对应 OAuth2 token endpoint 的统一入参。
+// 不同 grant type 实际只会使用其中一部分字段。
 type TokenRequest struct {
 	GrantType    string `form:"grant_type" json:"grant_type" binding:"required"`
 	Code         string `form:"code" json:"code"`
@@ -22,6 +24,8 @@ type TokenRequest struct {
 }
 
 func (r TokenRequest) Validate() error {
+	// Validate 只做 grant type 级别的必填字段检查；
+	// 更细的协议语义校验仍留给应用层/token service。
 	switch pkgoauth2.GrantType(r.GrantType) {
 	case pkgoauth2.GrantTypeAuthorizationCode:
 		if strings.TrimSpace(r.Code) == "" {
@@ -55,6 +59,7 @@ func (r TokenRequest) Validate() error {
 }
 
 func (r TokenRequest) ScopeList() []string {
+	// scope 在 HTTP 层按空格分隔字符串传输，这里统一拆成切片。
 	if strings.TrimSpace(r.Scope) == "" {
 		return nil
 	}

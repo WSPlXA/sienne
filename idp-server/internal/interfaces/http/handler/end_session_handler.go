@@ -17,6 +17,8 @@ import (
 
 var errInvalidEndSessionRequest = errors.New("invalid end session request")
 
+// EndSessionHandler 实现 OIDC RP-Initiated Logout 的浏览器交互。
+// 它负责展示确认页、校验 post_logout_redirect_uri，并在退出后把用户送回 RP。
 type EndSessionHandler struct {
 	service           appsession.Manager
 	redirectValidator appclient.LogoutRedirectValidator
@@ -35,6 +37,7 @@ func NewEndSessionHandler(service appsession.Manager, redirectValidator appclien
 }
 
 func (h *EndSessionHandler) Get(c *gin.Context) {
+	// GET 阶段只做请求校验和确认页展示，不真正执行登出。
 	req := dto.EndSessionRequest{
 		ClientID:              c.Query("client_id"),
 		PostLogoutRedirectURI: c.Query("post_logout_redirect_uri"),
@@ -78,6 +81,7 @@ func (h *EndSessionHandler) Get(c *gin.Context) {
 }
 
 func (h *EndSessionHandler) Post(c *gin.Context) {
+	// POST 阶段才真正结束本地会话，并按 OIDC 约定带着 state 回跳 RP。
 	var req dto.EndSessionRequest
 	if err := c.ShouldBind(&req); err != nil {
 		log.Printf("end_session bind_failed method=POST ip=%s err=%v", c.ClientIP(), err)
@@ -114,6 +118,7 @@ func (h *EndSessionHandler) Post(c *gin.Context) {
 		}
 	}
 
+	// IdP 本地会话失效后，浏览器 cookie 也立即清除。
 	c.SetCookie("idp_session", "", -1, "/", "", false, true)
 
 	if validatedRedirect != "" {
@@ -134,6 +139,8 @@ func (h *EndSessionHandler) Post(c *gin.Context) {
 }
 
 func (h *EndSessionHandler) validateRedirect(c *gin.Context, req dto.EndSessionRequest) (string, error) {
+	// OIDC end-session 里 post_logout_redirect_uri 不能直接信任用户输入，
+	// 必须结合 client_id 回查该客户端已注册的合法退出回调地址。
 	clientID := strings.TrimSpace(req.ClientID)
 	redirectURI := strings.TrimSpace(req.PostLogoutRedirectURI)
 	state := strings.TrimSpace(req.State)
@@ -162,6 +169,7 @@ func (h *EndSessionHandler) validateRedirect(c *gin.Context, req dto.EndSessionR
 }
 
 func (h *EndSessionHandler) writeRequestError(c *gin.Context, status int, req dto.EndSessionRequest, err error) {
+	// 浏览器拿友好页面，API/脚本调用拿 JSON 错误。
 	if wantsHTML(c.GetHeader("Accept")) {
 		h.renderPage(c, status, endSessionPageData{
 			ClientID:              strings.TrimSpace(req.ClientID),
@@ -175,6 +183,7 @@ func (h *EndSessionHandler) writeRequestError(c *gin.Context, status int, req dt
 }
 
 func (h *EndSessionHandler) renderPage(c *gin.Context, status int, data endSessionPageData) {
+	// 渲染确认页前兜底补一个 CSRF token，确保退出动作必须经由真实表单提交。
 	if data.CSRFToken == "" {
 		csrfToken, err := ensureCSRFToken(c)
 		if err != nil {
@@ -190,6 +199,7 @@ func (h *EndSessionHandler) renderPage(c *gin.Context, status int, data endSessi
 }
 
 func endSessionErrorMessage(err error) string {
+	// 对浏览器暴露的错误文案比内部错误更收敛，避免泄露过多校验细节。
 	switch {
 	case err == nil:
 		return ""
@@ -203,6 +213,7 @@ func endSessionErrorMessage(err error) string {
 }
 
 func buildPostLogoutRedirect(redirectURI, state string) string {
+	// OIDC 允许把 state 原样带回 RP，便于调用方把这次登出请求和本地状态对上。
 	if strings.TrimSpace(state) == "" {
 		return redirectURI
 	}

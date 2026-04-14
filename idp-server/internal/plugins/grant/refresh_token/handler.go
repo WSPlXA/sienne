@@ -30,6 +30,8 @@ func (h *Handler) Type() pluginport.GrantHandlerType {
 }
 
 func (h *Handler) Exchange(ctx context.Context, input pluginport.ExchangeInput) (*pluginport.ExchangeResult, error) {
+	// refresh token handler 与 authorization code handler 结构类似，
+	// 但真正复杂的 replay 检测、轮换和 grace 逻辑都在 token service 里。
 	if h.exchanger == nil {
 		return nil, errors.New("grant handler is not configured")
 	}
@@ -40,15 +42,17 @@ func (h *Handler) Exchange(ctx context.Context, input pluginport.ExchangeInput) 
 		return nil, apptoken.ErrUnsupportedGrantType
 	}
 
+	// ReplayFingerprint 会原样传入下层，用来识别同一客户端的并发重试与真实重放攻击。
 	result, err := h.exchanger.Exchange(ctx, apptoken.ExchangeInput{
-		GrantType:    input.GrantType,
-		ClientID:     input.ClientID,
-		ClientSecret: input.ClientSecret,
-		Code:         input.Code,
-		RedirectURI:  input.RedirectURI,
-		CodeVerifier: input.CodeVerifier,
-		RefreshToken: input.RefreshToken,
-		Scopes:       input.Scopes,
+		GrantType:         input.GrantType,
+		ClientID:          input.ClientID,
+		ClientSecret:      input.ClientSecret,
+		ReplayFingerprint: input.ReplayFingerprint,
+		Code:              input.Code,
+		RedirectURI:       input.RedirectURI,
+		CodeVerifier:      input.CodeVerifier,
+		RefreshToken:      input.RefreshToken,
+		Scopes:            input.Scopes,
 	})
 	if err != nil {
 		return nil, err

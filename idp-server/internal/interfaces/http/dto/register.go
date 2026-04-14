@@ -1,5 +1,6 @@
 package dto
 
+// RegisterRequest 是后台创建本地用户时提交的表单/JSON 输入结构。
 type RegisterRequest struct {
 	Username      string `json:"username" form:"username" binding:"required"`
 	Email         string `json:"email" form:"email" binding:"required"`

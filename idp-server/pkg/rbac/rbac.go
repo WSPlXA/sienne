@@ -1,6 +1,7 @@
 package rbac
 
 const (
+	// 每 4 bit 代表一个权限域，整张权限表被压进一个 uint32 mask。
 	DomainAuth   uint32 = 0xF0000000
 	DomainOAuth  uint32 = 0x0F000000
 	DomainClient uint32 = 0x00F00000
@@ -12,6 +13,7 @@ const (
 )
 
 const (
+	// 每个域内部再按读/执行/管理/特权四个动作切分。
 	ActionRead   uint32 = 0x8
 	ActionExec   uint32 = 0x4
 	ActionManage uint32 = 0x2
@@ -19,6 +21,7 @@ const (
 )
 
 const (
+	// 下面这些常量是“域 + 动作”预先左移后的最终权限位。
 	AuthRead   uint32 = ActionRead << 28
 	AuthExec   uint32 = ActionExec << 28
 	AuthManage uint32 = ActionManage << 28
@@ -61,6 +64,7 @@ const (
 )
 
 const (
+	// 这是系统内置的几个角色代码。
 	RoleEndUser       = "end_user"
 	RoleSupport       = "support"
 	RoleOAuthAdmin    = "oauth_admin"
@@ -69,6 +73,7 @@ const (
 )
 
 const (
+	// 这些是内置角色的默认权限掩码。
 	MaskEndUser       uint32 = 0x00000000
 	MaskAuditor       uint32 = 0x88888888
 	MaskSupport       uint32 = 0xCC8C888C
@@ -78,6 +83,7 @@ const (
 )
 
 func HasAll(mask uint32, required ...uint32) bool {
+	// HasAll 用于判断当前权限是否完整覆盖一组必需权限。
 	for _, permission := range required {
 		if permission == 0 {
 			continue
@@ -90,6 +96,7 @@ func HasAll(mask uint32, required ...uint32) bool {
 }
 
 func HasAny(mask uint32, required ...uint32) bool {
+	// HasAny 用于“命中任一权限即可”的场景。
 	for _, permission := range required {
 		if permission != 0 && mask&permission == permission {
 			return true

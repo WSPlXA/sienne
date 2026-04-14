@@ -14,6 +14,9 @@ type Handler struct {
 	exchanger apptoken.Exchanger
 }
 
+// NewHandler 注册 device_code grant 的插件适配器。
+// 设备授权的轮询、授权状态判断和节流策略都在应用层，这里只承担
+// grant 插件统一入口的胶水职责。
 func NewHandler(exchanger apptoken.Exchanger) *Handler {
 	return &Handler{
 		name:      "device_code",
@@ -29,6 +32,9 @@ func (h *Handler) Type() pluginport.GrantHandlerType {
 	return pkgoauth2.GrantTypeDeviceCode
 }
 
+// Exchange 只接收设备端轮询 token endpoint 时真正需要的 device_code
+// 等字段，并把 grant 类型固定到 device_code，避免插件被错误复用到
+// 其他交换路径。
 func (h *Handler) Exchange(ctx context.Context, input pluginport.ExchangeInput) (*pluginport.ExchangeResult, error) {
 	if h.exchanger == nil {
 		return nil, errors.New("grant handler is not configured")
@@ -41,10 +47,11 @@ func (h *Handler) Exchange(ctx context.Context, input pluginport.ExchangeInput) 
 	}
 
 	result, err := h.exchanger.Exchange(ctx, apptoken.ExchangeInput{
-		GrantType:    input.GrantType,
-		ClientID:     input.ClientID,
-		ClientSecret: input.ClientSecret,
-		DeviceCode:   input.DeviceCode,
+		GrantType:         input.GrantType,
+		ClientID:          input.ClientID,
+		ClientSecret:      input.ClientSecret,
+		ReplayFingerprint: input.ReplayFingerprint,
+		DeviceCode:        input.DeviceCode,
 	})
 	if err != nil {
 		return nil, err

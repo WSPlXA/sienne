@@ -13,6 +13,8 @@ import (
 
 var jwtEncoding = base64.RawURLEncoding
 
+// Signer 封装了最基础的 JWT 签名与验签逻辑。
+// 这里不负责 claim 语义校验，只处理 JWS 格式拼装和 RSA 签名正确性。
 type Signer struct {
 	keys *KeyManager
 }
@@ -29,6 +31,7 @@ func NewSigner(keys *KeyManager) *Signer {
 }
 
 func (s *Signer) SignJWT(claims map[string]any) (string, error) {
+	// 签名始终使用当前 active key，对外表现为“最新 kid”。
 	if s.keys == nil {
 		return "", fmt.Errorf("key manager is required")
 	}
@@ -47,6 +50,8 @@ func (s *Signer) SignJWT(claims map[string]any) (string, error) {
 		"kid": meta.KID,
 	}
 
+	// JWT 的签名对象是 base64url(header) + "." + base64url(claims)，
+	// 这里严格按 JWS 紧凑序列化格式拼装 signing input。
 	headerJSON, err := json.Marshal(header)
 	if err != nil {
 		return "", fmt.Errorf("marshal jwt header: %w", err)
@@ -68,6 +73,8 @@ func (s *Signer) SignJWT(claims map[string]any) (string, error) {
 }
 
 func (s *Signer) VerifyJWT(token string) (*verifiedToken, error) {
+	// 验签流程先拆 token，再根据 header.kid 找到对应公钥，
+	// 这样即使系统已经轮换到新 key，历史 token 仍可被旧公钥验证。
 	if s.keys == nil {
 		return nil, fmt.Errorf("key manager is required")
 	}
@@ -110,6 +117,7 @@ func (s *Signer) VerifyJWT(token string) (*verifiedToken, error) {
 		return nil, err
 	}
 	if meta.Alg != alg {
+		// kid 找到了但算法声明不一致时直接拒绝，防止算法降级或元数据错配。
 		return nil, fmt.Errorf("jwt alg mismatch for kid %q", kid)
 	}
 

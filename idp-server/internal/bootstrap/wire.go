@@ -46,69 +46,63 @@ import (
 	cacheport "idp-server/internal/ports/cache"
 )
 
-// Wire设置应用程序的依赖关系并返回一个App实例。它加载配置，初始化数据库和缓存连接，创建存储库和服务，并构建HTTP路由器。
+// App 是启动阶段产出的顶层运行对象。
+// 当前只暴露 Router，因为这个二进制的唯一职责是提供 HTTP 服务；
+// 如果未来需要优雅停机、后台任务或健康探针对象，也可以继续在这里扩展。
 type App struct {
 	Router http.Handler
 }
 
-// 本方法挂载在App结构体上，负责设置应用程序的依赖关系并返回一个App实例。它加载配置，初始化数据库和缓存连接，创建存储库和服务，并构建HTTP路由器。
+// Wire 把“配置 -> 基础设施 -> 仓储 -> 应用服务 -> HTTP 接口”这条依赖链一次性串起来。
+// 这个函数是整个进程的 Composition Root：只有这里知道具体实现类型，
+// 其余层只依赖接口或更窄的抽象，便于测试和后续替换实现。
 func Wire() (*App, error) {
-	// 加载配置从环境变量中获取应用程序的配置参数。如果某些必需的配置项缺失或无效，函数将返回错误。
+	// 第一步先收敛配置，避免后续初始化过程中夹杂大量环境变量读取逻辑。
 	cfg, err := loadConfigFromEnv()
-	// 如果加载配置失败，返回错误。
 	if err != nil {
 		return nil, err
 	}
-	// 创建一个带有超时的上下文，用于后续的数据库和缓存连接初始化。
-	// 入参context.Background()表示从根上下文开始，5*time.Second表示设置超时时间为5秒。defer cancel()确保在函数返回时取消上下文，释放相关资源。
+
+	// 初始化数据库、Redis、密钥管理器等外部依赖时统一套一个短超时，
+	// 防止启动阶段因为下游不可用而无限阻塞。
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	//首先是db，它是通过调用storage.NewMySQL函数创建的，该函数接受上下文和MySQL数据源名称（DSN）作为参数。如果连接数据库失败，函数将返回错误。
 	db, err := storage.NewMySQL(ctx, cfg.MySQLDSN)
 	if err != nil {
 		return nil, err
 	}
 
-	// 接下来是redisClient，它是通过调用storage.NewRedis函数创建的，该函数接受上下文、Redis地址、密码和数据库索引作为参数。如果连接Redis失败，函数将关闭之前打开的数据库连接并返回错误。
 	redisClient, err := storage.NewRedis(ctx, cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
 	if err != nil {
 		_ = db.Close()
 		return nil, err
 	}
 
-	// 创建存储库和服务实例。这里创建了多个存储库实例，如userRepo、sessionRepo、clientRepo等，以及多个服务实例，如authzService、consentService、authnService等。这些实例将用于处理应用程序的业务逻辑。
+	// 从这里开始进入依赖装配阶段：
+	// persistence.* 负责落库，cacheRedis.* 负责短生命周期状态，
+	// application service 则把多个仓储/缓存拼成一个完整用例。
 	keyBuilder := cacheRedis.NewKeyBuilder(cfg.RedisKeyPrefix, cfg.AppEnv)
-	// userRepo是一个用户存储库实例，用于与数据库交互以管理用户数据。
 	userRepo := persistence.NewUserRepository(db)
 	auditEventRepo := persistence.NewAuditEventRepository(db)
 	operatorRoleRepo := persistence.NewOperatorRoleRepository(db)
-	// sessionRepo是一个会话存储库实例，用于与数据库交互以管理会话数据。!【重要】
 	sessionRepo := persistence.NewSessionRepository(db)
-	// clientRepo是一个客户端存储库实例，用于与数据库交互以管理客户端数据。
 	clientRepo := persistence.NewClientRepository(db)
-	// authCodeRepo是一个授权码存储库实例，用于与数据库交互以管理授权码数据。
 	authCodeRepo := persistence.NewAuthorizationCodeRepository(db)
-	// consentRepo是一个consent存储库实例，用于与数据库交互以管理consent数据。
 	consentRepo := persistence.NewConsentRepository(db)
-	// jwkRepo是一个jwk存储库实例，用于与数据库交互以管理jwk数据。
 	jwkRepo := persistence.NewJWKKeyRepository(db)
-	// tokenRepo是一个token存储库实例，用于与数据库交互以管理token数据。
 	tokenRepo := persistence.NewTokenRepository(db)
-	// secretCodec是一个用于加密和解密TOTP秘密的编解码器实例。它使用配置中的TOTPSecretEncryptionKey进行初始化。如果初始化失败，函数将关闭之前打开的数据库和Redis连接并返回错误。
-	// 为什么初始化失败要关闭数据库和Redis连接？因为如果编解码器无法正确初始化，应用程序可能无法安全地处理TOTP秘密，这可能会导致安全风险。因此，在这种情况下，最好关闭数据库和Redis连接以防止潜在的安全问题。
+
+	// TOTP 密钥会持久化到数据库，因此这里先建立密钥编解码器，
+	// 保证后续仓储操作拿到的永远是“可安全解密”的实现。
 	secretCodec, err := infrasecurity.NewSecretCodec(cfg.TOTPSecretEncryptionKey)
 	if err != nil {
 		_ = db.Close()
 		_ = redisClient.Close()
 		return nil, fmt.Errorf("init totp secret codec: %w", err)
 	}
-	// 创建更多的存储库实例，如totpRepo、sessionCache、tokenCache等，这些存储库将用于管理TOTP数据、会话缓存、令牌缓存等。
-	// repositories代表应用程序中与数据存储相关的组件，负责与数据库或缓存系统交互以存储和检索数据。这些存储库实例将被服务层使用，以实现应用程序的业务逻辑。
-	// cacheRepositories代表应用程序中与缓存相关的组件，负责与缓存系统（如Redis）交互以存储和检索数据。这些缓存存储库实例将被服务层使用，以提高应用程序的性能和响应速度。
 	totpRepo := persistence.NewTOTPRepository(db, secretCodec)
 	passkeyRepo := persistence.NewPasskeyCredentialRepository(db)
-	// 比如sessionCache是一个会话缓存存储库实例，用于与Redis交互以管理会话缓存数据。它使用redisClient和keyBuilder进行初始化。
 	sessionCache := cacheRedis.NewSessionCacheRepository(redisClient, keyBuilder)
 	tokenCache := cacheRedis.NewTokenCacheRepository(redisClient, keyBuilder)
 	deviceCodeRepo := cacheRedis.NewDeviceCodeRepository(redisClient, keyBuilder)
@@ -122,12 +116,16 @@ func Wire() (*App, error) {
 	registerService := appregister.NewService(userRepo, passwordVerifier, rateLimitRepo)
 	clientService := appclient.NewService(clientRepo, passwordVerifier)
 	federatedOIDCProvider := buildFederatedOIDCProvider(cfg, replayProtectionRepo)
+
+	// 认证方式和 grant type 都通过 registry 扩展。
+	// Wire 在这里决定启用哪些插件，业务层只关心“按类型查找并执行”。
 	authnRegistry := pluginregistry.NewAuthnRegistry(
 		authnpassword.NewMethod(userRepo, passwordVerifier),
 		authnfederatedoidc.NewMethod(federatedOIDCProvider),
 	)
-	// 上述都是在应用程序中使用的服务实例，这些服务实例封装了应用程序的业务逻辑，并使用存储库和缓存存储库来管理数据。它们将被HTTP处理程序使用，以处理来自客户端的请求并生成响应。
-	// 例如，authnService是一个认证服务实例，用于处理用户认证相关的业务逻辑。它使用userRepo、sessionRepo、sessionCache、rateLimitRepo、mfaCache、authnRegistry、totpRepo、totpProvider等组件进行初始化，并配置了会话TTL、登录失败窗口、强制MFA注册等参数。
+
+	// authnService 是登录链路的核心编排器：
+	// 它协调密码校验、失败限流、账户锁定、MFA 挑战和最终会话创建。
 	authnService := authn.NewService(userRepo, sessionRepo, sessionCache, rateLimitRepo, mfaCache, authnRegistry, totpRepo, totpProvider, cfg.SessionTTL, 5*time.Minute, cfg.ForceMFAEnrollment, authn.RateLimitPolicy{
 		FailureWindow:      cfg.LoginFailureWindow,
 		MaxFailuresPerIP:   int64(cfg.LoginMaxFailuresPerIP),
@@ -137,6 +135,8 @@ func Wire() (*App, error) {
 	})
 	var passkeyProvider *infrasecurity.PasskeyProvider
 	if cfg.PasskeyEnabled {
+		// Passkey 对 RP 配置非常敏感，启动阶段就完成校验，
+		// 比等到请求进来才报错更容易定位环境配置问题。
 		rpID, rpDisplayName, rpOrigins, err := resolvePasskeyRPConfig(cfg)
 		if err != nil {
 			_ = db.Close()
@@ -167,6 +167,9 @@ func Wire() (*App, error) {
 		RetireAfter:   cfg.SigningKeyRetireAfter,
 		KIDPrefix:     "kid",
 	}
+
+	// 优先使用持久化密钥管理器，保证 JWKS 能稳定对外发布；
+	// 只有在持久化初始化失败时才回退到进程内临时密钥，方便开发环境快速启动。
 	keyManager, err := infracrypto.EnsureKeyManager(ctx, jwkRepo, rotationConfig)
 	if err != nil {
 		keyManager, err = infracrypto.NewGeneratedRSAKeyManager(cfg.JWTKeyID, cfg.SigningKeyBits)
@@ -220,6 +223,8 @@ func Wire() (*App, error) {
 		}, nil
 	})
 
+	// 最后一层才把所有 service 暴露给 HTTP router。
+	// 这样 handler 层保持“输入输出转换器”的角色，不直接感知底层实现细节。
 	return &App{
 		Router: interfacehttp.NewRouter(authzService, consentService, registerService, registerService, registerService, userRepo, clientService, clientService, clientService, clientService, authnService, federatedOIDCProvider != nil, sessionService, rbacService, keysService, auditEventRepo, clientAuthenticator, grantRegistry, deviceService, mfaService, passkeyService, oidcService, authMiddleware, adminMiddleware),
 	}, nil

@@ -39,6 +39,8 @@ type ManualRotateResult struct {
 }
 
 func EnsureKeyManager(ctx context.Context, repo rotationRepository, cfg RotationConfig) (*KeyManager, error) {
+	// EnsureKeyManager 先确保“至少有一把可用 active key”，
+	// 再把数据库里的当前密钥集加载进内存 KeyManager。
 	if err := ensureRotation(ctx, repo, cfg); err != nil {
 		return nil, err
 	}
@@ -46,6 +48,8 @@ func EnsureKeyManager(ctx context.Context, repo rotationRepository, cfg Rotation
 }
 
 func StartRotationLoop(repo rotationRepository, manager *KeyManager, cfg RotationConfig) {
+	// 自动轮换通过后台 ticker 定期检查，
+	// 轮换成功后再把新的 key 集原子刷新到内存 manager。
 	if repo == nil || manager == nil || cfg.CheckInterval <= 0 {
 		return
 	}
@@ -67,6 +71,7 @@ func StartRotationLoop(repo rotationRepository, manager *KeyManager, cfg Rotatio
 }
 
 func ensureRotation(ctx context.Context, repo rotationRepository, cfg RotationConfig) error {
+	// 非强制模式下只在即将到达轮换窗口时才生成新 key。
 	_, err := rotateKey(ctx, repo, cfg, false)
 	return err
 }
@@ -80,6 +85,8 @@ func RotateSigningKeyNow(
 	manager *KeyManager,
 	cfg RotationConfig,
 ) (*ManualRotateResult, error) {
+	// 手动轮换用于后台管理操作：
+	// 无论当前是否临近轮换窗口，都强制生成并切换新 key。
 	if repo == nil {
 		return nil, fmt.Errorf("rotation repository is required")
 	}
@@ -119,6 +126,7 @@ func RotateSigningKeyNow(
 }
 
 func rotateKey(ctx context.Context, repo rotationRepository, cfg RotationConfig, force bool) (bool, error) {
+	// rotateKey 决定“是否需要轮换”以及“如何生成并持久化新 key”。
 	if repo == nil {
 		return false, fmt.Errorf("rotation repository is required")
 	}
@@ -142,10 +150,12 @@ func rotateKey(ctx context.Context, repo rotationRepository, cfg RotationConfig,
 
 	now := time.Now().UTC()
 	active := findActiveKey(records)
+	// 非强制模式下，如果当前 active key 的 rotates_at 还远在 RotateBefore 窗口之外，就不做事。
 	if !force && active != nil && active.RotatesAt != nil && active.RotatesAt.After(now.Add(cfg.RotateBefore)) {
 		return false, nil
 	}
 	if !force && active != nil && active.RotatesAt == nil {
+		// 没有计划轮换时间的 active key 被视作长期有效，不自动替换。
 		return false, nil
 	}
 
@@ -174,7 +184,8 @@ func rotateKey(ctx context.Context, repo rotationRepository, cfg RotationConfig,
 		PrivateKeyRef: privateKeyRef,
 		IsActive:      true,
 		CreatedAt:     now,
-		RotatesAt:     ptrTime(now.Add(90 * 24 * time.Hour)),
+		// 当前实现给新 key 一个固定的未来轮换时间，后台循环会据此判断下一次轮换窗口。
+		RotatesAt: ptrTime(now.Add(90 * 24 * time.Hour)),
 	}
 
 	if err := repo.CreateActiveKey(ctx, record, now.Add(cfg.RetireAfter)); err != nil {
@@ -184,6 +195,7 @@ func rotateKey(ctx context.Context, repo rotationRepository, cfg RotationConfig,
 }
 
 func findActiveKey(records []persistence.JWKKeyRecord) *persistence.JWKKeyRecord {
+	// 仓储层保证同一时刻只有一把 active key；这里取第一把即可。
 	for i := range records {
 		if records[i].IsActive {
 			return &records[i]
@@ -193,6 +205,7 @@ func findActiveKey(records []persistence.JWKKeyRecord) *persistence.JWKKeyRecord
 }
 
 func writePrivateKey(cfg RotationConfig, kid string, privateKey *rsa.PrivateKey) (string, error) {
+	// 私钥文件落盘到受限目录，并返回可持久化引用给数据库记录。
 	dir := strings.TrimSpace(cfg.StorageDir)
 	if dir == "" {
 		dir = "scripts/dev_keys"
@@ -215,6 +228,7 @@ func writePrivateKey(cfg RotationConfig, kid string, privateKey *rsa.PrivateKey)
 		return "", fmt.Errorf("write private key: %w", err)
 	}
 
+	// 尽量保存相对工作目录的引用，减少环境迁移时的绝对路径耦合。
 	relative, err := filepath.Rel(cfg.WorkingDir, path)
 	if err != nil {
 		return "file://" + path, nil
@@ -223,6 +237,7 @@ func writePrivateKey(cfg RotationConfig, kid string, privateKey *rsa.PrivateKey)
 }
 
 func buildPublicJWKJSON(kid string, publicKey *rsa.PublicKey, alg, use string) (string, error) {
+	// public JWK 直接持久化为 JSON，方便 discovery/JWKS 端点原样对外发布。
 	jwk := JSONWebKey{
 		Kty: "RSA",
 		Kid: kid,

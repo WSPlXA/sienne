@@ -36,6 +36,9 @@ type IntrospectionProvider interface {
 	Introspect(ctx context.Context, input IntrospectionInput) (*IntrospectionOutput, error)
 }
 
+// Service 提供 OIDC 相关的对外能力：
+// userinfo、discovery、JWKS 以及 token introspection。
+// 它本身不签发 token，而是站在“消费/验证 token”的角度对外暴露标准端点。
 type Service struct {
 	users        repository.UserRepository
 	accessTokens repository.TokenRepository
@@ -65,6 +68,8 @@ func NewService(users repository.UserRepository, accessTokens repository.TokenRe
 }
 
 func (s *Service) GetUserInfo(ctx context.Context, input UserInfoInput) (*UserInfoOutput, error) {
+	// userinfo 先验证 access token，再根据 sub 反查本地用户资料。
+	// 这样返回的数据始终以服务端当前状态为准，而不是完全依赖 token 内快照。
 	if strings.TrimSpace(input.AccessToken) == "" {
 		return nil, ErrInvalidAccessToken
 	}
@@ -100,6 +105,8 @@ func (s *Service) GetUserInfo(ctx context.Context, input UserInfoInput) (*UserIn
 
 func (s *Service) Discovery(ctx context.Context) (*DiscoveryDocument, error) {
 	_ = ctx
+	// Discovery 文档把当前服务支持的 OIDC/OAuth 能力一次性声明出来，
+	// 方便客户端自动发现端点和支持的认证方式。
 	base := strings.TrimRight(s.issuer, "/")
 	return &DiscoveryDocument{
 		Issuer:                                    base,
@@ -122,6 +129,8 @@ func (s *Service) Discovery(ctx context.Context) (*DiscoveryDocument, error) {
 
 func (s *Service) JWKS(ctx context.Context) (*JSONWebKeySet, error) {
 	_ = ctx
+	// 如果没有注入密钥提供方，返回空集合而不是报错，
+	// 这样开发环境或部分测试场景也能保持接口形态稳定。
 	if s.keys == nil {
 		return &JSONWebKeySet{}, nil
 	}
@@ -129,6 +138,11 @@ func (s *Service) JWKS(ctx context.Context) (*JSONWebKeySet, error) {
 }
 
 func (s *Service) Introspect(ctx context.Context, input IntrospectionInput) (*IntrospectionOutput, error) {
+	// introspection 的目标不是“重新签名验证一次就算有效”，
+	// 而是同时确认：
+	// 1. token 格式和签名有效；
+	// 2. token 未被撤销；
+	// 3. token 确实是本服务曾经签发并仍处于活动状态的 access token。
 	token := strings.TrimSpace(input.AccessToken)
 	if token == "" {
 		return &IntrospectionOutput{Active: false}, nil
@@ -136,6 +150,7 @@ func (s *Service) Introspect(ctx context.Context, input IntrospectionInput) (*In
 
 	tokenSHA256 := sha256Hex(token)
 	if s.tokenCache != nil {
+		// 先查撤销缓存，可以在不命中数据库的情况下快速否定已失效 token。
 		revoked, err := s.tokenCache.IsAccessTokenRevoked(ctx, tokenSHA256)
 		if err != nil {
 			return nil, err
@@ -151,6 +166,8 @@ func (s *Service) Introspect(ctx context.Context, input IntrospectionInput) (*In
 	if err != nil {
 		return &IntrospectionOutput{Active: false}, nil
 	}
+	// 只信任“签名正确且在本地有发行记录”的 token。
+	// 这一步可以拦住外部系统伪造的、但恰好使用相同签名规则的 JWT。
 	if !s.isServerIssuedAccessToken(ctx, tokenSHA256) {
 		return &IntrospectionOutput{Active: false}, nil
 	}
@@ -184,6 +201,8 @@ func (s *Service) Introspect(ctx context.Context, input IntrospectionInput) (*In
 }
 
 func (s *Service) isServerIssuedAccessToken(ctx context.Context, tokenSHA256 string) bool {
+	// 先走缓存命中，再回退数据库。
+	// 这是 introspection 高频路径上的一个典型“冷热分层”读取。
 	if s.tokenCache != nil {
 		entry, err := s.tokenCache.GetAccessToken(ctx, tokenSHA256)
 		if err == nil && entry != nil {
@@ -198,6 +217,7 @@ func (s *Service) isServerIssuedAccessToken(ctx context.Context, tokenSHA256 str
 }
 
 func stringClaim(value any) string {
+	// claim 解码来自 JWT，类型可能不完全可靠，这里统一做安全转换。
 	result, _ := value.(string)
 	return strings.TrimSpace(result)
 }
@@ -216,6 +236,8 @@ func int64Claim(value any) int64 {
 }
 
 func claimStringSlice(value any) []string {
+	// aud / scp 这类 claim 可能被编码成 string、[]string 或 []any，
+	// 这里统一整理成 []string 供上层使用。
 	switch v := value.(type) {
 	case string:
 		if strings.TrimSpace(v) == "" {

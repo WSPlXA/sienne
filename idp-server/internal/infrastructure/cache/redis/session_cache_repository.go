@@ -16,6 +16,8 @@ type SessionCacheRepository struct {
 }
 
 func NewSessionCacheRepository(rdb *goredis.Client, key *KeyBuilder) *SessionCacheRepository {
+	// session cache 用脚本同时维护两类数据：
+	// 单个 session 的哈希记录，以及 user -> sessionIDs 的反向索引集合。
 	scripts, err := loadScripts()
 	if err != nil {
 		panic(err)
@@ -29,6 +31,8 @@ func NewSessionCacheRepository(rdb *goredis.Client, key *KeyBuilder) *SessionCac
 }
 
 func (r *SessionCacheRepository) Save(ctx context.Context, entry cacheport.SessionCacheEntry, ttl time.Duration) error {
+	// Save 把 session 正文和用户索引一起写入 Redis，
+	// 这样既能按 sessionID 取会话，也能在“全端登出”时按用户枚举会话。
 	_, err := runScript(
 		ctx,
 		r.scripts.saveSession,
@@ -53,6 +57,7 @@ func (r *SessionCacheRepository) Save(ctx context.Context, entry cacheport.Sessi
 }
 
 func (r *SessionCacheRepository) Get(ctx context.Context, sessionID string) (*cacheport.SessionCacheEntry, error) {
+	// 缓存里的时间统一用 RFC3339 字符串保存，便于 Lua/Go 双端稳定读写。
 	key := r.key.Session(sessionID)
 
 	res, err := r.rdb.HGetAll(ctx, key).Result()
@@ -81,6 +86,8 @@ func (r *SessionCacheRepository) Get(ctx context.Context, sessionID string) (*ca
 }
 
 func (r *SessionCacheRepository) Delete(ctx context.Context, sessionID string) error {
+	// 删除时优先读出 user_id，是为了把对应的用户索引集合也一起清掉，
+	// 避免留下“索引还在但 session 实际已失效”的悬挂条目。
 	entry, err := r.Get(ctx, sessionID)
 	if err != nil || entry == nil {
 		if err != nil {
@@ -103,6 +110,7 @@ func (r *SessionCacheRepository) Delete(ctx context.Context, sessionID string) e
 }
 
 func (r *SessionCacheRepository) AddUserSessionIndex(ctx context.Context, userID string, sessionID string, ttl time.Duration) error {
+	// 单独暴露索引操作，方便少数只需要修补索引、不需要重写整个 session 的场景。
 	key := r.key.UserSessionIndex(userID)
 
 	pipe := r.rdb.TxPipeline()
@@ -113,9 +121,11 @@ func (r *SessionCacheRepository) AddUserSessionIndex(ctx context.Context, userID
 }
 
 func (r *SessionCacheRepository) ListUserSessionIDs(ctx context.Context, userID string) ([]string, error) {
+	// 这里直接返回集合成员，由上层负责去重和进一步过滤。
 	return r.rdb.SMembers(ctx, r.key.UserSessionIndex(userID)).Result()
 }
 
 func (r *SessionCacheRepository) RemoveUserSessionIndex(ctx context.Context, userID string, sessionID string) error {
+	// 索引移除是幂等的，session 已不在集合中时也不会报错。
 	return r.rdb.SRem(ctx, r.key.UserSessionIndex(userID), sessionID).Err()
 }

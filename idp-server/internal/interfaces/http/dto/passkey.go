@@ -1,5 +1,6 @@
 package dto
 
+// PasskeySetupRequest 是 Passkey/WebAuthn 绑定页的 begin/finish 请求体。
 type PasskeySetupRequest struct {
 	Action       string `json:"action" form:"action"`
 	SetupID      string `json:"setup_id" form:"setup_id"`

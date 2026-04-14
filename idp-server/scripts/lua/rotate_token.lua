@@ -1,20 +1,16 @@
--- Rotate refresh token atomically:
--- 1) validate old token state
--- 2) mark old token revoked + rotated_to
--- 3) persist revoke marker for old token
--- 4) create new token hash
--- 5) update optional user/client index sets
+-- Rotate refresh token atomically with a short grace-period replay cache.
 --
 -- KEYS:
 --   KEYS[1] = old refresh token hash key
 --   KEYS[2] = new refresh token hash key
---   KEYS[3] = old token revoke marker key
---   KEYS[4] = optional user refresh-token set key
---   KEYS[5] = optional client refresh-token set key
+--   KEYS[3] = old token grace response key
+--   KEYS[4] = refresh token family revoked key prefix
+--   KEYS[5] = optional user refresh-token set key
+--   KEYS[6] = optional client refresh-token set key
 --
 -- ARGV:
---   ARGV[1]  = old token id/reference (stored in rotated_from)
---   ARGV[2]  = new token id/reference (stored in rotated_to and set members)
+--   ARGV[1]  = old token sha
+--   ARGV[2]  = new token sha
 --   ARGV[3]  = client_id
 --   ARGV[4]  = user_id
 --   ARGV[5]  = subject
@@ -22,40 +18,60 @@
 --   ARGV[7]  = issued_at
 --   ARGV[8]  = expires_at
 --   ARGV[9]  = new token TTL (seconds)
---   ARGV[10] = old revoke marker TTL (seconds)
+--   ARGV[10] = grace TTL (seconds)
+--   ARGV[11] = now unix ts
+--   ARGV[12] = replay fingerprint
+--   ARGV[13] = response json
 --
 -- Return:
---   -1 -> old token does not exist
---   -2 -> old token already revoked or already rotated
---    1 -> rotate success
+--   1 -> rotate success
+--  -1 -> old token missing
+--  -2 -> old token already rotated/revoked
+--  -3 -> token family already revoked
 if redis.call("EXISTS", KEYS[1]) == 0 then
     return -1
 end
 
--- Reject replay rotation: old token can only be rotated once.
-local old_revoked = redis.call("HGET", KEYS[1], "revoked")
-local rotated_to = redis.call("HGET", KEYS[1], "rotated_to")
-if old_revoked == "1" or (rotated_to and rotated_to ~= "") then
+local status = redis.call("HGET", KEYS[1], "status")
+if not status or status == "" then
+    local revoked = redis.call("HGET", KEYS[1], "revoked")
+    local rotated_to = redis.call("HGET", KEYS[1], "rotated_to")
+    if revoked == "1" then
+        status = "revoked"
+    elseif rotated_to and rotated_to ~= "" then
+        status = "rotated"
+    else
+        status = "active"
+    end
+end
+
+if status ~= "active" then
     return -2
 end
 
 local new_ttl = tonumber(ARGV[9]) or 0
-local old_revoke_ttl = tonumber(ARGV[10]) or 0
+local grace_ttl = tonumber(ARGV[10]) or 0
+local now_ts = tonumber(ARGV[11]) or 0
+local grace_until = now_ts + grace_ttl
+local family_id = redis.call("HGET", KEYS[1], "family_id")
+if not family_id or family_id == "" then
+    family_id = ARGV[1]
+end
+local family_key = KEYS[4] .. family_id
 
--- Mark old token as revoked and link it to the new token.
-redis.call("HSET", KEYS[1],
-    "revoked", "1",
-    "rotated_to", ARGV[2]
-)
-
--- Write explicit deny marker for old token.
-if old_revoke_ttl > 0 then
-    redis.call("SET", KEYS[3], "1", "EX", old_revoke_ttl)
-else
-    redis.call("SET", KEYS[3], "1")
+if redis.call("EXISTS", family_key) == 1 then
+    return -3
 end
 
--- Materialize new token hash payload.
+redis.call("HSET", KEYS[1],
+    "status", "rotated",
+    "rotated_to", ARGV[2],
+    "rotated_at", tostring(now_ts),
+    "grace_until", tostring(grace_until),
+    "bind_fp", ARGV[12],
+    "family_id", family_id
+)
+
 redis.call("HSET", KEYS[2],
     "client_id", ARGV[3],
     "user_id", ARGV[4],
@@ -63,36 +79,42 @@ redis.call("HSET", KEYS[2],
     "scopes_json", ARGV[6],
     "issued_at", ARGV[7],
     "expires_at", ARGV[8],
+    "status", "active",
     "revoked", "0",
+    "family_id", family_id,
     "rotated_from", ARGV[1],
-    "rotated_to", ""
+    "rotated_to", "",
+    "rotated_at", "",
+    "grace_until", "",
+    "bind_fp", ""
 )
 
--- Optional expiration for new token hash.
 if new_ttl > 0 then
     redis.call("EXPIRE", KEYS[2], new_ttl)
 end
 
-if KEYS[4] ~= "" then
-    -- Keep user-level refresh index in sync.
-    redis.call("SADD", KEYS[4], "refresh:" .. ARGV[2])
+if grace_ttl > 0 then
+    redis.call("SET", KEYS[3], ARGV[13], "EX", grace_ttl)
+else
+    redis.call("SET", KEYS[3], ARGV[13])
+end
+
+if KEYS[5] ~= "" then
+    redis.call("SADD", KEYS[5], "refresh:" .. ARGV[2])
     if new_ttl > 0 then
-        -- Extend set TTL when shorter than token TTL; never shrink valid windows.
-        local user_set_ttl = redis.call("TTL", KEYS[4])
+        local user_set_ttl = redis.call("TTL", KEYS[5])
         if user_set_ttl < 0 or user_set_ttl < new_ttl then
-            redis.call("EXPIRE", KEYS[4], new_ttl)
+            redis.call("EXPIRE", KEYS[5], new_ttl)
         end
     end
 end
 
-if KEYS[5] ~= "" then
-    -- Keep client-level refresh index in sync.
-    redis.call("SADD", KEYS[5], "refresh:" .. ARGV[2])
+if KEYS[6] ~= "" then
+    redis.call("SADD", KEYS[6], "refresh:" .. ARGV[2])
     if new_ttl > 0 then
-        -- Same TTL extension strategy as user set.
-        local client_set_ttl = redis.call("TTL", KEYS[5])
+        local client_set_ttl = redis.call("TTL", KEYS[6])
         if client_set_ttl < 0 or client_set_ttl < new_ttl then
-            redis.call("EXPIRE", KEYS[5], new_ttl)
+            redis.call("EXPIRE", KEYS[6], new_ttl)
         end
     end
 end

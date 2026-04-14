@@ -22,6 +22,7 @@ func NewAdminUserLogoutHandler(service appsession.Manager, audit repository.Audi
 }
 
 func (h *AdminUserLogoutHandler) Handle(c *gin.Context) {
+	// 这是后台运营入口：管理员可以强制让某个用户的所有会话和 token 立即失效。
 	var req dto.LogoutRequest
 	if err := c.ShouldBind(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid logout request"})
@@ -46,6 +47,7 @@ func (h *AdminUserLogoutHandler) Handle(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "logout user failed"})
 		return
 	}
+	// 管理动作会额外写审计事件，便于追溯是谁在什么时候强制下线了目标用户。
 	recordAdminAuditEvent(c.Request.Context(), h.audit, currentAdminAuditContext(c), "auth.user.logout_all.admin", "user:"+result.UserID, map[string]any{
 		"target_user_id":         result.UserID,
 		"revoked_session_count":  result.RevokedSessionCount,

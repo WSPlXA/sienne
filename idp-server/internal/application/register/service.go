@@ -30,6 +30,8 @@ type AccountUnlocker interface {
 	AdminUnlockUser(ctx context.Context, input AdminUnlockUserInput) (*AdminUnlockUserResult, error)
 }
 
+// Service 负责用户注册以及少量管理员账号维护动作。
+// 它把用户名/邮箱/密码规则、唯一性校验和密码哈希收敛在一起。
 type Service struct {
 	users     repository.UserRepository
 	passwords securityport.PasswordVerifier
@@ -53,6 +55,10 @@ func NewService(users repository.UserRepository, passwords securityport.Password
 }
 
 func (s *Service) Register(ctx context.Context, input RegisterInput) (*RegisterResult, error) {
+	// 注册流程分三步：
+	// 1. 校验输入格式和密码强度；
+	// 2. 校验用户名/邮箱唯一性；
+	// 3. 生成密码哈希并创建用户。
 	username := strings.TrimSpace(input.Username)
 	email := strings.ToLower(strings.TrimSpace(input.Email))
 	displayName := strings.TrimSpace(input.DisplayName)
@@ -95,6 +101,7 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (*RegisterR
 	now := s.now()
 	status := "pending_verification"
 	if input.AutoActivate {
+		// 某些后台场景允许直接创建 active 用户，跳过邮箱验证阶段。
 		status = "active"
 	}
 	model := &userdomain.Model{
@@ -135,6 +142,8 @@ type userAccountUnlocker interface {
 }
 
 func (s *Service) AdminResetPassword(ctx context.Context, input AdminResetPasswordInput) (*AdminResetPasswordResult, error) {
+	// 管理员重置密码不会直接改动登录状态；
+	// 是否联动强制下线由更上层运维动作决定。
 	if input.UserID <= 0 {
 		return nil, ErrUserNotFound
 	}
@@ -173,6 +182,7 @@ func (s *Service) AdminResetPassword(ctx context.Context, input AdminResetPasswo
 }
 
 func (s *Service) AdminUnlockUser(ctx context.Context, input AdminUnlockUserInput) (*AdminUnlockUserResult, error) {
+	// 解锁账号除了更新数据库状态，也会顺手清掉限流/锁定缓存。
 	if input.UserID <= 0 {
 		return nil, ErrUserNotFound
 	}
@@ -206,6 +216,7 @@ func (s *Service) AdminUnlockUser(ctx context.Context, input AdminUnlockUserInpu
 }
 
 func isValidEmail(email string) bool {
+	// 这里只做格式层面的轻量校验，不做邮箱存在性探测。
 	if len(email) > 255 {
 		return false
 	}
@@ -214,6 +225,7 @@ func isValidEmail(email string) bool {
 }
 
 func isStrongEnoughPassword(password string) bool {
+	// 当前密码策略比较基础：长度 + 至少一个字母和一个数字。
 	password = strings.TrimSpace(password)
 	if len(password) < 8 || len(password) > 128 {
 		return false

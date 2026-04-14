@@ -266,7 +266,9 @@ JWT 的优点：
 
 - refresh token 必须绑定 client
 - 校验 revoked / expired / active
-- 支持 rotation，旧 token 被替换后立即失效
+- 支持 rotation
+- 不是简单“旧 token 立刻物理消失”，而是加入短暂 grace period
+- 在弱网重试场景下返回第一次成功刷新得到的同一份 token response
 
 ### 8.3 `client_credentials`
 
@@ -382,6 +384,32 @@ sequenceDiagram
     I->>M: 轮转 refresh token
     I->>R: 原子撤销旧 token 并标记新 token
     I-->>C: access_token + new_refresh_token
+  end
+```
+
+### 9.2.1 Refresh Token Rotation + Grace Period
+
+```mermaid
+sequenceDiagram
+  participant C as Client
+  participant I as IdP
+  participant R as Redis
+  participant M as MySQL
+
+  C->>I: POST /oauth2/token(grant_type=refresh_token, old_refresh_token)
+  I->>I: 计算 replay fingerprint
+  I->>R: 检查 old token 是否处于 rotated + grace 状态
+  alt 命中 10 秒宽限期且 fingerprint 一致
+    R-->>I: 返回第一次成功刷新缓存的 token response
+    I-->>C: 直接返回同一份 access_token + refresh_token
+  else 宽限期内 fingerprint 不一致
+    I->>R: 标记 token family revoked
+    I-->>C: invalid_grant
+  else 不在 grace，继续正常刷新
+    I->>M: 查 active refresh token
+    I->>M: 事务轮转 old -> new
+    I->>R: Lua 原子写 rotated_to / grace_until / grace response
+    I-->>C: 第一次成功返回新 token 对
   end
 ```
 
@@ -719,8 +747,102 @@ Session-based CSRF：
 ### 13.4 Refresh Token
 
 - rotation
-- 旧 token 被替换后立即撤销
-- 并发重复使用会落入失败路径
+- 旧 token 被替换后进入短暂 grace period，而不是立刻完全不可识别
+- 10 秒内同一 fingerprint 的合法重试会返回第一次成功刷新得到的同一份 token response
+- 10 秒外重放，或宽限期内 fingerprint 不一致，会被识别为 replay 并失败
+
+### 13.4.1 为什么要加 Grace Period
+
+因为真实客户端并不总是工作在理想网络下。
+
+如果第一次刷新实际上已经成功了，但客户端在弱网、超时、连接复用异常的情况下没收到响应，就会自然重试。  
+如果服务端把“旧 refresh token 只要被消费过一次就立刻统一打成 invalid_grant”，会出现两个问题：
+
+- 合法客户端被自己重试打死
+- 用户看到的是随机失效，而不是平滑续期
+
+所以更贴近 Auth0 / Okta 这类业界实践的方案是：
+
+- 第一次成功刷新后，旧 token 进入很短的 grace period
+- 宽限期内不再派生第二个 child token
+- 如果请求来源与第一次刷新一致，就返回第一次成功的那一份结果
+- 如果来源不一致，则视为可疑 replay
+
+### 13.4.2 当前实现怎么做
+
+我把这件事拆成了三层：
+
+- MySQL：持久化 refresh token 事实记录和 rotation 链
+- Redis：保存 `rotated` 热状态、`grace response`、family revoke 标记
+- Lua：原子判断和写入 grace 相关状态
+
+Redis 侧大致有三类 key：
+
+- `token:refresh:sha256:<sha>`
+- `token:refresh:grace:<old_sha>`
+- `token:refresh:family:revoked:<family_id>`
+
+旧 token 第一次成功刷新后，会被写成：
+
+- `status=rotated`
+- `rotated_to=<new_sha>`
+- `grace_until=<now+10s>`
+- `bind_fp=<replay_fingerprint>`
+- `family_id=<family_id>`
+
+同时 Redis 会缓存第一次成功刷新返回的 token response，TTL 约 10 秒。
+
+### 13.4.3 replay fingerprint 是什么
+
+为了区分“合法弱网重试”和“真正的盗用重放”，我在 token endpoint 会计算一个短指纹：
+
+- `client_id`
+- client auth method
+- client IP
+- user agent
+
+当前它不是最终形态的 sender-constrained token 方案，但已经能把“同一客户端的幂等重试”和“不同来源的重放”区分开。
+
+如果继续往生产级推进，下一步会升级成：
+
+- mTLS 证书指纹
+- 或 DPoP `jkt`
+
+### 13.4.4 Lua 脚本是怎么判断的
+
+现在 refresh rotation 不是单一脚本直接“一把梭”完成，而是拆成两段：
+
+1. `check_refresh_replay.lua`
+   - 先看旧 token 是否已经处于 `rotated + grace` 状态
+   - 如果命中 grace 且 fingerprint 一致，直接返回缓存 response
+   - 如果 fingerprint 不一致，或 grace 已经过期还重放，就标记 family revoke
+
+2. `rotate_token.lua`
+   - 首次消费时把旧 token 从 `active` 切到 `rotated`
+   - 写入 `grace_until`
+   - 写入第一次成功刷新得到的 response 缓存
+   - 保存新 token hash 状态
+
+这样做好处是：
+
+- 合法重试可幂等
+- 恶意 replay 可识别
+- 旧 token 不会在宽限期内继续派生第二份 child token
+
+### 13.4.5 为什么还要改数据库事务
+
+光有 Redis 不够，因为并发下可能出现：
+
+- 两个请求几乎同时读到同一个 active refresh token
+- 都准备插入新的 child token
+
+所以我在 MySQL 的 `RotateRefreshToken` 事务里也补了检查：
+
+- old token 已被 revoke
+- 或已经有 `replaced_by_token_id`
+- 或已经过期
+
+这种情况下事务会直接失败，然后上层回退去检查 grace replay，而不是再长出第二个 child token。
 
 ### 13.5 TOTP
 
@@ -969,6 +1091,51 @@ Session-based CSRF：
 
 - 防止 refresh token 泄漏后长期复用
 - 一旦旧 token 被再次使用，可以识别为异常路径
+
+### 20.7.1 为什么不是“旧 refresh token 立刻直接报废”
+
+如果只做最朴素的 rotation，旧 refresh token 一旦第一次成功消费，后续再来统一返回 `invalid_grant`。  
+这在理想网络里没问题，但真实场景下会误伤弱网客户端。
+
+所以更合理的做法是：
+
+- 第一次刷新成功后保留一个极短 grace period
+- 10 秒内同一客户端的幂等重试，直接返回第一次成功的那一份 token response
+- 不再次签发新的 refresh token
+
+这样既能平滑处理重试，又不会放大 token fan-out。
+
+### 20.7.2 如何区分“合法重试”和“黑客重放”
+
+不能只看“是不是 10 秒内”，还要看请求来源约束。
+
+我现在的做法是计算一个 replay fingerprint，至少绑定：
+
+- `client_id`
+- client auth method
+- IP
+- user agent
+
+判断规则是：
+
+- 宽限期内 + fingerprint 一致：返回第一次成功刷新结果
+- 宽限期内 + fingerprint 不一致：视为可疑 replay
+- 宽限期结束后再次使用旧 token：视为 replay
+
+### 20.7.3 replay 发生后怎么处理
+
+对于真正可疑的 refresh token replay，不能只返回一次 `invalid_grant` 就算了，更合理的是：
+
+- 直接让当前旧 token 失败
+- 标记该 refresh token family 为 revoked
+- 后续同 family 链路继续请求时一并拒绝
+- 记录安全审计事件
+
+这比“只撤销当前这一个旧 token”更稳，因为真正的盗用往往意味着整条 family 都不可信了。
+
+### 20.7.4 面试推荐标准回答
+
+> 我对 refresh token 不是只做了最基础的 rotation，而是补成了带 grace period 的生产化方案。第一次成功刷新后，旧 token 不会再继续派生新的 child token，但会进入大约 10 秒的宽限期；如果客户端因为弱网超时重试，并且 replay fingerprint 与第一次请求一致，服务端会直接返回第一次成功刷新得到的同一份 token response。反过来，如果宽限期内 fingerprint 不一致，或者宽限期结束后仍重放旧 token，我会把它判定为 replay，并进一步撤销整个 token family。这样既兼顾了安全性，也兼顾了真实客户端的幂等重试体验。
 
 ### 20.8 为什么 MFA 先 challenge，再发 session
 

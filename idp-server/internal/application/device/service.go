@@ -45,6 +45,8 @@ func NewService(
 }
 
 func (s *Service) Start(ctx context.Context, input StartInput) (*StartResult, error) {
+	// Start 是 OAuth 2.0 Device Authorization Grant 的起点：
+	// 为受限输入设备生成 device_code / user_code，并把待授权状态写入缓存。
 	client, err := s.clients.FindByClientID(ctx, strings.TrimSpace(input.ClientID))
 	if err != nil {
 		return nil, err
@@ -55,6 +57,7 @@ func (s *Service) Start(ctx context.Context, input StartInput) (*StartResult, er
 
 	scopes := normalizeScopes(input.Scopes)
 	if len(scopes) == 0 {
+		// 设备流未显式传 scope 时，默认给客户端允许的全部 scope。
 		scopes = append([]string(nil), client.Scopes...)
 	}
 	if !allContained(scopes, client.Scopes) {
@@ -71,6 +74,7 @@ func (s *Service) Start(ctx context.Context, input StartInput) (*StartResult, er
 	}
 	scopeJSON, _ := json.Marshal(scopes)
 	expiresAt := s.now().Add(s.deviceTTL)
+	// device_code 给轮询 token 端点使用，user_code 给用户在浏览器里手动输入确认。
 	if err := s.deviceCodes.Save(ctx, cacheport.DeviceCodeEntry{
 		DeviceCode: deviceCode,
 		UserCode:   userCode,
@@ -94,6 +98,7 @@ func (s *Service) Start(ctx context.Context, input StartInput) (*StartResult, er
 }
 
 func (s *Service) Prepare(ctx context.Context, input PrepareInput) (*PrepareResult, error) {
+	// Prepare 用于浏览器确认页展示，把 user_code 映射回 client 和 scope 信息。
 	entry, _, _, err := s.loadContext(ctx, input.SessionID, input.UserCode)
 	if err != nil {
 		return nil, err
@@ -109,6 +114,8 @@ func (s *Service) Prepare(ctx context.Context, input PrepareInput) (*PrepareResu
 }
 
 func (s *Service) Decide(ctx context.Context, input DecideInput) (*DecideResult, error) {
+	// Decide 由用户在浏览器里明确批准或拒绝，
+	// 结果会回写到 device code 记录，供设备轮询消费。
 	action := strings.ToLower(strings.TrimSpace(input.Action))
 	if action != "approve" && action != "deny" {
 		return nil, ErrInvalidAction
@@ -119,6 +126,7 @@ func (s *Service) Decide(ctx context.Context, input DecideInput) (*DecideResult,
 		return nil, err
 	}
 	if action == "deny" {
+		// 拒绝时不需要绑定用户身份，直接把状态记为 denied。
 		if err := s.deviceCodes.Deny(ctx, entry.UserCode, s.now()); err != nil {
 			return nil, err
 		}
@@ -132,6 +140,7 @@ func (s *Service) Decide(ctx context.Context, input DecideInput) (*DecideResult,
 }
 
 func (s *Service) loadContext(ctx context.Context, sessionID string, userCode string) (*cacheport.DeviceCodeEntry, int64, string, error) {
+	// 设备确认页既要验证 user_code 仍然有效，也要确认当前浏览器里确实有登录态。
 	userCode = strings.ToUpper(strings.TrimSpace(userCode))
 	if userCode == "" {
 		return nil, 0, "", ErrInvalidUserCode
@@ -152,6 +161,7 @@ func (s *Service) loadContext(ctx context.Context, sessionID string, userCode st
 	}
 
 	if s.sessionCache != nil {
+		// 会话缓存命中时可以避免每次确认页加载都打数据库。
 		cacheEntry, err := s.sessionCache.Get(ctx, sessionID)
 		if err != nil {
 			return nil, 0, "", err
@@ -175,6 +185,7 @@ func (s *Service) loadContext(ctx context.Context, sessionID string, userCode st
 }
 
 func decodeScopes(raw string) []string {
+	// scope 在缓存里按 JSON 数组保存，这里给展示层解码成人类可读切片。
 	if strings.TrimSpace(raw) == "" {
 		return nil
 	}
@@ -186,6 +197,7 @@ func decodeScopes(raw string) []string {
 }
 
 func normalizeScopes(scopes []string) []string {
+	// 与 authorize 流一致，去空、去重并保留输入顺序。
 	seen := make(map[string]struct{}, len(scopes))
 	result := make([]string, 0, len(scopes))
 	for _, scope := range scopes {
@@ -229,6 +241,7 @@ func allContained(values, allowed []string) bool {
 }
 
 func randomToken(length int) (string, error) {
+	// device_code 使用较长随机串，核心目标是高熵和不可猜测。
 	buf := make([]byte, length)
 	if _, err := rand.Read(buf); err != nil {
 		return "", err
@@ -242,6 +255,7 @@ func randomToken(length int) (string, error) {
 }
 
 func randomUserCode() (string, error) {
+	// user_code 面向人工输入，字符集刻意去掉易混淆字符（如 0/O、1/I）。
 	buf := make([]byte, 8)
 	if _, err := rand.Read(buf); err != nil {
 		return "", err

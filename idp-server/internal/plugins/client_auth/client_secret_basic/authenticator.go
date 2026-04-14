@@ -28,6 +28,8 @@ func (a *Authenticator) Type() pluginport.ClientAuthMethodType {
 
 func (a *Authenticator) Authenticate(ctx context.Context, input pluginport.ClientAuthenticateInput) (*pluginport.ClientAuthenticateResult, error) {
 	_ = ctx
+	// client_secret_basic 只接受 Authorization: Basic 头，
+	// 并明确拒绝同时在 body 中重复提交 client_id / client_secret。
 	if input.Client == nil || a.passwords == nil {
 		return nil, apptoken.ErrInvalidClient
 	}
@@ -48,6 +50,8 @@ func (a *Authenticator) Authenticate(ctx context.Context, input pluginport.Clien
 		return nil, apptoken.ErrInvalidClient
 	}
 
+	// Basic 头中的 client_id 必须与服务端已加载的 client 完全一致，
+	// 然后再使用统一的 PasswordVerifier 校验 secret 哈希。
 	clientID := strings.TrimSpace(parts[0])
 	clientSecret := parts[1]
 	if clientID == "" || clientID != input.Client.ClientID {

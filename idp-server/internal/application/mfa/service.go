@@ -56,6 +56,9 @@ func NewService(
 }
 
 func (s *Service) BeginSetup(ctx context.Context, sessionID string) (*SetupResult, error) {
+	// BeginSetup 面向“已登录用户为自己绑定 TOTP”的场景。
+	// 它不会立刻落库，而是先生成 secret 和 provisioning URI，
+	// 再把待确认的 enrollment 暂存在缓存里，等用户提交一次有效 TOTP 后才真正启用。
 	authCtx, err := s.loadUser(ctx, sessionID)
 	if err != nil {
 		return nil, err
@@ -65,6 +68,7 @@ func (s *Service) BeginSetup(ctx context.Context, sessionID string) (*SetupResul
 		return nil, err
 	}
 	if existing != nil {
+		// 已经启用过 TOTP 时直接返回，不重复生成新 secret。
 		return &SetupResult{AlreadyEnabled: true}, nil
 	}
 	secret, err := s.totp.GenerateSecret()
@@ -81,6 +85,8 @@ func (s *Service) BeginSetup(ctx context.Context, sessionID string) (*SetupResul
 		ttl = 10 * time.Minute
 	}
 	now := s.now().UTC()
+	// enrollment 以 sessionID 作为临时索引，绑定当前登录会话，
+	// 防止别的会话或用户误用这次待确认的 secret。
 	if err := s.mfaCache.SaveTOTPEnrollment(ctx, cacheport.TOTPEnrollmentEntry{
 		SessionID:       strings.TrimSpace(sessionID),
 		UserID:          strconv.FormatInt(authCtx.UserID, 10),
@@ -97,6 +103,7 @@ func (s *Service) BeginSetup(ctx context.Context, sessionID string) (*SetupResul
 }
 
 func (s *Service) ConfirmSetup(ctx context.Context, sessionID string, code string, returnTo string) (*ConfirmResult, error) {
+	// ConfirmSetup 只有在用户用新 secret 成功打出一个 TOTP 后，才会真正启用 2FA。
 	authCtx, err := s.loadUser(ctx, sessionID)
 	if err != nil {
 		return nil, err
@@ -119,6 +126,8 @@ func (s *Service) ConfirmSetup(ctx context.Context, sessionID string, code strin
 	if !ok {
 		return nil, ErrInvalidTOTPCode
 	}
+	// 启用 2FA 时同样做 step 级别的重放保护，
+	// 避免同一个时间窗里的验证码被重复消费。
 	reserved, err := s.mfaCache.ReserveTOTPStepUse(ctx, strconv.FormatInt(authCtx.UserID, 10), cacheport.TOTPPurposeEnable2FA, matchedStep, totpStepReplayTTL)
 	if err != nil {
 		return nil, err
@@ -141,9 +150,12 @@ func (s *Service) ConfirmSetup(ctx context.Context, sessionID string, code strin
 
 	returnTo = strings.TrimSpace(returnTo)
 	if returnTo == "" {
+		// 纯设置场景到这里就结束，不强制再走一次登录挑战。
 		return &ConfirmResult{Enabled: true}, nil
 	}
 
+	// 如果绑定动作是从“登录后必须补齐 MFA”流程进入的，
+	// 那么启用完成后会立刻生成一个新的登录挑战，并让用户用刚刚绑定的 TOTP 再验证一次。
 	challengeID, err := s.createLoginChallenge(ctx, authCtx, returnTo, now)
 	if err != nil {
 		return nil, err
@@ -162,6 +174,7 @@ func (s *Service) ConfirmSetup(ctx context.Context, sessionID string, code strin
 }
 
 func (s *Service) createLoginChallenge(ctx context.Context, authCtx mfaAuthContext, returnTo string, now time.Time) (string, error) {
+	// 这里复用登录 MFA challenge 结构，把“刚绑定完成，需要再次验证”也纳入同一条 TOTP 登录链路。
 	challengeID := uuid.NewString()
 	err := s.mfaCache.SaveMFAChallenge(ctx, cacheport.MFAChallengeEntry{
 		ChallengeID: challengeID,
@@ -181,6 +194,7 @@ func (s *Service) createLoginChallenge(ctx context.Context, authCtx mfaAuthConte
 }
 
 func (s *Service) invalidateCurrentSession(ctx context.Context, authCtx mfaAuthContext, now time.Time) error {
+	// 绑定完成后主动使当前 session 失效，避免用户在“尚未完成第二要素验证”的旧会话里继续停留。
 	if authCtx.SessionID == "" {
 		return nil
 	}
@@ -201,6 +215,8 @@ func (s *Service) invalidateCurrentSession(ctx context.Context, authCtx mfaAuthC
 }
 
 func (s *Service) loadUser(ctx context.Context, sessionID string) (mfaAuthContext, error) {
+	// 优先从 session cache 读取，命中失败再回退数据库；
+	// 这是绑定页面和确认接口的高频读取路径。
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
 		return mfaAuthContext{}, ErrLoginRequired

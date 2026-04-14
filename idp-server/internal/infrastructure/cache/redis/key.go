@@ -54,6 +54,14 @@ func (k *KeyBuilder) RevokedRefreshToken(tokenSHA256 string) string {
 	return fmt.Sprintf("%s:%s:revoked:refresh:%s", k.Prefix, k.Env, tokenSHA256)
 }
 
+func (k *KeyBuilder) RefreshTokenGrace(tokenSHA256 string) string {
+	return fmt.Sprintf("%s:%s:token:refresh:grace:%s", k.Prefix, k.Env, tokenSHA256)
+}
+
+func (k *KeyBuilder) RefreshTokenFamilyRevoked(familyID string) string {
+	return fmt.Sprintf("%s:%s:token:refresh:family:revoked:%s", k.Prefix, k.Env, familyID)
+}
+
 func (k *KeyBuilder) LoginFailUser(username string) string {
 	return fmt.Sprintf("%s:%s:loginfail:user:%s", k.Prefix, k.Env, username)
 }

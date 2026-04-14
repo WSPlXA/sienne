@@ -5,9 +5,9 @@ import (
 	"idp-server/internal/application/authz"
 	appauthz "idp-server/internal/application/authz"
 	"idp-server/internal/interfaces/http/dto"
+	pkgoauth2 "idp-server/pkg/oauth2"
 	"net/http"
 	"net/url"
-	pkgoauth2 "idp-server/pkg/oauth2"
 )
 
 type AuthorizationHandler struct {
@@ -21,6 +21,8 @@ func NewAuthorizationHandler(authzService authz.Service) *AuthorizationHandler {
 }
 
 func (h *AuthorizationHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// authorize handler 负责把浏览器请求翻译成应用层命令，
+	// 再根据 Authorize 的结果决定跳去登录、跳去 consent，还是直接回调 client。
 	ctx := r.Context()
 	req := dto.AuthorizeRequest{
 		ResponseType:        r.URL.Query().Get("response_type"),
@@ -35,6 +37,7 @@ func (h *AuthorizationHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 
 	sessionID := ""
 	if cookie, err := r.Cookie("idp_session"); err == nil {
+		// /oauth2/authorize 依赖浏览器已有的登录会话 cookie 来判断用户身份。
 		sessionID = cookie.Value
 	}
 
@@ -56,10 +59,12 @@ func (h *AuthorizationHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if result.RequireConsent {
+		// 把当前 authorize 请求原样带进 return_to，保证 consent 完成后能回到原始请求。
 		http.Redirect(w, r, withReturnTo(result.ConsentRedirectURI, r.URL.RequestURI()), http.StatusFound)
 		return
 	}
 	if result.RequireLogin {
+		// 未登录时同样保留原始请求，登录成功后继续走授权流程而不是回首页。
 		http.Redirect(w, r, withReturnTo(result.LoginRedirectURI, r.URL.RequestURI()), http.StatusFound)
 		return
 	}
@@ -72,6 +77,7 @@ func (h *AuthorizationHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 
 }
 func buildAuthorizeSuccessRedirect(redirectURI, code, state string) (string, error) {
+	// 授权成功时按 OAuth2 规范把 code/state 放回 redirect_uri 的查询参数里。
 	u, err := url.Parse(redirectURI)
 	if err != nil {
 		return "", err
@@ -91,6 +97,8 @@ func (h *AuthorizationHandler) writeAuthorizeError(
 	cmd *appauthz.AuthorizationCommand,
 	err error,
 ) {
+	// 这里把领域错误映射成 OAuth2 标准错误码，
+	// 方便客户端 SDK 依据规范处理失败场景。
 	oauthErr := pkgoauth2.Error{
 		Code:        "invalid_request",
 		Description: err.Error(),
@@ -110,6 +118,8 @@ func (h *AuthorizationHandler) writeAuthorizeError(
 	}
 
 	if cmd != nil && cmd.RedirectURI != "" {
+		// 只要 redirect_uri 看起来可用，就优先把错误重定向给 client，
+		// 这符合 authorization endpoint 的常见交互方式。
 		redirectURL, buildErr := buildAuthorizeErrorRedirect(cmd.RedirectURI, oauthErr, cmd.State)
 		if buildErr == nil {
 			http.Redirect(w, r, redirectURL, http.StatusFound)
@@ -121,6 +131,7 @@ func (h *AuthorizationHandler) writeAuthorizeError(
 }
 
 func buildAuthorizeErrorRedirect(redirectURI string, oauthErr pkgoauth2.Error, state string) (string, error) {
+	// 授权失败也要保留 state，避免前端无法把这次错误和原始请求对上。
 	u, err := url.Parse(redirectURI)
 	if err != nil {
 		return "", err
@@ -139,6 +150,7 @@ func buildAuthorizeErrorRedirect(redirectURI string, oauthErr pkgoauth2.Error, s
 }
 
 func withReturnTo(loginURI, returnTo string) string {
+	// return_to 是浏览器侧流程衔接的关键：登录/同意页完成后靠它回跳原请求。
 	u, err := url.Parse(loginURI)
 	if err != nil {
 		return loginURI

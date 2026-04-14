@@ -37,6 +37,8 @@ func NewTOTPSetupHandler(service appmfa.Manager) *TOTPSetupHandler {
 }
 
 func (h *TOTPSetupHandler) Handle(c *gin.Context) {
+	// TOTP setup 页对应绑定流程的两步：
+	// GET 生成 secret/二维码，POST 用用户输入的首个验证码确认启用。
 	sessionID, _ := c.Cookie("idp_session")
 	returnTo, err := validateLocalRedirectTarget(strings.TrimSpace(c.Query("return_to")))
 	if err != nil {
@@ -54,6 +56,7 @@ func (h *TOTPSetupHandler) Handle(c *gin.Context) {
 			return
 		}
 		if result.AlreadyEnabled && returnTo != "" {
+			// 已经绑定过时不重复展示二维码，直接回到来源页面。
 			c.Redirect(http.StatusFound, returnTo)
 			return
 		}
@@ -67,6 +70,7 @@ func (h *TOTPSetupHandler) Handle(c *gin.Context) {
 		return
 	}
 
+	// POST 分支真正提交验证码，并可能把流程接回登录 MFA 挑战页。
 	var req dto.TOTPSetupRequest
 	if err := c.ShouldBind(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid totp setup request"})
@@ -94,6 +98,8 @@ func (h *TOTPSetupHandler) Handle(c *gin.Context) {
 		return
 	}
 	if result.MFAChallengeID != "" {
+		// 这说明本次绑定是从“首次登录必须完成 MFA”流程里进入的，
+		// 启用后还要再走一次 TOTP 登录验证。
 		c.SetCookie(mfaChallengeCookieName, result.MFAChallengeID, 300, "/", "", false, true)
 		c.SetCookie("idp_session", "", -1, "/", "", false, true)
 		if wantsHTML(c.GetHeader("Accept")) {
@@ -122,6 +128,7 @@ func (h *TOTPSetupHandler) Handle(c *gin.Context) {
 }
 
 func (h *TOTPSetupHandler) render(c *gin.Context, status int, data totpSetupPageData) {
+	// HTML/JSON 双模输出都共用这一个 render，避免不同响应模式的数据漂移。
 	if token, err := ensureCSRFToken(c); err == nil {
 		data.CSRFToken = token
 	}
@@ -144,6 +151,7 @@ func (h *TOTPSetupHandler) render(c *gin.Context, status int, data totpSetupPage
 }
 
 func (h *TOTPSetupHandler) writeError(c *gin.Context, err error, preserve bool, returnTo string) {
+	// preserve=true 时会重新拉一份 enrollment 数据，方便用户在验证码输错后继续当前二维码。
 	status := http.StatusInternalServerError
 	data := totpSetupPageData{ReturnTo: returnTo}
 	setupPath := "/mfa/totp/setup"
@@ -178,6 +186,7 @@ func (h *TOTPSetupHandler) writeError(c *gin.Context, err error, preserve bool, 
 }
 
 func buildQRCodeURL(provisioningURI string) template.URL {
+	// 直接把 QR PNG 编码成 data URL，避免额外的静态文件或动态图片路由。
 	provisioningURI = strings.TrimSpace(provisioningURI)
 	if provisioningURI == "" {
 		return ""

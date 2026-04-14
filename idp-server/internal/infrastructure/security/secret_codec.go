@@ -12,11 +12,14 @@ import (
 
 const secretEncPrefix = "enc:v1:"
 
+// SecretCodec 用于加密存储类似 TOTP secret 这类敏感短文本。
+// 当前实现基于 AES-GCM，并通过前缀区分新旧存储格式。
 type SecretCodec struct {
 	aead cipher.AEAD
 }
 
 func NewSecretCodec(keyMaterial string) (*SecretCodec, error) {
+	// 初始化阶段就把 key 规范化并构造成 AEAD，后续加解密路径保持尽量简单。
 	key, err := parseSecretKey(strings.TrimSpace(keyMaterial))
 	if err != nil {
 		return nil, err
@@ -33,6 +36,7 @@ func NewSecretCodec(keyMaterial string) (*SecretCodec, error) {
 }
 
 func (c *SecretCodec) Encrypt(plaintext string) (string, error) {
+	// 明文为空时直接返回空，避免数据库里出现“加密过的空串”。
 	plaintext = strings.TrimSpace(plaintext)
 	if plaintext == "" {
 		return "", nil
@@ -50,6 +54,7 @@ func (c *SecretCodec) Encrypt(plaintext string) (string, error) {
 }
 
 func (c *SecretCodec) Decrypt(value string) (string, error) {
+	// 为了兼容历史数据，没有前缀的值会被当作旧版明文直接返回。
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return "", nil
@@ -77,6 +82,10 @@ func (c *SecretCodec) Decrypt(value string) (string, error) {
 }
 
 func parseSecretKey(keyMaterial string) ([]byte, error) {
+	// 支持三种输入形式：
+	// 1. `base64:` 前缀；
+	// 2. 纯 base64；
+	// 3. 原始字节串。
 	if keyMaterial == "" {
 		return nil, fmt.Errorf("empty secret encryption key")
 	}

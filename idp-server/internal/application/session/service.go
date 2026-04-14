@@ -25,6 +25,9 @@ type tokenRevoker interface {
 	RevokeRefreshTokensByUserID(ctx context.Context, userID int64, revokedAt time.Time) error
 }
 
+// Service 负责“退出登录”相关的会话和 token 收尾工作。
+// 它不仅要删除浏览器会话，还要尽量把同一用户的服务端状态一起清理干净，
+// 避免出现页面已退出、API token 仍然可用的割裂状态。
 type Service struct {
 	sessions     repository.SessionRepository
 	sessionCache cache.SessionCacheRepository
@@ -51,6 +54,7 @@ func NewService(
 }
 
 func (s *Service) Logout(ctx context.Context, input LogoutInput) (*LogoutResult, error) {
+	// 单点登出只处理当前 session，不影响同一用户的其他设备或其他 token。
 	sessionID := strings.TrimSpace(input.SessionID)
 	if sessionID == "" {
 		return &LogoutResult{}, nil
@@ -61,6 +65,7 @@ func (s *Service) Logout(ctx context.Context, input LogoutInput) (*LogoutResult,
 		return nil, err
 	}
 	if sessionModel == nil {
+		// 数据库里已经没有这个会话时，仍然顺手删掉缓存，做一次幂等清理。
 		if s.sessionCache != nil {
 			if err := s.sessionCache.Delete(ctx, sessionID); err != nil {
 				return nil, err
@@ -70,6 +75,7 @@ func (s *Service) Logout(ctx context.Context, input LogoutInput) (*LogoutResult,
 	}
 
 	if sessionModel.LoggedOutAt == nil {
+		// 先落库标记退出，再清缓存，保证数据库始终是最终真相来源。
 		if err := s.sessions.LogoutBySessionID(ctx, sessionID, s.now()); err != nil {
 			return nil, err
 		}
@@ -88,6 +94,7 @@ func (s *Service) Logout(ctx context.Context, input LogoutInput) (*LogoutResult,
 }
 
 func (s *Service) LogoutAll(ctx context.Context, input LogoutAllInput) (*LogoutAllResult, error) {
+	// LogoutAll 以当前 session 为入口，找到所属用户后扩散到该用户的所有活跃会话。
 	sessionID := strings.TrimSpace(input.SessionID)
 	if sessionID == "" {
 		return &LogoutAllResult{}, nil
@@ -109,6 +116,7 @@ func (s *Service) LogoutAll(ctx context.Context, input LogoutAllInput) (*LogoutA
 }
 
 func (s *Service) AdminLogoutUser(ctx context.Context, input AdminLogoutUserInput) (*LogoutAllResult, error) {
+	// 管理员强制下线不依赖当前会话，只需要明确目标用户即可。
 	if input.UserID <= 0 {
 		return &LogoutAllResult{}, nil
 	}
@@ -116,6 +124,8 @@ func (s *Service) AdminLogoutUser(ctx context.Context, input AdminLogoutUserInpu
 }
 
 func (s *Service) collectUserSessionIDs(ctx context.Context, userID int64, activeSessions []*sessiondomain.Model) ([]string, error) {
+	// 会话 ID 同时存在于数据库和缓存的索引集合中，
+	// 这里要把两边结果合并去重，尽量做到“清一次就清干净”。
 	seen := make(map[string]struct{})
 	ids := make([]string, 0, len(activeSessions))
 
@@ -156,6 +166,8 @@ func (s *Service) collectUserSessionIDs(ctx context.Context, userID int64, activ
 }
 
 func (s *Service) logoutUser(ctx context.Context, userID int64, sessionID string) (*LogoutAllResult, error) {
+	// 统一的“整用户登出”路径：
+	// 先使所有 session 失效，再清缓存，最后撤销 access/refresh token。
 	now := s.now()
 	activeSessions, err := s.sessions.ListActiveByUserID(ctx, userID)
 	if err != nil {
@@ -194,6 +206,8 @@ func (s *Service) logoutUser(ctx context.Context, userID int64, sessionID string
 }
 
 func (s *Service) revokeUserTokens(ctx context.Context, userID int64, revokedAt time.Time) (int, int, error) {
+	// token 撤销除了更新数据库状态，还要把剩余 TTL 写进缓存黑名单，
+	// 这样中间件可以在 JWT 尚未自然过期前立即拦截它。
 	if s.tokens == nil {
 		return 0, 0, nil
 	}

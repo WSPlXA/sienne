@@ -57,6 +57,9 @@ func NewService(
 }
 
 func (s *Service) BeginSetup(ctx context.Context, sessionID string) (*BeginSetupResult, error) {
+	// BeginSetup 负责发起 WebAuthn 注册：
+	// 读取当前用户、收集已有 credential 作为排除列表，
+	// 生成浏览器侧 options 和服务端 session 数据。
 	if s.passkey == nil || s.passkeys == nil || s.mfaCache == nil {
 		return nil, ErrPasskeyDisabled
 	}
@@ -76,6 +79,8 @@ func (s *Service) BeginSetup(ctx context.Context, sessionID string) (*BeginSetup
 	now := s.now().UTC()
 	setupID := uuid.NewString()
 	expiresAt := now.Add(s.ttl)
+	// WebAuthn 的 registration session 必须在服务端保存，
+	// FinishRegistration 时需要用它来校验 challenge、origin 和 attestation 响应。
 	if err := s.mfaCache.SaveMFAChallenge(ctx, cacheport.MFAChallengeEntry{
 		ChallengeID:        setupID,
 		UserID:             strconv.FormatInt(authUser.ID, 10),
@@ -96,6 +101,8 @@ func (s *Service) BeginSetup(ctx context.Context, sessionID string) (*BeginSetup
 }
 
 func (s *Service) FinishSetup(ctx context.Context, sessionID, setupID string, responseJSON []byte) (*FinishSetupResult, error) {
+	// FinishSetup 消费前一步缓存下来的 registration session，
+	// 并把浏览器返回的 credential 结构序列化后持久化。
 	if s.passkey == nil || s.passkeys == nil || s.mfaCache == nil {
 		return nil, ErrPasskeyDisabled
 	}
@@ -117,6 +124,7 @@ func (s *Service) FinishSetup(ctx context.Context, sessionID, setupID string, re
 	if strings.TrimSpace(challenge.UserID) != strconv.FormatInt(authUser.ID, 10) {
 		return nil, ErrPasskeySetupExpired
 	}
+	// 再次读取现有 credential 列表，避免并发注册时遗漏排除项。
 	existing, err := s.passkeys.ListByUserID(ctx, authUser.ID)
 	if err != nil {
 		return nil, err
@@ -146,6 +154,8 @@ func (s *Service) FinishSetup(ctx context.Context, sessionID, setupID string, re
 }
 
 func (s *Service) loadUser(ctx context.Context, sessionID string) (*repositoryUser, error) {
+	// 和 TOTP setup 一样，优先走缓存会话，再回退数据库，
+	// 并且只接受仍处于 active 且未过期的登录态。
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
 		return nil, ErrLoginRequired
@@ -204,6 +214,8 @@ type repositoryUser struct {
 }
 
 func toPasskeyUser(user *repositoryUser) securityport.PasskeyUser {
+	// Passkey user handle 优先使用稳定的 UserUUID；
+	// 缺失时才退回数据库 ID，尽量避免将来用户名变化影响 credential 绑定。
 	handle := []byte(strings.TrimSpace(user.UserUUID))
 	if len(handle) == 0 {
 		handle = []byte(strconv.FormatInt(user.ID, 10))
@@ -224,6 +236,8 @@ func toPasskeyUser(user *repositoryUser) securityport.PasskeyUser {
 }
 
 func credentialJSONList(models []*passkeydomain.Model) []string {
+	// WebAuthn 库需要的是已注册 credential 的原始 JSON 列表，
+	// 这里做一次轻量过滤和整理。
 	if len(models) == 0 {
 		return nil
 	}
