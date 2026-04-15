@@ -8,6 +8,8 @@ import (
 
 	auditdomain "idp-server/internal/domain/audit"
 	repositoryport "idp-server/internal/ports/repository"
+
+	"github.com/google/uuid"
 )
 
 type AuditEventRepository struct {
@@ -19,6 +21,10 @@ func NewAuditEventRepository(db *sql.DB) *AuditEventRepository {
 }
 
 func (r *AuditEventRepository) Create(ctx context.Context, model *auditdomain.Model) error {
+	if strings.TrimSpace(model.EventID) == "" {
+		model.EventID = uuid.NewString()
+	}
+
 	var clientID any
 	if model.ClientID != nil && *model.ClientID > 0 {
 		clientID = *model.ClientID
@@ -42,6 +48,7 @@ func (r *AuditEventRepository) Create(ctx context.Context, model *auditdomain.Mo
 	result, err := r.db.ExecContext(
 		ctx,
 		auditEventRepositorySQL.create,
+		strings.TrimSpace(model.EventID),
 		strings.TrimSpace(model.EventType),
 		clientID,
 		userID,
@@ -114,6 +121,7 @@ func (r *AuditEventRepository) List(ctx context.Context, input repositoryport.Li
 	events := make([]*auditdomain.Model, 0, limit)
 	for rows.Next() {
 		var model auditdomain.Model
+		var eventID sql.NullString
 		var clientID sql.NullInt64
 		var userID sql.NullInt64
 		var sessionID sql.NullInt64
@@ -123,6 +131,7 @@ func (r *AuditEventRepository) List(ctx context.Context, input repositoryport.Li
 		var metadata sql.NullString
 		if err := rows.Scan(
 			&model.ID,
+			&eventID,
 			&model.EventType,
 			&clientID,
 			&userID,
@@ -135,6 +144,7 @@ func (r *AuditEventRepository) List(ctx context.Context, input repositoryport.Li
 		); err != nil {
 			return nil, fmt.Errorf("scan audit event: %w", err)
 		}
+		model.EventID = strings.TrimSpace(eventID.String)
 		if clientID.Valid {
 			value := clientID.Int64
 			model.ClientID = &value

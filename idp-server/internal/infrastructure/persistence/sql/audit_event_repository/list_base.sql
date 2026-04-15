@@ -1,5 +1,6 @@
 SELECT
     id,
+    event_id,
     event_type,
     client_id,
     user_id,

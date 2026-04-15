@@ -24,6 +24,7 @@ import (
 	appregister "idp-server/internal/application/register"
 	appsession "idp-server/internal/application/session"
 	apptoken "idp-server/internal/application/token"
+	"idp-server/internal/infrastructure/auditstream"
 	cacheRedis "idp-server/internal/infrastructure/cache/redis"
 	infracrypto "idp-server/internal/infrastructure/crypto"
 	infraexternal "idp-server/internal/infrastructure/external"
@@ -84,7 +85,7 @@ func Wire() (*App, error) {
 	// application service 则把多个仓储/缓存拼成一个完整用例。
 	keyBuilder := cacheRedis.NewKeyBuilder(cfg.RedisKeyPrefix, cfg.AppEnv)
 	userRepo := persistence.NewUserRepository(db)
-	auditEventRepo := persistence.NewAuditEventRepository(db)
+	auditStore := persistence.NewAuditEventRepository(db)
 	operatorRoleRepo := persistence.NewOperatorRoleRepository(db)
 	sessionRepo := persistence.NewSessionRepository(db)
 	clientRepo := persistence.NewClientRepository(db)
@@ -109,6 +110,27 @@ func Wire() (*App, error) {
 	mfaCache := cacheRedis.NewMFARepository(redisClient, keyBuilder)
 	replayProtectionRepo := cacheRedis.NewReplayProtectionRepository(redisClient, keyBuilder)
 	rateLimitRepo := cacheRedis.NewRateLimitRepository(redisClient, keyBuilder)
+	auditProducer := auditstream.NewProducer(redisClient, cfg.AuditStream, cfg.AuditDedupTTL, keyBuilder.AuditEventDedup)
+	auditEventRepo := auditstream.NewAsyncRepository(auditStore, auditProducer, !cfg.AuditAsyncEnabled)
+	if cfg.AuditAsyncEnabled {
+		auditConsumer := auditstream.NewConsumer(redisClient, auditStore, auditstream.ConsumerConfig{
+			Stream:          cfg.AuditStream,
+			DLQStream:       cfg.AuditDLQStream,
+			Group:           cfg.AuditConsumerGroup,
+			Consumer:        cfg.AuditConsumerName,
+			BatchSize:       int64(cfg.AuditBatchSize),
+			BlockTimeout:    cfg.AuditBlockTimeout,
+			ReclaimIdle:     cfg.AuditReclaimIdle,
+			RetryTTL:        cfg.AuditRetryTTL,
+			MaxRetryCount:   int64(cfg.AuditMaxRetryCount),
+			ReclaimInterval: cfg.AuditReclaimInterval,
+		}, keyBuilder.AuditRetryCounter)
+		if err := auditConsumer.Start(context.Background()); err != nil {
+			_ = db.Close()
+			_ = redisClient.Close()
+			return nil, fmt.Errorf("start audit async consumer: %w", err)
+		}
+	}
 	passwordVerifier := infrasecurity.NewPasswordVerifier()
 	totpProvider := infrasecurity.NewTOTPProvider()
 	authzService := authz.NewService(clientRepo, sessionRepo, authCodeRepo, consentRepo, 10*time.Minute)
@@ -238,6 +260,18 @@ type config struct {
 	RedisDB                       int
 	RedisKeyPrefix                string
 	AppEnv                        string
+	AuditAsyncEnabled             bool
+	AuditStream                   string
+	AuditDLQStream                string
+	AuditConsumerGroup            string
+	AuditConsumerName             string
+	AuditBatchSize                int
+	AuditDedupTTL                 time.Duration
+	AuditRetryTTL                 time.Duration
+	AuditBlockTimeout             time.Duration
+	AuditReclaimIdle              time.Duration
+	AuditReclaimInterval          time.Duration
+	AuditMaxRetryCount            int
 	SessionTTL                    time.Duration
 	Issuer                        string
 	TOTPIssuer                    string
@@ -280,6 +314,16 @@ func loadConfigFromEnv() (*config, error) {
 		RedisDB:                       getEnvInt("REDIS_DB", 0),
 		RedisKeyPrefix:                getEnvString("REDIS_KEY_PREFIX", "idp"),
 		AppEnv:                        getEnvString("APP_ENV", "dev"),
+		AuditAsyncEnabled:             getEnvBool("AUDIT_ASYNC_ENABLED", true),
+		AuditConsumerGroup:            getEnvString("AUDIT_CONSUMER_GROUP", "audit-writers"),
+		AuditConsumerName:             getEnvString("AUDIT_CONSUMER_NAME", hostnameOrDefault("idp-server")),
+		AuditBatchSize:                getEnvInt("AUDIT_BATCH_SIZE", 16),
+		AuditDedupTTL:                 getEnvDuration("AUDIT_DEDUP_TTL", 24*time.Hour),
+		AuditRetryTTL:                 getEnvDuration("AUDIT_RETRY_TTL", 24*time.Hour),
+		AuditBlockTimeout:             getEnvDuration("AUDIT_BLOCK_TIMEOUT", 2*time.Second),
+		AuditReclaimIdle:              getEnvDuration("AUDIT_RECLAIM_IDLE", 30*time.Second),
+		AuditReclaimInterval:          getEnvDuration("AUDIT_RECLAIM_INTERVAL", 15*time.Second),
+		AuditMaxRetryCount:            getEnvInt("AUDIT_MAX_RETRY_COUNT", 10),
 		SessionTTL:                    getEnvDuration("SESSION_TTL", 8*time.Hour),
 		Issuer:                        getEnvString("ISSUER", "http://localhost:8080"),
 		TOTPIssuer:                    strings.TrimSpace(os.Getenv("TOTP_ISSUER")),
@@ -319,6 +363,9 @@ func loadConfigFromEnv() (*config, error) {
 	if cfg.RedisAddr == "" {
 		cfg.RedisAddr = buildRedisAddrFromEnv()
 	}
+	keyBuilder := cacheRedis.NewKeyBuilder(cfg.RedisKeyPrefix, cfg.AppEnv)
+	cfg.AuditStream = getEnvString("AUDIT_STREAM", keyBuilder.AuditStream())
+	cfg.AuditDLQStream = getEnvString("AUDIT_DLQ_STREAM", keyBuilder.AuditDLQStream())
 	if cfg.TOTPSecretEncryptionKey == "" {
 		if strings.EqualFold(cfg.AppEnv, "dev") {
 			cfg.TOTPSecretEncryptionKey = "dev_totp_secret_encryption_key!!"
@@ -345,6 +392,18 @@ func getWorkingDir() string {
 		return "."
 	}
 	return wd
+}
+
+func hostnameOrDefault(fallback string) string {
+	host, err := os.Hostname()
+	if err != nil {
+		return fallback
+	}
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return fallback
+	}
+	return host
 }
 
 func buildMySQLDSNFromEnv() string {

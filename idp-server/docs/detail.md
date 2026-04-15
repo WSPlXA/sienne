@@ -3217,3 +3217,78 @@ http://localhost:8080/login/qr/scan?qr_login_id=<opaque_id>&nonce=<opaque_nonce>
 
 - 用已登录手机批准一次新的浏览器登录请求
 - 然后由服务端为浏览器创建一个新的正式 session
+
+---
+
+## 37. WebAuthn (Passkey) 详细实现方案
+
+本项目基于 WebAuthn (Passkey) 标准实现了无密码认证和多因子认证 (MFA) 结合的方案。
+
+### 37.1 核心组件与分层
+
+WebAuthn 的实现遵循了项目的分层架构：
+
+1.  **基础设施层 (`internal/infrastructure/security/passkey.go`)**
+    - 使用 `github.com/go-webauthn/webauthn` 库作为核心引擎。
+    - 实现了 `internal/ports/security/passkey.go` 中定义的 `PasskeyProvider` 接口。
+    - 负责 RP (Relying Party) 配置、凭据验证 (Attestation/Assertion) 以及本地用户模型与库模型的适配。
+
+2.  **应用层 - 注册服务 (`internal/application/passkey/service.go`)**
+    - 处理用户的 Passkey 绑定流程。
+    - `BeginSetup`: 生成 WebAuthn 注册选项 (options)，并将 challenge 存入 MFA Cache (Redis)。
+    - `FinishSetup`: 验证浏览器返回的凭据，并调用 Repository 持久化。
+
+3.  **应用层 - 认证服务 (`internal/application/authn/service.go`)**
+    - 在 `Authenticate` 流程中，如果用户开启了 MFA 且注册了 Passkey，则触发 MFA 状态机。
+    - `BeginMFAPasskey`: 生成 WebAuthn 登录选项。
+    - `VerifyMFAPasskey`: 验证签名，成功后创建正式 Session。
+
+4.  **持久层 (`internal/persistence/passkey_credential_repo_sql.go`)**
+    - 负责 `user_webauthn_credentials` 表的读写。
+
+### 37.2 数据模型
+
+存储在 `user_webauthn_credentials` 表中：
+
+- `id`: 自增主键。
+- `user_id`: 关联用户。
+- `credential_id`: WebAuthn 凭据 ID (唯一)。
+- `public_key`: 凭据公钥 (通常包含在 `credential_json` 中)。
+- `credential_json`: **关键字段**。存储了 `go-webauthn` 的完整凭据记录对象，包含算法、AAGUID、签名计数等。
+- `last_used_at`: 记录最近一次认证成功的时间。
+
+### 37.3 交互逻辑：两阶段提交
+
+无论是注册还是登录，都采用了经典的 `Begin` / `Finish` 两阶段逻辑：
+
+- **阶段一 (Begin)**:
+  - 客户端请求 Challenge。
+  - 服务端生成 Challenge、RP ID、允许的凭据列表等。
+  - 服务端将上下文 (Session) 序列化存入 Redis，TTL 通常为 1-5 分钟。
+- **阶段二 (Finish)**:
+  - 浏览器通过 `navigator.credentials` 获取结果后发回服务端。
+  - 服务端从 Redis 取回上下文。
+  - 服务端调用 `go-webauthn` 校验签名、Challenge 一致性、签名计数防克隆。
+  - 成功后完成后续业务 (保存凭据或创建 Session)。
+
+### 37.4 集成 MFA 状态机
+
+Passkey 在本项目中不仅可以作为独立认证，更多地是作为 MFA 的第二因子：
+
+1.  用户输入密码登录。
+2.  `authn.Service` 检查用户是否需要 MFA。
+3.  如果用户有 Passkey，Service 会在 Redis 中创建一个 `PendingMFA` 状态，模式为 `MFAModePasskeyTOTPFallback`。
+4.  浏览器被引导至 `/login/totp` 页面，展示 WebAuthn 触发按钮。
+5.  用户点击后触发 Passkey 校验，校验通过即视为 MFA 完成。
+
+### 37.5 为什么选择 `go-webauthn` 库
+
+- **合规性**: 完整支持 FIDO2 / WebAuthn L1/L2 规范。
+- **无状态友好**: 凭据对象可以直接序列化为 JSON 存入数据库，验证时只需重新反序列化，非常适合分布式架构。
+- **多平台支持**: 自动处理 iOS/Android/Windows Hello 等不同平台的签名细节。
+
+### 37.6 安全增强点
+
+- **RP ID 绑定**: 严格校验 RP ID，防止跨域劫持。
+- **Challenge 随机性**: 每次请求生成高熵随机 Challenge，且在 Redis 中一次性消费。
+- **签名计数校验**: 每次登录后更新数据库中的计数，如果发现新提交的计数小于旧计数，判定为凭据被克隆，立即拦截。

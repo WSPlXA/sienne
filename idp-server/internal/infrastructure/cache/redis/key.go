@@ -101,3 +101,19 @@ func (k *KeyBuilder) MFAChallenge(challengeID string) string {
 func (k *KeyBuilder) TOTPStepUsed(userID, purpose string, step int64) string {
 	return fmt.Sprintf("%s:%s:mfa:totp:used:%s:%s:%d", k.Prefix, k.Env, userID, purpose, step)
 }
+
+func (k *KeyBuilder) AuditStream() string {
+	return fmt.Sprintf("%s:%s:audit:stream", k.Prefix, k.Env)
+}
+
+func (k *KeyBuilder) AuditDLQStream() string {
+	return fmt.Sprintf("%s:%s:audit:dlq", k.Prefix, k.Env)
+}
+
+func (k *KeyBuilder) AuditEventDedup(eventID string) string {
+	return fmt.Sprintf("%s:%s:audit:dedup:%s", k.Prefix, k.Env, eventID)
+}
+
+func (k *KeyBuilder) AuditRetryCounter(eventID string) string {
+	return fmt.Sprintf("%s:%s:audit:retry:%s", k.Prefix, k.Env, eventID)
+}

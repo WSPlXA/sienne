@@ -399,3 +399,58 @@ sequenceDiagram
         IdP-->>PC: status=rejected / expired
     end
 ```
+
+## 15. WebAuthn (Passkey) 注册流程
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Browser as Browser (WebAuthn API)
+    participant IdP as idp-server
+    participant Redis as Redis (MFA Cache)
+    participant MySQL as MySQL
+
+    Note over Browser, IdP: 用户已登录，访问 /passkey/setup
+    Browser->>IdP: POST /passkey/setup (action=begin)
+    IdP->>IdP: 调用 passkey.Service.BeginSetup
+    IdP->>Redis: 存储 Registration Session (Challenge 等)
+    IdP-->>Browser: 返回 Creation Options (JSON)
+
+    Browser->>Browser: 调用 navigator.credential.create()
+    Browser->>IdP: POST /passkey/setup (action=finish, credential_json)
+    IdP->>IdP: 调用 passkey.Service.FinishSetup
+    IdP->>Redis: 校验并清理 Registration Session
+    IdP->>IdP: 使用 go-webauthn 验证 Attestation
+    IdP->>MySQL: 存储凭据到 user_webauthn_credentials
+    IdP-->>Browser: 注册成功
+```
+
+## 16. WebAuthn (Passkey) 登录流程 (作为 MFA)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Browser as Browser (WebAuthn API)
+    participant IdP as idp-server
+    participant Redis as Redis (MFA Cache)
+    participant MySQL as MySQL
+
+    Note over Browser, IdP: 用户完成第一因子登录 (如密码)
+    IdP->>MySQL: 查询用户已注册的 Passkeys
+    IdP->>Redis: 创建 MFA Challenge (MFAModePasskeyTOTPFallback)
+    IdP-->>Browser: 302 /login/totp (提示使用 Passkey 或 TOTP)
+
+    Browser->>IdP: POST /login/totp (action=passkey_begin)
+    IdP->>IdP: 调用 authn.Service.BeginMFAPasskey
+    IdP->>Redis: 存储 Authentication Session (Challenge 等)
+    IdP-->>Browser: 返回 Request Options (JSON)
+
+    Browser->>Browser: 调用 navigator.credential.get()
+    Browser->>IdP: POST /login/totp (action=passkey_finish, assertion_json)
+    IdP->>IdP: 调用 authn.Service.VerifyMFAPasskey
+    IdP->>Redis: 校验并清理 Authentication Session
+    IdP->>IdP: 使用 go-webauthn 验证 Assertion
+    IdP->>MySQL: 更新凭据最后使用时间
+    IdP->>MySQL: 创建正式 login_session (amr=["pwd", "webauthn"])
+    IdP-->>Browser: 登录成功，重定向回 return_to
+```

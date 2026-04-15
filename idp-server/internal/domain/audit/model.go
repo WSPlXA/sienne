@@ -6,6 +6,7 @@ import "time"
 // 它会把主体、来源、会话和附加元数据一起记录下来，供后台审计台和追责使用。
 type Model struct {
 	ID           int64
+	EventID      string
 	EventType    string
 	ClientID     *int64
 	UserID       *int64
