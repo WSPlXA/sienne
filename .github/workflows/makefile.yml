@@ -1,9 +1,11 @@
-name: Build
+name: CI
 
 on:
   push:
     branches:
       - main
+    tags:
+      - 'v*'
     paths:
       - ".github/workflows/makefile.yml"
       - "idp-server/**"
@@ -19,16 +21,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: build-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  test:
+  lint:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: idp-server
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -39,13 +37,72 @@ jobs:
           go-version-file: idp-server/go.mod
           cache-dependency-path: idp-server/go.sum
 
-      - name: Download dependencies
-        run: go mod download
+      - name: golangci-lint
+        uses: golangci-lint/golangci-lint-action@v6
+        with:
+          version: latest
+          working-directory: idp-server
+
+  vulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: idp-server/go.mod
+          cache-dependency-path: idp-server/go.sum
+
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+        working-directory: idp-server
+
+  wire-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: idp-server/go.mod
+          cache-dependency-path: idp-server/go.sum
+
+      - name: Check wire generation
+        run: |
+          go install github.com/google/wire/cmd/wire@latest
+          wire gen ./internal/bootstrap
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "Wire generated code is out of date. Please run 'wire gen ./internal/bootstrap' and commit the changes."
+            git status --porcelain
+            exit 1
+          fi
+        working-directory: idp-server
+
+  test:
+    needs: [lint, vulncheck, wire-check]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: idp-server/go.mod
+          cache-dependency-path: idp-server/go.sum
 
       - name: Run tests
-        run: go test ./...
+        run: make test
+        working-directory: idp-server
 
   build-binaries:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     needs: test
     runs-on: ubuntu-latest
     strategy:
@@ -61,10 +118,6 @@ jobs:
             output: bin/idp-server.exe
             artifact_name: idp-server-windows-amd64
 
-    defaults:
-      run:
-        working-directory: idp-server
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -75,9 +128,6 @@ jobs:
           go-version-file: idp-server/go.mod
           cache-dependency-path: idp-server/go.sum
 
-      - name: Download dependencies
-        run: go mod download
-
       - name: Build binary
         env:
           CGO_ENABLED: 0
@@ -86,6 +136,7 @@ jobs:
         run: |
           mkdir -p bin
           go build -o ${{ matrix.output }} ./cmd/idp
+        working-directory: idp-server
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
@@ -125,7 +176,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Log in to GHCR
-        if: github.event_name != 'pull_request' && (github.ref_name == github.event.repository.default_branch || startsWith(github.ref, 'refs/tags/'))
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -137,6 +188,8 @@ jobs:
         with:
           context: ./idp-server
           file: ./idp-server/dockerfile.server
-          push: ${{ github.event_name != 'pull_request' && (github.ref_name == github.event.repository.default_branch || startsWith(github.ref, 'refs/tags/')) }}
+          push: ${{ github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
