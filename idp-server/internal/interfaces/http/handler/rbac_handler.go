@@ -191,7 +191,7 @@ func (h *RBACHandler) AssignRole(c *gin.Context) {
 		TenantScope:   req.TenantScope,
 	})
 	if err != nil {
-		status := http.StatusBadRequest
+		var status int
 		switch {
 		case errors.Is(err, apprbac.ErrUserNotFound), errors.Is(err, apprbac.ErrRoleNotFound):
 			status = http.StatusNotFound
@@ -226,7 +226,7 @@ func (h *RBACHandler) AssignRole(c *gin.Context) {
 }
 
 func writeRBACError(c *gin.Context, err error) {
-	status := http.StatusBadRequest
+	var status int
 	switch {
 	case errors.Is(err, apprbac.ErrRoleAlreadyExists):
 		status = http.StatusConflict

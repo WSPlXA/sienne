@@ -164,7 +164,7 @@ func (h *LoginTOTPHandler) handlePasskeyBegin(c *gin.Context, req dto.LoginTOTPR
 		ChallengeID: challengeID,
 	})
 	if err != nil {
-		status := http.StatusBadRequest
+		var status int
 		switch {
 		case errors.Is(err, authn.ErrMFAChallengeExpired):
 			status = http.StatusUnauthorized
@@ -205,7 +205,7 @@ func (h *LoginTOTPHandler) handlePasskeyFinish(c *gin.Context, req dto.LoginTOTP
 		ResponseJSON: []byte(responseJSON),
 	})
 	if err != nil {
-		status := http.StatusBadRequest
+		var status int
 		switch {
 		case errors.Is(err, authn.ErrMFAChallengeExpired):
 			status = http.StatusUnauthorized
@@ -253,7 +253,7 @@ func (h *LoginTOTPHandler) handlePushDecision(c *gin.Context, req dto.LoginTOTPR
 		UserAgent:         c.GetHeader("User-Agent"),
 	})
 	if err != nil {
-		status := http.StatusBadRequest
+		var status int
 		switch {
 		case errors.Is(err, authn.ErrMFAChallengeExpired):
 			status = http.StatusUnauthorized
@@ -290,7 +290,7 @@ func (h *LoginTOTPHandler) writePushStatus(c *gin.Context) {
 		ChallengeID: challengeID,
 	})
 	if err != nil {
-		status := http.StatusUnauthorized
+		var status int
 		if errors.Is(err, authn.ErrMFAChallengeExpired) {
 			c.SetCookie(mfaChallengeCookieName, "", -1, "/", "", false, true)
 			status = http.StatusUnauthorized
