@@ -67,7 +67,7 @@ func (r *UserRepository) ListByRoleCode(ctx context.Context, roleCode string, li
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var users []*user.Model
 	for rows.Next() {

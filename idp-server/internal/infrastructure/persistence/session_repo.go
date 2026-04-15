@@ -57,7 +57,7 @@ func (r *SessionRepository) ListActiveByUserID(ctx context.Context, userID int64
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var sessions []*session.Model
 	for rows.Next() {

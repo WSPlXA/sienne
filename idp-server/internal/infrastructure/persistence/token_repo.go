@@ -106,7 +106,7 @@ func (r *TokenRepository) ListActiveAccessTokensByUserID(ctx context.Context, us
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var tokens []*tokendomain.AccessToken
 	for rows.Next() {
@@ -128,7 +128,7 @@ func (r *TokenRepository) ListActiveRefreshTokensByUserID(ctx context.Context, u
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var tokens []*tokendomain.RefreshToken
 	for rows.Next() {

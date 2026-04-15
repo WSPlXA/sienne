@@ -23,7 +23,7 @@ func (r *OperatorRoleRepository) Upsert(ctx context.Context, model *operatorrole
 		operatorRoleRepositorySQL.upsert,
 		model.RoleCode,
 		model.DisplayName,
-		model.Description,
+		model.Descriptionf,
 		model.PrivilegeMask,
 		model.IsSystem,
 	)
@@ -89,7 +89,7 @@ func (r *OperatorRoleRepository) List(ctx context.Context) ([]*operatorroledomai
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var roles []*operatorroledomain.Model
 	for rows.Next() {
