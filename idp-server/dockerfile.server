@@ -19,6 +19,7 @@ RUN apt-get update \
 
 COPY --from=builder /out/idp-server /app/idp-server
 COPY scripts /app/scripts
+COPY config /app/config
 
 EXPOSE 8080
 

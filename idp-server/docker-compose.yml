@@ -51,23 +51,9 @@ services:
     image: idp-server
     container_name: idp-server
     restart: unless-stopped
-    environment:
-      MYSQL_HOST: idp-db
-      MYSQL_PORT: 3306
-      MYSQL_DATABASE: app
-      MYSQL_USER: app
-      MYSQL_PASSWORD: apppass
-      REDIS_HOST: idp-redis
-      REDIS_PORT: 6379
-      REDIS_DB: 0
-      APP_ENV: dev
-      SESSION_TTL: 8h
-      ISSUER: http://localhost:8080
-      LISTEN_ADDR: :8080
-      SIGNING_KEY_DIR: scripts/dev_keys
-      SIGNING_KEY_CHECK_INTERVAL: 1h
-      SIGNING_KEY_ROTATE_BEFORE: 24h
-      SIGNING_KEY_RETIRE_AFTER: 24h
+    volumes:
+      - ./config/idp.docker.yaml:/app/config/idp.yaml
+      - ./scripts/dev_keys:/app/scripts/dev_keys
     ports:
       - "8080:8080"
     depends_on:

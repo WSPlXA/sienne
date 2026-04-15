@@ -1,0 +1,62 @@
+app:
+  env: dev
+
+mysql:
+  host: "idp-db"
+  port: 3306
+  database: "app"
+  user: "app"
+  password: "apppass"
+
+redis:
+  host: "idp-redis"
+  port: 6379
+  db: 0
+  key_prefix: "idp"
+
+issuer: "http://localhost:8080"
+
+session:
+  ttl: "8h"
+
+audit:
+  async_enabled: true
+  consumer_group: "audit-writers"
+  consumer_name: "idp-server"
+  batch_size: 16
+  dedup_ttl: "24h"
+  retry_ttl: "24h"
+  block_timeout: "2s"
+  reclaim_idle: "30s"
+  reclaim_interval: "15s"
+  max_retry_count: 10
+
+totp:
+  issuer: "IDP Server"
+  secret_encryption_key: "dev_totp_secret_encryption_key!!"
+
+jwt:
+  key_id: "kid-2026-01-rs256"
+
+signing_key:
+  dir: "scripts/dev_keys"
+  bits: 2048
+  check_interval: "1h"
+  rotate_before: "24h"
+  retire_after: "24h"
+
+login:
+  failure_window: "15m"
+  max_failures_per_ip: 20
+  max_failures_per_user: 5
+  user_lock_threshold: 5
+  user_lock_ttl: "30m"
+
+mfa:
+  force_enrollment: true
+
+passkey:
+  enabled: true
+  rp_display_name: "IDP Server"
+  rp_origins:
+    - "http://localhost:8080"
