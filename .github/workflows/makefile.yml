@@ -38,7 +38,7 @@ jobs:
           cache-dependency-path: idp-server/go.sum
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9
         with:
           version: latest
           working-directory: idp-server
