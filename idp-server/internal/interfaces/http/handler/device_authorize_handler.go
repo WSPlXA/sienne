@@ -46,7 +46,7 @@ func (h *DeviceAuthorizeHandler) Handle(c *gin.Context) {
 	})
 	if err != nil {
 		// 设备授权接口和 token endpoint 一样，client 认证失败按 invalid_client 语义处理。
-	
+		var status int
 		code := "invalid_client"
 		if !errors.Is(err, apptoken.ErrInvalidClient) {
 			status = http.StatusInternalServerError
