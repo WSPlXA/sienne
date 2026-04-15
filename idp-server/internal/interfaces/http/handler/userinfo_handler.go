@@ -28,7 +28,7 @@ func (h *UserInfoHandler) Handle(c *gin.Context) {
 	})
 	if err != nil {
 		// userinfo 是资源接口语义：无效 token 返回 401，主体不存在返回 404。
-		status := http.StatusUnauthorized
+		var status int
 		switch {
 		case errors.Is(err, oidc.ErrUserNotFound):
 			status = http.StatusNotFound

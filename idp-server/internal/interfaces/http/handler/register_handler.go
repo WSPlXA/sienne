@@ -87,7 +87,7 @@ func (h *RegisterHandler) Handle(c *gin.Context) {
 		AutoActivate:  true,
 	})
 	if err != nil {
-		status := http.StatusBadRequest
+		var status int
 		switch {
 		case errors.Is(err, register.ErrUsernameAlreadyUsed), errors.Is(err, register.ErrEmailAlreadyUsed):
 			status = http.StatusConflict
