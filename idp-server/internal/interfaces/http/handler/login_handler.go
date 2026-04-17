@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"idp-server/internal/application/authn"
@@ -15,18 +16,20 @@ import (
 )
 
 type LoginHandler struct {
-	authnService         authn.Authenticator
-	federatedOIDCEnabled bool
-	auditRepo            repository.AuditEventRepository
+	authnService              authn.Authenticator
+	federatedOIDCEnabled      bool
+	federatedOIDCProviderName string
+	auditRepo                 repository.AuditEventRepository
 }
 
 type loginPageData struct {
-	Username             string
-	ReturnTo             string
-	CSRFToken            string
-	Error                string
-	Success              bool
-	FederatedOIDCEnabled bool
+	Username                  string
+	ReturnTo                  string
+	CSRFToken                 string
+	Error                     string
+	Success                   bool
+	FederatedOIDCEnabled      bool
+	FederatedOIDCProviderName string
 }
 
 func NewLoginHandler(authnService authn.Authenticator, federatedOIDCEnabled bool, auditRepo ...repository.AuditEventRepository) *LoginHandler {
@@ -35,10 +38,19 @@ func NewLoginHandler(authnService authn.Authenticator, federatedOIDCEnabled bool
 		repo = auditRepo[0]
 	}
 	return &LoginHandler{
-		authnService:         authnService,
-		federatedOIDCEnabled: federatedOIDCEnabled,
-		auditRepo:            repo,
+		authnService:              authnService,
+		federatedOIDCEnabled:      federatedOIDCEnabled,
+		federatedOIDCProviderName: "OpenID Connect",
+		auditRepo:                 repo,
 	}
+}
+
+func (h *LoginHandler) WithFederatedOIDCProviderName(name string) *LoginHandler {
+	name = strings.TrimSpace(name)
+	if name != "" {
+		h.federatedOIDCProviderName = name
+	}
+	return h
 }
 
 func (h *LoginHandler) Handle(c *gin.Context) {
@@ -89,6 +101,7 @@ func (h *LoginHandler) Handle(c *gin.Context) {
 			"csrf_token":              csrfToken,
 			"return_to":               req.ReturnTo,
 			"federated_oidc_enabled":  h.federatedOIDCEnabled,
+			"federated_oidc_provider": h.federatedOIDCProviderName,
 			"federated_oidc_endpoint": "/login",
 			"federated_oidc_method":   http.MethodPost,
 		})
@@ -326,6 +339,9 @@ func (h *LoginHandler) writeInvalidCSRF(c *gin.Context, req dto.LoginRequest) {
 
 func (h *LoginHandler) renderLoginPage(c *gin.Context, status int, data loginPageData) {
 	// 渲染前兜底补一个 CSRF token，确保无论从哪个分支进入页面都能提交表单。
+	if strings.TrimSpace(data.FederatedOIDCProviderName) == "" {
+		data.FederatedOIDCProviderName = h.federatedOIDCProviderName
+	}
 	if data.CSRFToken == "" {
 		csrfToken, err := ensureCSRFToken(c)
 		if err != nil {

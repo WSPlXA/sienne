@@ -28,7 +28,7 @@ import (
 	"idp-server/resource"
 )
 
-func NewRouter(authzService authz.Service, consentService appconsent.Manager, registerService appregister.Registrar, passwordResetter appregister.PasswordResetter, accountUnlocker appregister.AccountUnlocker, userRepo repository.UserRepository, clientCreator appclient.Creator, clientRedirectRegistrar appclient.Registrar, clientPostLogoutRedirectRegistrar appclient.PostLogoutRegistrar, logoutRedirectValidator appclient.LogoutRedirectValidator, authnService authn.Authenticator, federatedOIDCEnabled bool, sessionService appsession.Manager, rbacService apprbac.Manager, keysService appkeys.Manager, auditRepo repository.AuditEventRepository, clientAuthenticator appclientauth.Authenticator, grantRegistry *pluginregistry.GrantRegistry, deviceService *appdevice.Service, mfaService appmfa.Manager, passkeyService apppasskey.Manager, oidcService *oidc.Service, authMiddleware *middleware.AuthMiddleware, adminMiddleware *middleware.SessionPermissionMiddleware) *gin.Engine {
+func NewRouter(authzService authz.Service, consentService appconsent.Manager, registerService appregister.Registrar, passwordResetter appregister.PasswordResetter, accountUnlocker appregister.AccountUnlocker, userRepo repository.UserRepository, clientCreator appclient.Creator, clientRedirectRegistrar appclient.Registrar, clientPostLogoutRedirectRegistrar appclient.PostLogoutRegistrar, logoutRedirectValidator appclient.LogoutRedirectValidator, authnService authn.Authenticator, federatedOIDCEnabled bool, federatedOIDCProviderName string, sessionService appsession.Manager, rbacService apprbac.Manager, keysService appkeys.Manager, auditRepo repository.AuditEventRepository, clientAuthenticator appclientauth.Authenticator, grantRegistry *pluginregistry.GrantRegistry, deviceService *appdevice.Service, mfaService appmfa.Manager, passkeyService apppasskey.Manager, oidcService *oidc.Service, authMiddleware *middleware.AuthMiddleware, adminMiddleware *middleware.SessionPermissionMiddleware) *gin.Engine {
 	// Router 是系统所有 HTTP 能力的装配入口。
 	// 这里不写业务逻辑，而是把 handler、中间件和 URL 空间组织起来，
 	// 让“协议层职责”和“应用层职责”保持清晰分离。
@@ -62,7 +62,7 @@ func NewRouter(authzService authz.Service, consentService appconsent.Manager, re
 	registerHandler := handler.NewRegisterHandler(registerService)
 	clientRedirectURIHandler := handler.NewClientRedirectURIHandler(clientRedirectRegistrar)
 	clientPostLogoutRedirectURIHandler := handler.NewClientPostLogoutRedirectURIHandler(clientPostLogoutRedirectRegistrar)
-	loginHandler := handler.NewLoginHandler(authnService, federatedOIDCEnabled, auditRepo)
+	loginHandler := handler.NewLoginHandler(authnService, federatedOIDCEnabled, auditRepo).WithFederatedOIDCProviderName(federatedOIDCProviderName)
 	loginTOTPHandler := handler.NewLoginTOTPHandler(authnService, auditRepo)
 	loginPushHandler := handler.NewLoginPushHandler(authnService)
 	logoutHandler := handler.NewLogoutHandler(sessionService)

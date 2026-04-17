@@ -13,6 +13,7 @@ services:
       - "--enforce-gtid-consistency=ON"
     environment:
       MYSQL_ROOT_PASSWORD: ${IDP_MYSQL_ROOT_PASSWORD:-ChangeThisRootPassword_32CharsMin}
+      MYSQL_ROOT_HOST: "${IDP_MYSQL_ROOT_HOST:-%}"
       MYSQL_DATABASE: ${IDP_MYSQL_DATABASE:-app}
       MYSQL_USER: ${IDP_MYSQL_USER:-app}
       MYSQL_PASSWORD: ${IDP_MYSQL_PASSWORD:-ChangeThisAppPassword_32CharsMin}
@@ -43,6 +44,7 @@ services:
       - "--super-read-only=ON"
     environment:
       MYSQL_ROOT_PASSWORD: ${IDP_MYSQL_ROOT_PASSWORD:-ChangeThisRootPassword_32CharsMin}
+      MYSQL_ROOT_HOST: "${IDP_MYSQL_ROOT_HOST:-%}"
     volumes:
       - idp-mysql-replica-data:/var/lib/mysql
     ports:

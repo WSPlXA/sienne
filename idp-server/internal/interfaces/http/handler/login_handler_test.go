@@ -495,3 +495,21 @@ func TestLoginHandlerHandleGetHTMLShowsFederatedOIDCButton(t *testing.T) {
 		t.Fatalf("body did not contain federated login method field: %s", body)
 	}
 }
+
+func TestLoginHandlerHandleGetHTMLShowsConfiguredFederatedProviderName(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := gin.New()
+	router.GET("/login", NewLoginHandler(&stubAuthenticator{}, true).WithFederatedOIDCProviderName("Google").Handle)
+
+	req := httptest.NewRequest(http.MethodGet, "/login?return_to=%2Foauth2%2Fauthorize%3Fclient_id%3Ddemo", nil)
+	req.Header.Set("Accept", "text/html")
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, req)
+
+	body := recorder.Body.String()
+	if !strings.Contains(body, "Sign in with Google") {
+		t.Fatalf("body did not contain custom federated provider name: %s", body)
+	}
+}

@@ -181,9 +181,23 @@ go test ./...
 - `FEDERATED_OIDC_CLIENT_ID`
 - `FEDERATED_OIDC_CLIENT_SECRET`
 - `FEDERATED_OIDC_REDIRECT_URI`
+- `FEDERATED_OIDC_PROVIDER_NAME`（登录页按钮文案，默认 `OpenID Connect`）
 - `FEDERATED_OIDC_CLIENT_AUTH_METHOD`
 - `FEDERATED_OIDC_SCOPES`
 - `FEDERATED_OIDC_STATE_TTL`
+
+### Google 联邦登录（起步配置）
+1. 在 Google Cloud Console 创建 OAuth Client（Web Application），回调地址填 `http://localhost:8080/login`（开发环境）。
+2. 设置：
+   - `FEDERATED_OIDC_ISSUER=https://accounts.google.com`
+   - `FEDERATED_OIDC_CLIENT_ID=<your-client-id>`
+   - `FEDERATED_OIDC_CLIENT_SECRET=<your-client-secret>`
+   - `FEDERATED_OIDC_REDIRECT_URI=http://localhost:8080/login`
+3. 建议额外设置：
+   - `FEDERATED_OIDC_PROVIDER_NAME=Google`
+   - `FEDERATED_OIDC_CLIENT_AUTH_METHOD=client_secret_post`
+   - `FEDERATED_OIDC_USERNAME_CLAIM=email`
+4. 重启 `idp-server` 后访问 `/login`，即可看到 Google 文案入口按钮并走联邦回调链路。
 
 ## 深入文档
 

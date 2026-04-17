@@ -181,9 +181,23 @@ Config bootstrap source: `idp-server/internal/bootstrap/wire.go`
 - `FEDERATED_OIDC_CLIENT_ID`
 - `FEDERATED_OIDC_CLIENT_SECRET`
 - `FEDERATED_OIDC_REDIRECT_URI`
+- `FEDERATED_OIDC_PROVIDER_NAME` (login button label, default `OpenID Connect`)
 - `FEDERATED_OIDC_CLIENT_AUTH_METHOD`
 - `FEDERATED_OIDC_SCOPES`
 - `FEDERATED_OIDC_STATE_TTL`
+
+### Google Federated Login (Quick Start)
+1. Create an OAuth Client (Web Application) in Google Cloud Console and set callback URL to `http://localhost:8080/login` for local development.
+2. Set:
+   - `FEDERATED_OIDC_ISSUER=https://accounts.google.com`
+   - `FEDERATED_OIDC_CLIENT_ID=<your-client-id>`
+   - `FEDERATED_OIDC_CLIENT_SECRET=<your-client-secret>`
+   - `FEDERATED_OIDC_REDIRECT_URI=http://localhost:8080/login`
+3. Recommended extras:
+   - `FEDERATED_OIDC_PROVIDER_NAME=Google`
+   - `FEDERATED_OIDC_CLIENT_AUTH_METHOD=client_secret_post`
+   - `FEDERATED_OIDC_USERNAME_CLAIM=email`
+4. Restart `idp-server` and open `/login`; the federated button shows Google and follows the upstream callback flow.
 
 ## Deep-Dive Docs
 

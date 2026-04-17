@@ -508,6 +508,7 @@ func provideKeysManager(
 }
 
 func provideRouter(
+	cfg *config,
 	authzService authz.Service,
 	consentService appconsent.Manager,
 	registerService appregister.Registrar,
@@ -546,6 +547,7 @@ func provideRouter(
 		logoutRedirectValidator,
 		authnService,
 		federatedOIDCProvider != nil,
+		cfg.FederatedOIDCProviderName,
 		sessionService,
 		rbacService,
 		keysService,

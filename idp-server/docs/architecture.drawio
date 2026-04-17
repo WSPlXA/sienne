@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" type="device">
+    <diagram id="architect-v7" name="Sienne IdP Full Technical Architecture">
+        <mxGraphModel dx="2800" dy="2000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="1654" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                
+                <!-- ZONE: CONFIGURATION & BOOTSTRAP -->
+                <mxCell id="zone-boot" value="Boot and Configuration Tier" style="swimlane;whiteSpace=wrap;html=1;startSize=23;fillColor=#f5f5f5;" vertex="1" parent="1">
+                    <mxGeometry x="620" y="-300" width="800" height="240" as="geometry"/>
+                </mxCell>
+                <mxCell id="boot-config" value="Config Loader (loadConfig)&#10;- Env Variables (ISSUER, TTL)&#10;- YAML Files (idp.docker.yaml)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="zone-boot">
+                    <mxGeometry x="20" y="40" width="220" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="boot-wire" value="Composition Root: Wire.go&#10;- initializeApp()&#10;- Dependency Injection&#10;- Service Assembly" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="zone-boot">
+                    <mxGeometry x="280" y="40" width="240" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="boot-adapters" value="Adapter Layer&#10;- jwtServiceAdapter&#10;- keyManagerAdapter&#10;- Port/Infrastructure Mapping" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="zone-boot">
+                    <mxGeometry x="540" y="40" width="240" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- ZONE: PUBLIC INTERNET -->
+                <mxCell id="zone-public" value="Public Network (Internet)" style="swimlane;whiteSpace=wrap;html=1;startSize=23;fillColor=#f5f5f5;dashed=1;" vertex="1" parent="1">
+                    <mxGeometry x="40" y="40" width="280" height="1500" as="geometry"/>
+                </mxCell>
+                <mxCell id="actor-user" value="End User&#10;(Mobile App / Browser)" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" vertex="1" parent="zone-public">
+                    <mxGeometry x="40" y="100" width="30" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="actor-app-conf" value="Confidential Client&#10;(Web Server / Backend)" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" vertex="1" parent="zone-public">
+                    <mxGeometry x="150" y="100" width="30" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="resource-server" value="Resource Server (API)&#10;[Validates JWT / JWKS]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="zone-public">
+                    <mxGeometry x="40" y="500" width="200" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="oidc-metadata" value="OIDC Discovery Document&#10;[/.well-known/openid-conf]" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#fff2cc;" vertex="1" parent="zone-public">
+                    <mxGeometry x="40" y="650" width="180" height="100" as="geometry"/>
+                </mxCell>
+
+                <!-- ZONE: DMZ EDGE -->
+                <mxCell id="zone-dmz" value="DMZ (Edge Security)" style="swimlane;whiteSpace=wrap;html=1;startSize=23;fillColor=#dae8fc;dashed=1;" vertex="1" parent="1">
+                    <mxGeometry x="360" y="40" width="220" height="1500" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge-waf" value="WAF / Anti-DDoS&#10;[Rate Limit / IP Block]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="zone-dmz">
+                    <mxGeometry x="30" y="100" width="160" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge-lb" value="Global Load Balancer&#10;[SSL Termination]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="zone-dmz">
+                    <mxGeometry x="30" y="240" width="160" height="80" as="geometry"/>
+                </mxCell>
+
+                <!-- ZONE: APPLICATION VPC -->
+                <mxCell id="zone-app" value="Application Tier (Internal VPC)" style="swimlane;whiteSpace=wrap;html=1;startSize=23;fillColor=#d5e8d4;dashed=1;" vertex="1" parent="1">
+                    <mxGeometry x="620" y="40" width="800" height="1500" as="geometry"/>
+                </mxCell>
+                
+                <!-- HTTP Layer -->
+                <mxCell id="layer-http" value="Interface Layer: HTTP / Gin Framework" style="swimlane;whiteSpace=wrap;html=1;startSize=23;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="zone-app">
+                    <mxGeometry x="20" y="40" width="240" height="960" as="geometry"/>
+                </mxCell>
+                <mxCell id="http-middleware-stack" value="Middleware Chain:&#10;1. Recovery / Logger&#10;2. Rate Limiting&#10;3. CSRF Protection&#10;4. Session Context&#10;5. Admin Auth (32-bit RBAC)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;spacingLeft=5;" vertex="1" parent="layer-http">
+                    <mxGeometry x="10" y="40" width="220" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="http-oidc" value="OIDC / OAuth2 Handlers&#10;- Authorize (GET/POST)&#10;- Token (POST)&#10;- UserInfo / Introspect&#10;- JWKS / Discovery" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=5;" vertex="1" parent="layer-http">
+                    <mxGeometry x="10" y="170" width="220" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="http-ui" value="UI / Interaction Handlers&#10;- Login (Multi-Auth)&#10;- Consent Management&#10;- MFA Setup / Verify&#10;- Device Flow UI" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=5;" vertex="1" parent="layer-http">
+                    <mxGeometry x="10" y="280" width="220" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="http-admin" value="Admin / Console Handlers&#10;- RBAC Usage / Bootstrap&#10;- User Management&#10;- Audit DLQ Replay" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=5;" vertex="1" parent="layer-http">
+                    <mxGeometry x="10" y="390" width="220" height="100" as="geometry"/>
+                </mxCell>
+
+                <!-- Application Layer -->
+                <mxCell id="layer-logic" value="Application Layer: Domain Services" style="swimlane;whiteSpace=wrap;html=1;startSize=23;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="zone-app">
+                    <mxGeometry x="300" y="40" width="480" height="420" as="geometry"/>
+                </mxCell>
+                <mxCell id="svc-authn-group" value="Authn Service Cluster" style="swimlane;whiteSpace=wrap;html=1;startSize=23;" vertex="1" parent="layer-logic">
+                    <mxGeometry x="10" y="40" width="460" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="svc-authn" value="Authn Service Core" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="svc-authn-group">
+                    <mxGeometry x="10" y="40" width="130" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="svc-authn-iopool" value="IO Worker Pool&#10;(DB / Redis / FedOIDC)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;" vertex="1" parent="svc-authn-group">
+                    <mxGeometry x="150" y="40" width="140" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="svc-authn-cpupool" value="CPU Worker Pool&#10;(Crypto / Passwords)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;" vertex="1" parent="svc-authn-group">
+                    <mxGeometry x="300" y="40" width="140" height="80" as="geometry"/>
+                </mxCell>
+                
+                <mxCell id="svc-authz" value="Authz Service&#10;(OIDC Flow Control)" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="layer-logic">
+                    <mxGeometry x="10" y="190" width="140" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="svc-token" value="Token Service&#10;(Signing &amp; Rotation)" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="layer-logic">
+                    <mxGeometry x="160" y="190" width="140" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="svc-mfa" value="MFA State Machine&#10;(Bitmask-based)" style="rounded=0;whiteSpace=wrap;html=1;fontStyle=1;strokeWidth=2;" vertex="1" parent="layer-logic">
+                    <mxGeometry x="310" y="190" width="160" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="svc-audit" value="Audit Stream Producer&#10;[XADD to &quot;idp:audit:stream&quot;]" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="layer-logic">
+                    <mxGeometry x="10" y="260" width="460" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="layer-domain" value="Domain Layer: Core Models&#10;[User, Client, Session, Token, Role, Audit, PasskeyCredential]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="layer-logic">
+                    <mxGeometry x="10" y="330" width="460" height="70" as="geometry"/>
+                </mxCell>
+
+                <!-- Infrastructure Layer -->
+                <mxCell id="layer-infra" value="Infrastructure Layer: Ports &amp; Adapters" style="swimlane;whiteSpace=wrap;html=1;startSize=23;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="zone-app">
+                    <mxGeometry x="300" y="480" width="480" height="420" as="geometry"/>
+                </mxCell>
+                <mxCell id="infra-plugins" value="Strategy Registries&#10;- Grant Strategy (Code, CC, Refresh, Device)&#10;- Authn Strategy (Password, FedOIDC, MFA)&#10;- ClientAuth Strategy (Basic, Post, None, JWT)" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=5;" vertex="1" parent="layer-infra">
+                    <mxGeometry x="10" y="40" width="460" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="infra-cache" value="High-Performance Storage Core&#10;- BITFIELD Packed Storage (State 32b | Ver 32b)&#10;- Redis Lua CAS (Optimistic Locking)&#10;- HMGet / Multi-GET Optimizations" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeWidth=2;fontStyle=1;" vertex="1" parent="layer-infra">
+                    <mxGeometry x="10" y="130" width="460" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="infra-sql" value="SQL Persistence&#10;- MySQL Repositories&#10;- Audit DB Writer" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="layer-infra">
+                    <mxGeometry x="10" y="220" width="220" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="infra-crypto" value="Crypto Ecosystem&#10;- JWT Service&#10;- Key Manager (Rotation)&#10;- Hash / Verify Providers" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="layer-infra">
+                    <mxGeometry x="250" y="220" width="220" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- Background Workers -->
+                <mxCell id="layer-workers" value="Operational Workers Tier" style="swimlane;whiteSpace=wrap;html=1;startSize=23;fillColor=#e1d5e7;dashed=1;" vertex="1" parent="zone-app">
+                    <mxGeometry x="20" y="1040" width="760" height="420" as="geometry"/>
+                </mxCell>
+                <mxCell id="worker-audit" value="Audit Stream Consumer&#10;- Group: &quot;audit_group&quot;&#10;- Action: Batch SQL Insert&#10;- Error: Push to &quot;idp:audit:dlq&quot;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeWidth=2;" vertex="1" parent="layer-workers">
+                    <mxGeometry x="20" y="50" width="340" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="worker-tasks" value="Scheduled Tasks&#10;- Session / Nonce Cleanup&#10;- Signing Key Rotation Watcher&#10;- Replay Cache Eviction" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;" vertex="1" parent="layer-workers">
+                    <mxGeometry x="400" y="50" width="340" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="worker-dlq" value="DLQ Replay Tool&#10;- cmd/replay_audit_dlq&#10;- Manual Audit Recovery" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;" vertex="1" parent="layer-workers">
+                    <mxGeometry x="20" y="170" width="340" height="70" as="geometry"/>
+                </mxCell>
+
+                <!-- ZONE: DATA PERSISTENCE -->
+                <mxCell id="zone-data" value="Data Layer (Isolated Network)" style="swimlane;whiteSpace=wrap;html=1;startSize=23;fillColor=#ffe6cc;dashed=1;" vertex="1" parent="1">
+                    <mxGeometry x="1460" y="40" width="360" height="1500" as="geometry"/>
+                </mxCell>
+                <mxCell id="db-mysql" value="MySQL Primary / Replicas&#10;[Entities &amp; Logs]&#10;- users / clients / roles&#10;- auth_codes / tokens&#10;- login_sessions (Persistence)&#10;- audit_events (History)&#10;- jwk_keys (Public Keys)" style="shape=datastore;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="zone-data">
+                    <mxGeometry x="50" y="100" width="260" height="280" as="geometry"/>
+                </mxCell>
+                <mxCell id="db-redis" value="Redis Hot-State Engine&#10;[Cache &amp; Message Bus]&#10;- BITFIELD Session State&#10;- CAS Lua Logic&#10;- &quot;idp:audit:stream&quot;&#10;- Replay / CSRF Locks&#10;- Throttle / Rate Limit" style="shape=datastore;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;" vertex="1" parent="zone-data">
+                    <mxGeometry x="50" y="500" width="260" height="280" as="geometry"/>
+                </mxCell>
+
+                <!-- EXTERNAL INTEGRATIONS -->
+                <mxCell id="ext-op" value="External OIDC Provider&#10;[Federation Bridge]" style="ellipse;shape=cloud;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+                    <mxGeometry x="840" y="-80" width="200" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="ext-vault" value="KMS / Vault&#10;[HSM Security]" style="shape=process;whiteSpace=wrap;html=1;backgroundOutline=1;fillColor=#f5f5f5;" vertex="1" parent="1">
+                    <mxGeometry x="1860" y="200" width="220" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="ext-notify" value="Notification Gateway&#10;[MFA Delivery]" style="shape=process;whiteSpace=wrap;html=1;backgroundOutline=1;fillColor=#dae8fc;" vertex="1" parent="1">
+                    <mxGeometry x="1860" y="400" width="220" height="80" as="geometry"/>
+                </mxCell>
+
+                <!-- TRAFFIC FLOW EDGES -->
+                <mxCell id="edge-boot-app" value="Assemble" style="endArrow=classic;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="boot-wire" target="zone-app">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge-lb-to-app" value="HTTP (mTLS)" style="endArrow=classic;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.4;entryDx=0;entryDy=0;" edge="1" parent="1" source="edge-lb" target="layer-http">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge-app-mysql" value="SQL Repo" style="endArrow=classic;startArrow=classic;html=1;exitX=1;exitY=0.2;exitDx=0;exitDy=0;entryX=0;entryY=0.3;entryDx=0;entryDy=0;" edge="1" parent="1" target="db-mysql">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="1420" y="200" as="sourcePoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="edge-app-redis" value="CAS / BITFIELD / Stream" style="endArrow=classic;startArrow=classic;html=1;exitX=1;exitY=0.45;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeWidth=2;" edge="1" parent="1" target="db-redis">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="1420" y="600" as="sourcePoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="edge-audit-write" value="Batch Flush" style="endArrow=classic;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.25;entryY=0.95;entryDx=0;entryDy=0;" edge="1" parent="1" source="worker-audit" target="db-mysql">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1525" y="1140"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="edge-jwks-res" value="Fetch JWKS" style="endArrow=classic;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.65;entryDx=0;entryDy=0;" edge="1" parent="1" source="resource-server" target="layer-http">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="140" y="665"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

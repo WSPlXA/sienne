@@ -64,3 +64,23 @@ passkey:
   rp_display_name: "IDP Server"
   rp_origins:
     - "http://localhost:8080"
+
+federated_oidc:
+  provider_name: "OpenID Connect"
+  client_auth_method: "client_secret_basic"
+  username_claim: "preferred_username"
+  display_name_claim: "name"
+  email_claim: "email"
+  scopes:
+    - "openid"
+    - "profile"
+    - "email"
+  state_ttl: "10m"
+  # Google OIDC quick start:
+  # issuer: "https://accounts.google.com"
+  # client_id: "YOUR_GOOGLE_CLIENT_ID"
+  # client_secret: "YOUR_GOOGLE_CLIENT_SECRET"
+  # redirect_uri: "http://localhost:8080/login"
+  # provider_name: "Google"
+  # client_auth_method: "client_secret_post"
+  # username_claim: "email"

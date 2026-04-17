@@ -54,6 +54,7 @@ type config struct {
 	FederatedOIDCClientID         string
 	FederatedOIDCClientSecret     string
 	FederatedOIDCRedirectURI      string
+	FederatedOIDCProviderName     string
 	FederatedOIDCClientAuthMethod string
 	FederatedOIDCUsernameClaim    string
 	FederatedOIDCDisplayNameClaim string
@@ -121,6 +122,7 @@ var configEnvBindings = []envBinding{
 	{key: "federated_oidc.client_id", envs: []string{"FEDERATED_OIDC_CLIENT_ID", "IDP_FEDERATED_OIDC_CLIENT_ID"}},
 	{key: "federated_oidc.client_secret", envs: []string{"FEDERATED_OIDC_CLIENT_SECRET", "IDP_FEDERATED_OIDC_CLIENT_SECRET"}},
 	{key: "federated_oidc.redirect_uri", envs: []string{"FEDERATED_OIDC_REDIRECT_URI", "IDP_FEDERATED_OIDC_REDIRECT_URI"}},
+	{key: "federated_oidc.provider_name", envs: []string{"FEDERATED_OIDC_PROVIDER_NAME", "IDP_FEDERATED_OIDC_PROVIDER_NAME"}},
 	{key: "federated_oidc.client_auth_method", envs: []string{"FEDERATED_OIDC_CLIENT_AUTH_METHOD", "IDP_FEDERATED_OIDC_CLIENT_AUTH_METHOD"}},
 	{key: "federated_oidc.username_claim", envs: []string{"FEDERATED_OIDC_USERNAME_CLAIM", "IDP_FEDERATED_OIDC_USERNAME_CLAIM"}},
 	{key: "federated_oidc.display_name_claim", envs: []string{"FEDERATED_OIDC_DISPLAY_NAME_CLAIM", "IDP_FEDERATED_OIDC_DISPLAY_NAME_CLAIM"}},
@@ -185,6 +187,7 @@ func loadConfig() (*config, error) {
 		FederatedOIDCClientID:         strings.TrimSpace(v.GetString("federated_oidc.client_id")),
 		FederatedOIDCClientSecret:     v.GetString("federated_oidc.client_secret"),
 		FederatedOIDCRedirectURI:      strings.TrimSpace(v.GetString("federated_oidc.redirect_uri")),
+		FederatedOIDCProviderName:     strings.TrimSpace(v.GetString("federated_oidc.provider_name")),
 		FederatedOIDCClientAuthMethod: strings.TrimSpace(v.GetString("federated_oidc.client_auth_method")),
 		FederatedOIDCUsernameClaim:    strings.TrimSpace(v.GetString("federated_oidc.username_claim")),
 		FederatedOIDCDisplayNameClaim: strings.TrimSpace(v.GetString("federated_oidc.display_name_claim")),
@@ -262,6 +265,7 @@ func newConfigViper() *viper.Viper {
 	v.SetDefault("signing_key.rotate_before", 24*time.Hour)
 	v.SetDefault("signing_key.retire_after", 24*time.Hour)
 	v.SetDefault("federated_oidc.client_auth_method", "client_secret_basic")
+	v.SetDefault("federated_oidc.provider_name", "OpenID Connect")
 	v.SetDefault("federated_oidc.username_claim", "preferred_username")
 	v.SetDefault("federated_oidc.display_name_claim", "name")
 	v.SetDefault("federated_oidc.email_claim", "email")
