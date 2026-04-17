@@ -4,6 +4,13 @@ services:
   db:
     image: mysql:8.4
     restart: unless-stopped
+    command:
+      - "mysqld"
+      - "--server-id=1"
+      - "--log-bin=mysql-bin"
+      - "--binlog-format=ROW"
+      - "--gtid-mode=ON"
+      - "--enforce-gtid-consistency=ON"
     environment:
       MYSQL_ROOT_PASSWORD: ${IDP_MYSQL_ROOT_PASSWORD:-ChangeThisRootPassword_32CharsMin}
       MYSQL_DATABASE: ${IDP_MYSQL_DATABASE:-app}
@@ -20,6 +27,87 @@ services:
       timeout: 5s
       retries: 20
       start_period: 20s
+
+  db-replica:
+    image: mysql:8.4
+    restart: unless-stopped
+    command:
+      - "mysqld"
+      - "--server-id=2"
+      - "--log-bin=mysql-bin"
+      - "--relay-log=mysql-relay-bin"
+      - "--binlog-format=ROW"
+      - "--gtid-mode=ON"
+      - "--enforce-gtid-consistency=ON"
+      - "--read-only=ON"
+      - "--super-read-only=ON"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${IDP_MYSQL_ROOT_PASSWORD:-ChangeThisRootPassword_32CharsMin}
+    volumes:
+      - idp-mysql-replica-data:/var/lib/mysql
+    ports:
+      - "${IDP_MYSQL_REPLICA_PUBLISH:-127.0.0.1:23306}:3306"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent" ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  db-replica-init:
+    image: mysql:8.4
+    restart: "no"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${IDP_MYSQL_ROOT_PASSWORD:-ChangeThisRootPassword_32CharsMin}
+      MYSQL_DATABASE: ${IDP_MYSQL_DATABASE:-app}
+      MYSQL_REPL_USER: ${IDP_MYSQL_REPL_USER:-repl}
+      MYSQL_REPL_PASSWORD: ${IDP_MYSQL_REPL_PASSWORD:-ChangeThisReplPassword_32CharsMin}
+      MYSQL_READ_USER: ${IDP_MYSQL_READ_USER:-idp_ro}
+      MYSQL_READ_PASSWORD: ${IDP_MYSQL_READ_PASSWORD:-ChangeThisReplicaReadPassword_32CharsMin}
+    depends_on:
+      db:
+        condition: service_healthy
+      db-replica:
+        condition: service_healthy
+    command:
+      - "sh"
+      - "-ec"
+      - |
+        mysql -h db -uroot -p"$${MYSQL_ROOT_PASSWORD}" <<EOSQL
+        CREATE USER IF NOT EXISTS '$${MYSQL_REPL_USER}'@'%' IDENTIFIED BY '$${MYSQL_REPL_PASSWORD}';
+        GRANT REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO '$${MYSQL_REPL_USER}'@'%';
+        CREATE USER IF NOT EXISTS '$${MYSQL_READ_USER}'@'%' IDENTIFIED BY '$${MYSQL_READ_PASSWORD}';
+        GRANT SELECT ON \`$${MYSQL_DATABASE}\`.* TO '$${MYSQL_READ_USER}'@'%';
+        FLUSH PRIVILEGES;
+        EOSQL
+
+        mysql -h db-replica -uroot -p"$${MYSQL_ROOT_PASSWORD}" <<EOSQL
+        STOP REPLICA;
+        RESET REPLICA ALL;
+        CHANGE REPLICATION SOURCE TO
+          SOURCE_HOST='db',
+          SOURCE_PORT=3306,
+          SOURCE_USER='$${MYSQL_REPL_USER}',
+          SOURCE_PASSWORD='$${MYSQL_REPL_PASSWORD}',
+          SOURCE_AUTO_POSITION=1,
+          GET_SOURCE_PUBLIC_KEY=1;
+        START REPLICA;
+        EOSQL
+
+        i=0
+        while [ "$$i" -lt 60 ]; do
+          status="$$(mysql -h db-replica -uroot -p"$${MYSQL_ROOT_PASSWORD}" -Nse "SHOW REPLICA STATUS\\G")"
+          echo "$$status" | grep -q "Replica_IO_Running: Yes" && \
+          echo "$$status" | grep -q "Replica_SQL_Running: Yes" && \
+          exit 0
+          i=$$((i + 1))
+          sleep 2
+        done
+        echo "replica init failed: replication is not running"
+        exit 1
 
   redis:
     image: redis:7-alpine
@@ -48,7 +136,7 @@ services:
       MYSQL_USER: ${IDP_MYSQL_USER:-app}
       MYSQL_PASSWORD: ${IDP_MYSQL_PASSWORD:-ChangeThisAppPassword_32CharsMin}
       # Replica DSN should use read-only account (e.g. idp_ro). Leave empty to fallback to primary.
-      MYSQL_READ_DSN: ${IDP_MYSQL_READ_DSN:-}
+      MYSQL_READ_DSN: ${IDP_MYSQL_READ_DSN:-idp_ro:ChangeThisReplicaReadPassword_32CharsMin@tcp(db-replica:3306)/app?parseTime=true&charset=utf8mb4&collation=utf8mb4_unicode_ci}
       MYSQL_STRONG_READ_SESSION_BY_ID: ${IDP_MYSQL_STRONG_READ_SESSION_BY_ID:-true}
       MYSQL_STRONG_READ_TOKEN_BY_SHA256: ${IDP_MYSQL_STRONG_READ_TOKEN_BY_SHA256:-true}
       REDIS_HOST: redis
@@ -75,6 +163,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      db-replica-init:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     healthcheck:
@@ -103,5 +193,6 @@ services:
 
 volumes:
   idp-mysql-data:
+  idp-mysql-replica-data:
   idp-redis-data:
   idp-signing-keys:

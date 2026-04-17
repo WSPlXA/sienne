@@ -14,14 +14,14 @@ import (
 
 //go:generate wire
 func initializeApp(ctx context.Context, cfg *config) (*App, error) {
-	databases, err := provideMySQLDatabases(ctx, cfg)
+	bootstrapMysqlDatabases, err := provideMySQLDatabases(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
-	clientRepository := provideClientRepository(databases)
-	sessionRepository := provideSessionRepository(cfg, databases)
-	authorizationCodeRepository := provideAuthorizationCodeRepository(databases)
-	consentRepository := provideConsentRepository(databases)
+	clientRepository := provideClientRepository(bootstrapMysqlDatabases)
+	sessionRepository := provideSessionRepository(cfg, bootstrapMysqlDatabases)
+	authorizationCodeRepository := provideAuthorizationCodeRepository(bootstrapMysqlDatabases)
+	consentRepository := provideConsentRepository(bootstrapMysqlDatabases)
 	service := provideAuthzService(clientRepository, sessionRepository, authorizationCodeRepository, consentRepository)
 	client, err := provideRedis(ctx, cfg)
 	if err != nil {
@@ -30,7 +30,7 @@ func initializeApp(ctx context.Context, cfg *config) (*App, error) {
 	keyBuilder := provideKeyBuilder(cfg)
 	sessionCacheRepository := provideSessionCacheRepository(client, keyBuilder)
 	manager := provideConsentManager(clientRepository, sessionRepository, sessionCacheRepository, consentRepository)
-	userRepository := provideUserRepository(databases)
+	userRepository := provideUserRepository(bootstrapMysqlDatabases)
 	passwordVerifier := providePasswordVerifier()
 	rateLimitRepository := provideRateLimitRepository(client, keyBuilder)
 	registerService := provideRegisterService(userRepository, passwordVerifier, rateLimitRepository)
@@ -50,27 +50,27 @@ func initializeApp(ctx context.Context, cfg *config) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	totpRepository := provideTOTPRepository(databases, secretCodec)
+	totpRepository := provideTOTPRepository(bootstrapMysqlDatabases, secretCodec)
 	totpProvider := provideTOTPProvider()
-	passkeyCredentialRepository := providePasskeyRepository(databases)
+	passkeyCredentialRepository := providePasskeyRepository(bootstrapMysqlDatabases)
 	passkeyProvider, err := providePasskeyProvider(cfg)
 	if err != nil {
 		return nil, err
 	}
 	authenticator := provideAuthnService(cfg, userRepository, sessionRepository, sessionCacheRepository, rateLimitRepository, mfaRepository, authnRegistry, totpRepository, totpProvider, passkeyCredentialRepository, passkeyProvider)
-	tokenRepository := provideTokenStore(cfg, databases)
+	tokenRepository := provideTokenStore(cfg, bootstrapMysqlDatabases)
 	tokenCacheRepository := provideTokenCacheRepository(client, keyBuilder)
 	sessionManager := provideSessionManager(sessionRepository, sessionCacheRepository, tokenRepository, tokenCacheRepository)
-	operatorRoleRepository := provideOperatorRoleRepository(databases)
+	operatorRoleRepository := provideOperatorRoleRepository(bootstrapMysqlDatabases)
 	rbacManager := provideRBACManager(operatorRoleRepository, userRepository)
-	jwkKeyRepository := provideJWKRepository(databases)
+	jwkKeyRepository := provideJWKRepository(bootstrapMysqlDatabases)
 	rotationConfig := provideRotationConfig(cfg)
 	keyManager, err := provideKeyManager(ctx, cfg, jwkKeyRepository, rotationConfig)
 	if err != nil {
 		return nil, err
 	}
 	keysManager := provideKeysManager(jwkKeyRepository, keyManager, rotationConfig)
-	auditEventRepository := provideAuditStore(databases)
+	auditEventRepository := provideAuditStore(bootstrapMysqlDatabases)
 	repositoryAuditEventRepository, err := provideAuditEventRepository(client, cfg, keyBuilder, auditEventRepository)
 	if err != nil {
 		return nil, err
