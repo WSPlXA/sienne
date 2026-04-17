@@ -36,6 +36,8 @@ func (r *ReplayProtectionRepository) SaveState(ctx context.Context, state string
 		value["redirect_uri"],
 		value["session_id"],
 		value["created_at"],
+		value["return_to"],
+		value["nonce"],
 		durationSeconds(ttl),
 	).Result()
 	return err

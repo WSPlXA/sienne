@@ -53,11 +53,11 @@ func TestResolveBrowserPostLoginRedirect(t *testing.T) {
 			want:             "/admin",
 		},
 		{
-			name:             "unknown_role_no_default_redirect",
+			name:             "end_user_role_defaults_to_root",
 			returnTo:         "",
 			upstreamRedirect: "",
 			roleCode:         "end_user",
-			want:             "",
+			want:             "/",
 		},
 	}
 

@@ -18,6 +18,8 @@ func resolveBrowserPostLoginRedirect(returnTo, upstreamRedirectURI, roleCode str
 		return target
 	}
 	switch strings.ToLower(strings.TrimSpace(roleCode)) {
+	case pkgrbac.RoleEndUser:
+		return "/"
 	case pkgrbac.RoleSupport:
 		return "/admin/workbench/support"
 	case pkgrbac.RoleOAuthAdmin:
