@@ -37,6 +37,9 @@
 - CSRF 双提交校验（cookie + body/header）
 - `return_to` 本地路径校验（防开放重定向）
 - 登录失败限流与用户锁定
+- **高性能状态机**：会话与 MFA 状态采用 32 位掩码（Bitmask）替代字符串比较，利用 CPU 原生位运算完成状态校验。
+- **原子 CAS (Compare-And-Swap)**：通过 Redis Lua 脚本实现 Redis 原生乐观锁，杜绝并发流中的“更新丢失”并确保状态转换原子化。
+- **硬件亲和型缓存层**：优化 Redis 访问，采用 `HMGet` 与紧凑的 `BITFIELD` 状态存储，减少内存分配与网络往返（RTT）。
 - Redis Lua 脚本保证状态更新原子性
 - 32 位 RBAC 权限掩码保护管理接口
 - 管理关键操作写入 `audit_events` 审计日志
