@@ -37,6 +37,9 @@ This README is rebuilt from the current project docs:
 - CSRF double-submit protection (cookie + body/header)
 - `return_to` local-path validation (open redirect guard)
 - Login rate limiting and account lock
+- **High-Performance State Machine**: Session and MFA states use 32-bit bitmasks instead of string comparisons, leveraging CPU-native bitwise operations for state validation.
+- **Atomic CAS (Compare-And-Swap)**: Redis-native optimistic concurrency control via Lua scripts prevents "lost updates" and ensures atomic state transitions in concurrent flows.
+- **Hardware-Friendly Cache Layer**: Optimized Redis access using `HMGet` and packed `BITFIELD` state storage, reducing memory allocations and network RTT.
 - Redis Lua scripts for atomic state changes
 - 32-bit RBAC privilege mask for admin endpoints
 - Audit trail in `audit_events` for admin-sensitive operations
