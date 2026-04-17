@@ -9,16 +9,20 @@ import (
 )
 
 type ConsentRepository struct {
-	db *sql.DB
+	db dbRouter
 }
 
 func NewConsentRepository(db *sql.DB) *ConsentRepository {
-	return &ConsentRepository{db: db}
+	return NewConsentRepositoryRW(db, nil)
+}
+
+func NewConsentRepositoryRW(writeDB, readDB *sql.DB) *ConsentRepository {
+	return &ConsentRepository{db: newDBRouter(writeDB, readDB)}
 }
 
 func (r *ConsentRepository) HasActiveConsent(ctx context.Context, userID, clientID int64, scopes []string) (bool, error) {
 	var scopesJSON string
-	err := r.db.QueryRowContext(ctx, consentRepositorySQL.hasActiveConsentSelect, userID, clientID).Scan(&scopesJSON)
+	err := r.db.reader().QueryRowContext(ctx, consentRepositorySQL.hasActiveConsentSelect, userID, clientID).Scan(&scopesJSON)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return false, nil
@@ -54,8 +58,16 @@ func (r *ConsentRepository) HasActiveConsent(ctx context.Context, userID, client
 }
 
 func (r *ConsentRepository) UpsertActiveConsent(ctx context.Context, userID, clientID int64, scopes []string, grantedAt time.Time) error {
+	tx, err := r.db.writer().BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
 	var existingJSON string
-	err := r.db.QueryRowContext(ctx, consentRepositorySQL.upsertSelectExisting, userID, clientID).Scan(&existingJSON)
+	err = tx.QueryRowContext(ctx, consentRepositorySQL.upsertSelectExisting, userID, clientID).Scan(&existingJSON)
 	if err != nil && err != sql.ErrNoRows {
 		return err
 	}
@@ -93,6 +105,8 @@ func (r *ConsentRepository) UpsertActiveConsent(ctx context.Context, userID, cli
 		return err
 	}
 
-	_, err = r.db.ExecContext(ctx, consentRepositorySQL.upsertActiveConsent, userID, clientID, string(scopesJSON), grantedAt)
-	return err
+	if _, err := tx.ExecContext(ctx, consentRepositorySQL.upsertActiveConsent, userID, clientID, string(scopesJSON), grantedAt); err != nil {
+		return err
+	}
+	return tx.Commit()
 }

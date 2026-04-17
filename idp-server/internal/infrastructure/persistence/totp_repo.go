@@ -10,7 +10,7 @@ import (
 )
 
 type TOTPRepository struct {
-	db    *sql.DB
+	db    dbRouter
 	codec secretCodec
 }
 
@@ -20,12 +20,16 @@ type secretCodec interface {
 }
 
 func NewTOTPRepository(db *sql.DB, codec secretCodec) *TOTPRepository {
-	return &TOTPRepository{db: db, codec: codec}
+	return NewTOTPRepositoryRW(db, nil, codec)
+}
+
+func NewTOTPRepositoryRW(writeDB, readDB *sql.DB, codec secretCodec) *TOTPRepository {
+	return &TOTPRepository{db: newDBRouter(writeDB, readDB), codec: codec}
 }
 
 func (r *TOTPRepository) FindByUserID(ctx context.Context, userID int64) (*totpdomain.Model, error) {
 	var model totpdomain.Model
-	err := r.db.QueryRowContext(ctx, totpRepositorySQL.findByUserID, userID).Scan(
+	err := r.db.reader().QueryRowContext(ctx, totpRepositorySQL.findByUserID, userID).Scan(
 		&model.ID,
 		&model.UserID,
 		&model.Secret,
@@ -62,7 +66,7 @@ func (r *TOTPRepository) Upsert(ctx context.Context, model *totpdomain.Model) er
 	if err != nil {
 		return err
 	}
-	_, err = r.db.ExecContext(ctx, totpRepositorySQL.upsert, model.UserID, secret, model.EnabledAt, model.CreatedAt, model.UpdatedAt)
+	_, err = r.db.writer().ExecContext(ctx, totpRepositorySQL.upsert, model.UserID, secret, model.EnabledAt, model.CreatedAt, model.UpdatedAt)
 	return err
 }
 
@@ -81,6 +85,6 @@ func (r *TOTPRepository) decryptSecret(secret string) (string, error) {
 }
 
 func (r *TOTPRepository) DeleteByUserID(ctx context.Context, userID int64) error {
-	_, err := r.db.ExecContext(ctx, totpRepositorySQL.deleteByUser, userID)
+	_, err := r.db.writer().ExecContext(ctx, totpRepositorySQL.deleteByUser, userID)
 	return err
 }

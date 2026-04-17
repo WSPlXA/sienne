@@ -14,14 +14,14 @@ import (
 
 //go:generate wire
 func initializeApp(ctx context.Context, cfg *config) (*App, error) {
-	db, err := provideMySQL(ctx, cfg)
+	databases, err := provideMySQLDatabases(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
-	clientRepository := provideClientRepository(db)
-	sessionRepository := provideSessionRepository(db)
-	authorizationCodeRepository := provideAuthorizationCodeRepository(db)
-	consentRepository := provideConsentRepository(db)
+	clientRepository := provideClientRepository(databases)
+	sessionRepository := provideSessionRepository(cfg, databases)
+	authorizationCodeRepository := provideAuthorizationCodeRepository(databases)
+	consentRepository := provideConsentRepository(databases)
 	service := provideAuthzService(clientRepository, sessionRepository, authorizationCodeRepository, consentRepository)
 	client, err := provideRedis(ctx, cfg)
 	if err != nil {
@@ -30,7 +30,7 @@ func initializeApp(ctx context.Context, cfg *config) (*App, error) {
 	keyBuilder := provideKeyBuilder(cfg)
 	sessionCacheRepository := provideSessionCacheRepository(client, keyBuilder)
 	manager := provideConsentManager(clientRepository, sessionRepository, sessionCacheRepository, consentRepository)
-	userRepository := provideUserRepository(db)
+	userRepository := provideUserRepository(databases)
 	passwordVerifier := providePasswordVerifier()
 	rateLimitRepository := provideRateLimitRepository(client, keyBuilder)
 	registerService := provideRegisterService(userRepository, passwordVerifier, rateLimitRepository)
@@ -50,27 +50,27 @@ func initializeApp(ctx context.Context, cfg *config) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	totpRepository := provideTOTPRepository(db, secretCodec)
+	totpRepository := provideTOTPRepository(databases, secretCodec)
 	totpProvider := provideTOTPProvider()
-	passkeyCredentialRepository := providePasskeyRepository(db)
+	passkeyCredentialRepository := providePasskeyRepository(databases)
 	passkeyProvider, err := providePasskeyProvider(cfg)
 	if err != nil {
 		return nil, err
 	}
 	authenticator := provideAuthnService(cfg, userRepository, sessionRepository, sessionCacheRepository, rateLimitRepository, mfaRepository, authnRegistry, totpRepository, totpProvider, passkeyCredentialRepository, passkeyProvider)
-	tokenRepository := provideTokenStore(db)
+	tokenRepository := provideTokenStore(cfg, databases)
 	tokenCacheRepository := provideTokenCacheRepository(client, keyBuilder)
 	sessionManager := provideSessionManager(sessionRepository, sessionCacheRepository, tokenRepository, tokenCacheRepository)
-	operatorRoleRepository := provideOperatorRoleRepository(db)
+	operatorRoleRepository := provideOperatorRoleRepository(databases)
 	rbacManager := provideRBACManager(operatorRoleRepository, userRepository)
-	jwkKeyRepository := provideJWKRepository(db)
+	jwkKeyRepository := provideJWKRepository(databases)
 	rotationConfig := provideRotationConfig(cfg)
 	keyManager, err := provideKeyManager(ctx, cfg, jwkKeyRepository, rotationConfig)
 	if err != nil {
 		return nil, err
 	}
 	keysManager := provideKeysManager(jwkKeyRepository, keyManager, rotationConfig)
-	auditEventRepository := provideAuditStore(db)
+	auditEventRepository := provideAuditStore(databases)
 	repositoryAuditEventRepository, err := provideAuditEventRepository(client, cfg, keyBuilder, auditEventRepository)
 	if err != nil {
 		return nil, err

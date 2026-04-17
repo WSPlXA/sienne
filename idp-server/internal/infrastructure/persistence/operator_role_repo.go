@@ -10,15 +10,19 @@ import (
 )
 
 type OperatorRoleRepository struct {
-	db *sql.DB
+	db dbRouter
 }
 
 func NewOperatorRoleRepository(db *sql.DB) *OperatorRoleRepository {
-	return &OperatorRoleRepository{db: db}
+	return NewOperatorRoleRepositoryRW(db, nil)
+}
+
+func NewOperatorRoleRepositoryRW(writeDB, readDB *sql.DB) *OperatorRoleRepository {
+	return &OperatorRoleRepository{db: newDBRouter(writeDB, readDB)}
 }
 
 func (r *OperatorRoleRepository) Upsert(ctx context.Context, model *operatorroledomain.Model) error {
-	result, err := r.db.ExecContext(
+	result, err := r.db.writer().ExecContext(
 		ctx,
 		operatorRoleRepositorySQL.upsert,
 		model.RoleCode,
@@ -37,7 +41,7 @@ func (r *OperatorRoleRepository) Upsert(ctx context.Context, model *operatorrole
 }
 
 func (r *OperatorRoleRepository) Create(ctx context.Context, model *operatorroledomain.Model) error {
-	result, err := r.db.ExecContext(
+	result, err := r.db.writer().ExecContext(
 		ctx,
 		operatorRoleRepositorySQL.create,
 		model.RoleCode,
@@ -56,7 +60,7 @@ func (r *OperatorRoleRepository) Create(ctx context.Context, model *operatorrole
 }
 
 func (r *OperatorRoleRepository) Update(ctx context.Context, model *operatorroledomain.Model) error {
-	_, err := r.db.ExecContext(
+	_, err := r.db.writer().ExecContext(
 		ctx,
 		operatorRoleRepositorySQL.update,
 		model.DisplayName,
@@ -68,12 +72,12 @@ func (r *OperatorRoleRepository) Update(ctx context.Context, model *operatorrole
 }
 
 func (r *OperatorRoleRepository) DeleteByRoleCode(ctx context.Context, roleCode string) error {
-	_, err := r.db.ExecContext(ctx, operatorRoleRepositorySQL.deleteByRole, strings.TrimSpace(roleCode))
+	_, err := r.db.writer().ExecContext(ctx, operatorRoleRepositorySQL.deleteByRole, strings.TrimSpace(roleCode))
 	return err
 }
 
 func (r *OperatorRoleRepository) FindByRoleCode(ctx context.Context, roleCode string) (*operatorroledomain.Model, error) {
-	row := r.db.QueryRowContext(ctx, operatorRoleRepositorySQL.findByRoleCode, roleCode)
+	row := r.db.reader().QueryRowContext(ctx, operatorRoleRepositorySQL.findByRoleCode, roleCode)
 	model, err := scanOperatorRole(row)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -85,7 +89,7 @@ func (r *OperatorRoleRepository) FindByRoleCode(ctx context.Context, roleCode st
 }
 
 func (r *OperatorRoleRepository) List(ctx context.Context) ([]*operatorroledomain.Model, error) {
-	rows, err := r.db.QueryContext(ctx, operatorRoleRepositorySQL.list)
+	rows, err := r.db.reader().QueryContext(ctx, operatorRoleRepositorySQL.list)
 	if err != nil {
 		return nil, err
 	}

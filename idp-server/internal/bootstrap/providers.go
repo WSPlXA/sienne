@@ -3,7 +3,9 @@ package bootstrap
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"idp-server/internal/application/authn"
@@ -47,8 +49,35 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 )
 
-func provideMySQL(ctx context.Context, cfg *config) (*sql.DB, error) {
-	return storage.NewMySQL(ctx, cfg.MySQLDSN)
+type mysqlDatabases struct {
+	write *sql.DB
+	read  *sql.DB
+}
+
+func provideMySQLDatabases(ctx context.Context, cfg *config) (*mysqlDatabases, error) {
+	writeDB, err := storage.NewMySQL(ctx, cfg.MySQLDSN)
+	if err != nil {
+		return nil, err
+	}
+
+	readDSN := strings.TrimSpace(cfg.MySQLReadDSN)
+	if readDSN == "" || readDSN == strings.TrimSpace(cfg.MySQLDSN) {
+		return &mysqlDatabases{
+			write: writeDB,
+			read:  writeDB,
+		}, nil
+	}
+
+	readDB, err := storage.NewMySQL(ctx, readDSN)
+	if err != nil {
+		_ = writeDB.Close()
+		return nil, fmt.Errorf("open mysql read replica: %w", err)
+	}
+
+	return &mysqlDatabases{
+		write: writeDB,
+		read:  readDB,
+	}, nil
 }
 
 func provideRedis(ctx context.Context, cfg *config) (*goredis.Client, error) {
@@ -82,52 +111,60 @@ func providePasskeyProvider(cfg *config) (securityport.PasskeyProvider, error) {
 	return infrasecurity.NewPasskeyProvider(rpID, displayName, origins)
 }
 
-func provideUserRepository(db *sql.DB) repository.UserRepository {
-	return persistence.NewUserRepository(db)
+func provideUserRepository(databases *mysqlDatabases) repository.UserRepository {
+	return persistence.NewUserRepositoryRW(databases.write, databases.read)
 }
 
-func provideAuditStore(db *sql.DB) *persistence.AuditEventRepository {
-	return persistence.NewAuditEventRepository(db)
+func provideAuditStore(databases *mysqlDatabases) *persistence.AuditEventRepository {
+	return persistence.NewAuditEventRepositoryRW(databases.write, databases.read)
 }
 
-func provideOperatorRoleRepository(db *sql.DB) repository.OperatorRoleRepository {
-	return persistence.NewOperatorRoleRepository(db)
+func provideOperatorRoleRepository(databases *mysqlDatabases) repository.OperatorRoleRepository {
+	return persistence.NewOperatorRoleRepositoryRW(databases.write, databases.read)
 }
 
-func provideSessionRepository(db *sql.DB) repository.SessionRepository {
-	return persistence.NewSessionRepository(db)
+func provideSessionRepository(cfg *config, databases *mysqlDatabases) repository.SessionRepository {
+	return persistence.NewSessionRepositoryRWWithPolicy(
+		databases.write,
+		databases.read,
+		cfg.MySQLStrongReadSessionByID,
+	)
 }
 
-func provideClientRepository(db *sql.DB) repository.ClientRepository {
-	return persistence.NewClientRepository(db)
+func provideClientRepository(databases *mysqlDatabases) repository.ClientRepository {
+	return persistence.NewClientRepositoryRW(databases.write, databases.read)
 }
 
-func provideAuthorizationCodeRepository(db *sql.DB) repository.AuthorizationCodeRepository {
-	return persistence.NewAuthorizationCodeRepository(db)
+func provideAuthorizationCodeRepository(databases *mysqlDatabases) repository.AuthorizationCodeRepository {
+	return persistence.NewAuthorizationCodeRepositoryRW(databases.write, databases.read)
 }
 
-func provideConsentRepository(db *sql.DB) repository.ConsentRepository {
-	return persistence.NewConsentRepository(db)
+func provideConsentRepository(databases *mysqlDatabases) repository.ConsentRepository {
+	return persistence.NewConsentRepositoryRW(databases.write, databases.read)
 }
 
-func provideJWKRepository(db *sql.DB) *persistence.JWKKeyRepository {
-	return persistence.NewJWKKeyRepository(db)
+func provideJWKRepository(databases *mysqlDatabases) *persistence.JWKKeyRepository {
+	return persistence.NewJWKKeyRepositoryRW(databases.write, databases.read)
 }
 
-func provideTokenStore(db *sql.DB) *persistence.TokenRepository {
-	return persistence.NewTokenRepository(db)
+func provideTokenStore(cfg *config, databases *mysqlDatabases) *persistence.TokenRepository {
+	return persistence.NewTokenRepositoryRWWithPolicy(
+		databases.write,
+		databases.read,
+		cfg.MySQLStrongReadTokenBySHA256,
+	)
 }
 
 func provideTokenRepository(store *persistence.TokenRepository) repository.TokenRepository {
 	return store
 }
 
-func provideTOTPRepository(db *sql.DB, codec *infrasecurity.SecretCodec) repository.TOTPRepository {
-	return persistence.NewTOTPRepository(db, codec)
+func provideTOTPRepository(databases *mysqlDatabases, codec *infrasecurity.SecretCodec) repository.TOTPRepository {
+	return persistence.NewTOTPRepositoryRW(databases.write, databases.read, codec)
 }
 
-func providePasskeyRepository(db *sql.DB) repository.PasskeyCredentialRepository {
-	return persistence.NewPasskeyCredentialRepository(db)
+func providePasskeyRepository(databases *mysqlDatabases) repository.PasskeyCredentialRepository {
+	return persistence.NewPasskeyCredentialRepositoryRW(databases.write, databases.read)
 }
 
 func provideSessionCacheRepository(rdb *goredis.Client, keyBuilder *cacheRedis.KeyBuilder) cacheport.SessionCacheRepository {

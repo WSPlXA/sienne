@@ -9,15 +9,19 @@ import (
 )
 
 type PasskeyCredentialRepository struct {
-	db *sql.DB
+	db dbRouter
 }
 
 func NewPasskeyCredentialRepository(db *sql.DB) *PasskeyCredentialRepository {
-	return &PasskeyCredentialRepository{db: db}
+	return NewPasskeyCredentialRepositoryRW(db, nil)
+}
+
+func NewPasskeyCredentialRepositoryRW(writeDB, readDB *sql.DB) *PasskeyCredentialRepository {
+	return &PasskeyCredentialRepository{db: newDBRouter(writeDB, readDB)}
 }
 
 func (r *PasskeyCredentialRepository) ListByUserID(ctx context.Context, userID int64) ([]*passkeydomain.Model, error) {
-	rows, err := r.db.QueryContext(ctx, passkeyCredentialRepositorySQL.listByUserID, userID)
+	rows, err := r.db.reader().QueryContext(ctx, passkeyCredentialRepositorySQL.listByUserID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +53,7 @@ func (r *PasskeyCredentialRepository) Upsert(ctx context.Context, model *passkey
 	if model.LastUsedAt != nil {
 		lastUsed = *model.LastUsedAt
 	}
-	_, err := r.db.ExecContext(
+	_, err := r.db.writer().ExecContext(
 		ctx,
 		passkeyCredentialRepositorySQL.upsert,
 		model.UserID,
@@ -63,7 +67,7 @@ func (r *PasskeyCredentialRepository) Upsert(ctx context.Context, model *passkey
 }
 
 func (r *PasskeyCredentialRepository) TouchByCredentialID(ctx context.Context, credentialID string, lastUsedAt time.Time) error {
-	_, err := r.db.ExecContext(ctx, passkeyCredentialRepositorySQL.touchByCredentialID, lastUsedAt, credentialID)
+	_, err := r.db.writer().ExecContext(ctx, passkeyCredentialRepositorySQL.touchByCredentialID, lastUsedAt, credentialID)
 	return err
 }
 

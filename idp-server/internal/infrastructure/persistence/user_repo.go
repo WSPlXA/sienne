@@ -11,11 +11,15 @@ import (
 )
 
 type UserRepository struct {
-	db *sql.DB
+	db dbRouter
 }
 
 func NewUserRepository(db *sql.DB) *UserRepository {
-	return &UserRepository{db: db}
+	return NewUserRepositoryRW(db, nil)
+}
+
+func NewUserRepositoryRW(writeDB, readDB *sql.DB) *UserRepository {
+	return &UserRepository{db: newDBRouter(writeDB, readDB)}
 }
 
 func (r *UserRepository) Create(ctx context.Context, model *user.Model) error {
@@ -23,7 +27,7 @@ func (r *UserRepository) Create(ctx context.Context, model *user.Model) error {
 	if roleCode == "" {
 		roleCode = pkgrbac.RoleEndUser
 	}
-	result, err := r.db.ExecContext(
+	result, err := r.db.writer().ExecContext(
 		ctx,
 		userRepositorySQL.createUser,
 		model.UserUUID,
@@ -63,7 +67,7 @@ func (r *UserRepository) ListByRoleCode(ctx context.Context, roleCode string, li
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
-	rows, err := r.db.QueryContext(ctx, userRepositorySQL.listByRoleCode, roleCode, limit)
+	rows, err := r.db.reader().QueryContext(ctx, userRepositorySQL.listByRoleCode, roleCode, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +89,7 @@ func (r *UserRepository) ListByRoleCode(ctx context.Context, roleCode string, li
 
 func (r *UserRepository) CountByRoleCode(ctx context.Context, roleCode string) (int64, error) {
 	var count int64
-	if err := r.db.QueryRowContext(ctx, userRepositorySQL.countByRoleCode, roleCode).Scan(&count); err != nil {
+	if err := r.db.reader().QueryRowContext(ctx, userRepositorySQL.countByRoleCode, roleCode).Scan(&count); err != nil {
 		return 0, err
 	}
 	return count, nil
@@ -100,32 +104,32 @@ func (r *UserRepository) FindByUserUUID(ctx context.Context, userUUID string) (*
 }
 
 func (r *UserRepository) UpdateRoleAndPrivilege(ctx context.Context, id int64, roleCode string, privilegeMask uint32, tenantScope string) error {
-	_, err := r.db.ExecContext(ctx, userRepositorySQL.updateRoleAndPrivilege, roleCode, privilegeMask, nullString(tenantScope), id)
+	_, err := r.db.writer().ExecContext(ctx, userRepositorySQL.updateRoleAndPrivilege, roleCode, privilegeMask, nullString(tenantScope), id)
 	return err
 }
 
 func (r *UserRepository) LockAccount(ctx context.Context, id int64, updatedAt time.Time) error {
-	_, err := r.db.ExecContext(ctx, userRepositorySQL.lockAccount, updatedAt, id)
+	_, err := r.db.writer().ExecContext(ctx, userRepositorySQL.lockAccount, updatedAt, id)
 	return err
 }
 
 func (r *UserRepository) UnlockAccount(ctx context.Context, id int64, updatedAt time.Time) error {
-	_, err := r.db.ExecContext(ctx, userRepositorySQL.unlockAccount, updatedAt, id)
+	_, err := r.db.writer().ExecContext(ctx, userRepositorySQL.unlockAccount, updatedAt, id)
 	return err
 }
 
 func (r *UserRepository) UpdatePasswordHash(ctx context.Context, id int64, passwordHash string, updatedAt time.Time) error {
-	_, err := r.db.ExecContext(ctx, userRepositorySQL.updatePasswordHash, passwordHash, updatedAt, id)
+	_, err := r.db.writer().ExecContext(ctx, userRepositorySQL.updatePasswordHash, passwordHash, updatedAt, id)
 	return err
 }
 
 func (r *UserRepository) IncrementFailedLogin(ctx context.Context, id int64) (int64, error) {
-	if _, err := r.db.ExecContext(ctx, userRepositorySQL.incrementFailedLogin, id); err != nil {
+	if _, err := r.db.writer().ExecContext(ctx, userRepositorySQL.incrementFailedLogin, id); err != nil {
 		return 0, err
 	}
 
 	var count int64
-	if err := r.db.QueryRowContext(ctx, userRepositorySQL.selectFailedLoginCountByUserID, id).Scan(&count); err != nil {
+	if err := r.db.writer().QueryRowContext(ctx, userRepositorySQL.selectFailedLoginCountByUserID, id).Scan(&count); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return 0, nil
 		}
@@ -136,12 +140,12 @@ func (r *UserRepository) IncrementFailedLogin(ctx context.Context, id int64) (in
 }
 
 func (r *UserRepository) ResetFailedLogin(ctx context.Context, id int64, lastLoginAt time.Time) error {
-	_, err := r.db.ExecContext(ctx, userRepositorySQL.resetFailedLogin, lastLoginAt, id)
+	_, err := r.db.writer().ExecContext(ctx, userRepositorySQL.resetFailedLogin, lastLoginAt, id)
 	return err
 }
 
 func (r *UserRepository) getOne(ctx context.Context, query string, arg any) (*user.Model, error) {
-	row := r.db.QueryRowContext(ctx, query, arg)
+	row := r.db.reader().QueryRowContext(ctx, query, arg)
 	model, err := r.scanOne(row)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

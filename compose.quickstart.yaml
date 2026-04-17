@@ -12,6 +12,8 @@ services:
     volumes:
       - idp-mysql-data:/var/lib/mysql
       - ./idp-server/scripts/migrate.sql:/docker-entrypoint-initdb.d/001-migrate.sql:ro
+    ports:
+      - "${IDP_MYSQL_PUBLISH:-127.0.0.1:13306}:3306"
     healthcheck:
       test: [ "CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent" ]
       interval: 10s
@@ -25,6 +27,8 @@ services:
     command: [ "redis-server", "--appendonly", "yes" ]
     volumes:
       - idp-redis-data:/data
+    ports:
+      - "${IDP_REDIS_PUBLISH:-127.0.0.1:16379}:6379"
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
@@ -36,11 +40,17 @@ services:
     image: ${IDP_SERVER_IMAGE:-ghcr.io/wsplxa/sienne-idp-server:latest}
     restart: unless-stopped
     environment:
+      # Optional explicit primary DSN (if set, overrides MYSQL_HOST/MYSQL_PORT/...).
+      MYSQL_DSN: ${IDP_MYSQL_DSN:-}
       MYSQL_HOST: db
       MYSQL_PORT: 3306
       MYSQL_DATABASE: ${IDP_MYSQL_DATABASE:-app}
       MYSQL_USER: ${IDP_MYSQL_USER:-app}
       MYSQL_PASSWORD: ${IDP_MYSQL_PASSWORD:-ChangeThisAppPassword_32CharsMin}
+      # Replica DSN should use read-only account (e.g. idp_ro). Leave empty to fallback to primary.
+      MYSQL_READ_DSN: ${IDP_MYSQL_READ_DSN:-}
+      MYSQL_STRONG_READ_SESSION_BY_ID: ${IDP_MYSQL_STRONG_READ_SESSION_BY_ID:-true}
+      MYSQL_STRONG_READ_TOKEN_BY_SHA256: ${IDP_MYSQL_STRONG_READ_TOKEN_BY_SHA256:-true}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: 0

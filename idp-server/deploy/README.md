@@ -38,6 +38,21 @@ Run the Podman stack:
 podman kube play deploy/podman/idp-stack.yaml
 ```
 
+## MySQL Replica Hardening
+
+For primary/replica deployments, enforce hard read-only constraints on replica and use a read-only account:
+
+```sql
+SOURCE deploy/mysql/replica_readonly_hardening.sql;
+```
+
+Then configure application DSNs:
+
+- `MYSQL_DSN`: primary (read/write account)
+- `MYSQL_READ_DSN`: replica (read-only account)
+- `MYSQL_STRONG_READ_SESSION_BY_ID=true`: force session critical checks to primary
+- `MYSQL_STRONG_READ_TOKEN_BY_SHA256=true`: force token SHA256 critical checks to primary
+
 ## Windows Host Notes
 
 - Kubernetes 清单不需要改。你在 Windows 上执行 `kubectl apply -f deploy/k8s/idp-stack.yaml` 只是发请求给集群，真正跑 workload 的仍然是 Linux 节点。

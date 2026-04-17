@@ -11,15 +11,19 @@ import (
 )
 
 type ClientRepository struct {
-	db *sql.DB
+	db dbRouter
 }
 
 func NewClientRepository(db *sql.DB) *ClientRepository {
-	return &ClientRepository{db: db}
+	return NewClientRepositoryRW(db, nil)
+}
+
+func NewClientRepositoryRW(writeDB, readDB *sql.DB) *ClientRepository {
+	return &ClientRepository{db: newDBRouter(writeDB, readDB)}
 }
 
 func (r *ClientRepository) CreateClient(ctx context.Context, model *clientdomain.Model) error {
-	tx, err := r.db.BeginTx(ctx, nil)
+	tx, err := r.db.writer().BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -80,7 +84,7 @@ func (r *ClientRepository) CreateClient(ctx context.Context, model *clientdomain
 func (r *ClientRepository) FindByClientID(ctx context.Context, clientID string) (*clientdomain.Model, error) {
 	var model clientdomain.Model
 	var secretHash sql.NullString
-	err := r.db.QueryRowContext(ctx, clientRepositorySQL.findByClientID, clientID).Scan(
+	err := r.db.reader().QueryRowContext(ctx, clientRepositorySQL.findByClientID, clientID).Scan(
 		&model.ID,
 		&model.ClientID,
 		&model.ClientName,
@@ -126,7 +130,7 @@ func (r *ClientRepository) FindByClientID(ctx context.Context, clientID string) 
 }
 
 func (r *ClientRepository) loadStrings(ctx context.Context, query string, clientID int64) ([]string, error) {
-	rows, err := r.db.QueryContext(ctx, query, clientID)
+	rows, err := r.db.reader().QueryContext(ctx, query, clientID)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +156,7 @@ func (r *ClientRepository) RegisterRedirectURIs(ctx context.Context, clientDBID 
 		return 0, nil
 	}
 
-	tx, err := r.db.BeginTx(ctx, nil)
+	tx, err := r.db.writer().BeginTx(ctx, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -188,7 +192,7 @@ func (r *ClientRepository) RegisterRedirectURIs(ctx context.Context, clientDBID 
 func (r *ClientRepository) HasPostLogoutRedirectURI(ctx context.Context, clientDBID int64, redirectURI string) (bool, error) {
 	hash := sha256.Sum256([]byte(redirectURI))
 	var matched int
-	err := r.db.QueryRowContext(ctx, clientRepositorySQL.hasPostLogoutRedirectURI, clientDBID, hex.EncodeToString(hash[:])).Scan(&matched)
+	err := r.db.reader().QueryRowContext(ctx, clientRepositorySQL.hasPostLogoutRedirectURI, clientDBID, hex.EncodeToString(hash[:])).Scan(&matched)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return false, nil
@@ -203,7 +207,7 @@ func (r *ClientRepository) RegisterPostLogoutRedirectURIs(ctx context.Context, c
 		return 0, nil
 	}
 
-	tx, err := r.db.BeginTx(ctx, nil)
+	tx, err := r.db.writer().BeginTx(ctx, nil)
 	if err != nil {
 		return 0, err
 	}

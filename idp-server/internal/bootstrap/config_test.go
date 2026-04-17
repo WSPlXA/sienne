@@ -42,6 +42,9 @@ federated_oidc:
 	if got, want := cfg.MySQLDSN, "user:pass@tcp(localhost:3306)/idp?parseTime=true&charset=utf8mb4&collation=utf8mb4_unicode_ci"; got != want {
 		t.Fatalf("mysql dsn = %q, want %q", got, want)
 	}
+	if got, want := cfg.MySQLReadDSN, cfg.MySQLDSN; got != want {
+		t.Fatalf("mysql read dsn = %q, want %q", got, want)
+	}
 	if got, want := cfg.RedisAddr, "127.0.0.1:6379"; got != want {
 		t.Fatalf("redis addr = %q, want %q", got, want)
 	}
@@ -86,8 +89,65 @@ issuer: http://localhost:8080
 	if got, want := cfg.MySQLDSN, "app:secret@tcp(db:3307)/idp?parseTime=true&charset=utf8mb4&collation=utf8mb4_unicode_ci"; got != want {
 		t.Fatalf("mysql dsn = %q, want %q", got, want)
 	}
+	if got, want := cfg.MySQLReadDSN, cfg.MySQLDSN; got != want {
+		t.Fatalf("mysql read dsn = %q, want %q", got, want)
+	}
 	if got, want := cfg.RedisAddr, "cache:6380"; got != want {
 		t.Fatalf("redis addr = %q, want %q", got, want)
+	}
+}
+
+func TestLoadConfigUsesExplicitMySQLReadDSN(t *testing.T) {
+	clearConfigEnv(t)
+
+	configFile := writeTempConfig(t, `
+app:
+  env: dev
+mysql:
+  dsn: user:pass@tcp(primary:3306)/idp?parseTime=true&charset=utf8mb4&collation=utf8mb4_unicode_ci
+redis:
+  addr: 127.0.0.1:6379
+issuer: http://localhost:8080
+`)
+	t.Setenv("IDP_CONFIG_FILE", configFile)
+	t.Setenv("MYSQL_READ_DSN", "user:pass@tcp(replica:3306)/idp?parseTime=true&charset=utf8mb4&collation=utf8mb4_unicode_ci")
+
+	cfg, err := loadConfig()
+	if err != nil {
+		t.Fatalf("loadConfig() error = %v", err)
+	}
+
+	if got, want := cfg.MySQLReadDSN, "user:pass@tcp(replica:3306)/idp?parseTime=true&charset=utf8mb4&collation=utf8mb4_unicode_ci"; got != want {
+		t.Fatalf("mysql read dsn = %q, want %q", got, want)
+	}
+}
+
+func TestLoadConfigParsesMySQLStrongReadFlags(t *testing.T) {
+	clearConfigEnv(t)
+
+	configFile := writeTempConfig(t, `
+app:
+  env: dev
+mysql:
+  dsn: user:pass@tcp(primary:3306)/idp?parseTime=true&charset=utf8mb4&collation=utf8mb4_unicode_ci
+redis:
+  addr: 127.0.0.1:6379
+issuer: http://localhost:8080
+`)
+	t.Setenv("IDP_CONFIG_FILE", configFile)
+	t.Setenv("MYSQL_STRONG_READ_SESSION_BY_ID", "true")
+	t.Setenv("MYSQL_STRONG_READ_TOKEN_BY_SHA256", "1")
+
+	cfg, err := loadConfig()
+	if err != nil {
+		t.Fatalf("loadConfig() error = %v", err)
+	}
+
+	if !cfg.MySQLStrongReadSessionByID {
+		t.Fatal("MySQLStrongReadSessionByID = false, want true")
+	}
+	if !cfg.MySQLStrongReadTokenBySHA256 {
+		t.Fatal("MySQLStrongReadTokenBySHA256 = false, want true")
 	}
 }
 

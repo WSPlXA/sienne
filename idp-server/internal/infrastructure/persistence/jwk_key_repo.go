@@ -21,15 +21,19 @@ type JWKKeyRecord struct {
 }
 
 type JWKKeyRepository struct {
-	db *sql.DB
+	db dbRouter
 }
 
 func NewJWKKeyRepository(db *sql.DB) *JWKKeyRepository {
-	return &JWKKeyRepository{db: db}
+	return NewJWKKeyRepositoryRW(db, nil)
+}
+
+func NewJWKKeyRepositoryRW(writeDB, readDB *sql.DB) *JWKKeyRepository {
+	return &JWKKeyRepository{db: newDBRouter(writeDB, readDB)}
 }
 
 func (r *JWKKeyRepository) ListCurrent(ctx context.Context) ([]JWKKeyRecord, error) {
-	rows, err := r.db.QueryContext(ctx, jwkKeyRepositorySQL.listCurrentKeys)
+	rows, err := r.db.writer().QueryContext(ctx, jwkKeyRepositorySQL.listCurrentKeys)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +80,7 @@ func (r *JWKKeyRepository) ListCurrent(ctx context.Context) ([]JWKKeyRecord, err
 }
 
 func (r *JWKKeyRepository) CreateActiveKey(ctx context.Context, record JWKKeyRecord, retiresExistingAt time.Time) error {
-	tx, err := r.db.BeginTx(ctx, nil)
+	tx, err := r.db.writer().BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}

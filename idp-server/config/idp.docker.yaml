@@ -7,6 +7,10 @@ mysql:
   database: "app"
   user: "app"
   password: "apppass"
+  read_dsn: ""
+  strong_read:
+    session_by_id: true
+    token_by_sha256: true
 
 redis:
   host: "idp-redis"

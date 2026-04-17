@@ -3,6 +3,10 @@ app:
 
 mysql:
   dsn: "idp:idp@tcp(localhost:3306)/idp?parseTime=true&charset=utf8mb4&collation=utf8mb4_unicode_ci"
+  read_dsn: "idp:idp@tcp(localhost:3307)/idp?parseTime=true&charset=utf8mb4&collation=utf8mb4_unicode_ci"
+  strong_read:
+    session_by_id: true
+    token_by_sha256: true
 
 redis:
   addr: "localhost:6379"

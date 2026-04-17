@@ -10,15 +10,19 @@ import (
 )
 
 type AuthorizationCodeRepository struct {
-	db *sql.DB
+	db dbRouter
 }
 
 func NewAuthorizationCodeRepository(db *sql.DB) *AuthorizationCodeRepository {
-	return &AuthorizationCodeRepository{db: db}
+	return NewAuthorizationCodeRepositoryRW(db, nil)
+}
+
+func NewAuthorizationCodeRepositoryRW(writeDB, readDB *sql.DB) *AuthorizationCodeRepository {
+	return &AuthorizationCodeRepository{db: newDBRouter(writeDB, readDB)}
 }
 
 func (r *AuthorizationCodeRepository) Create(ctx context.Context, model *authorizationdomain.Model) error {
-	result, err := r.db.ExecContext(
+	result, err := r.db.writer().ExecContext(
 		ctx,
 		authorizationCodeRepositorySQL.createAuthorizationCode,
 		model.Code,
@@ -46,7 +50,7 @@ func (r *AuthorizationCodeRepository) Create(ctx context.Context, model *authori
 }
 
 func (r *AuthorizationCodeRepository) ConsumeByCode(ctx context.Context, code string, consumedAt time.Time) (*authorizationdomain.Model, error) {
-	tx, err := r.db.BeginTx(ctx, nil)
+	tx, err := r.db.writer().BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}

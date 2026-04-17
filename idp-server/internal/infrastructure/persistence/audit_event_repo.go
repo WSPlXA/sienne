@@ -13,11 +13,15 @@ import (
 )
 
 type AuditEventRepository struct {
-	db *sql.DB
+	db dbRouter
 }
 
 func NewAuditEventRepository(db *sql.DB) *AuditEventRepository {
-	return &AuditEventRepository{db: db}
+	return NewAuditEventRepositoryRW(db, nil)
+}
+
+func NewAuditEventRepositoryRW(writeDB, readDB *sql.DB) *AuditEventRepository {
+	return &AuditEventRepository{db: newDBRouter(writeDB, readDB)}
 }
 
 func (r *AuditEventRepository) Create(ctx context.Context, model *auditdomain.Model) error {
@@ -45,7 +49,7 @@ func (r *AuditEventRepository) Create(ctx context.Context, model *auditdomain.Mo
 		metadata = model.MetadataJSON
 	}
 
-	result, err := r.db.ExecContext(
+	result, err := r.db.writer().ExecContext(
 		ctx,
 		auditEventRepositorySQL.create,
 		strings.TrimSpace(model.EventID),
@@ -112,7 +116,7 @@ func (r *AuditEventRepository) List(ctx context.Context, input repositoryport.Li
 	queryBuilder.WriteString(" ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?")
 	args = append(args, limit, offset)
 
-	rows, err := r.db.QueryContext(ctx, queryBuilder.String(), args...)
+	rows, err := r.db.reader().QueryContext(ctx, queryBuilder.String(), args...)
 	if err != nil {
 		return nil, fmt.Errorf("query audit events: %w", err)
 	}

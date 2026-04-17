@@ -20,6 +20,9 @@ const (
 
 type config struct {
 	MySQLDSN                      string
+	MySQLReadDSN                  string
+	MySQLStrongReadSessionByID    bool
+	MySQLStrongReadTokenBySHA256  bool
 	RedisAddr                     string
 	RedisPassword                 string
 	RedisDB                       int
@@ -77,6 +80,9 @@ type envBinding struct {
 
 var configEnvBindings = []envBinding{
 	{key: "mysql.dsn", envs: []string{"MYSQL_DSN", "IDP_MYSQL_DSN"}},
+	{key: "mysql.read_dsn", envs: []string{"MYSQL_READ_DSN", "IDP_MYSQL_READ_DSN"}},
+	{key: "mysql.strong_read.session_by_id", envs: []string{"MYSQL_STRONG_READ_SESSION_BY_ID", "IDP_MYSQL_STRONG_READ_SESSION_BY_ID"}},
+	{key: "mysql.strong_read.token_by_sha256", envs: []string{"MYSQL_STRONG_READ_TOKEN_BY_SHA256", "IDP_MYSQL_STRONG_READ_TOKEN_BY_SHA256"}},
 	{key: "mysql.host", envs: []string{"MYSQL_HOST", "IDP_MYSQL_HOST"}},
 	{key: "mysql.port", envs: []string{"MYSQL_PORT", "IDP_MYSQL_PORT"}},
 	{key: "mysql.database", envs: []string{"MYSQL_DATABASE", "IDP_MYSQL_DATABASE"}},
@@ -145,6 +151,9 @@ func loadConfig() (*config, error) {
 
 	cfg := &config{
 		MySQLDSN:                      strings.TrimSpace(v.GetString("mysql.dsn")),
+		MySQLReadDSN:                  strings.TrimSpace(v.GetString("mysql.read_dsn")),
+		MySQLStrongReadSessionByID:    v.GetBool("mysql.strong_read.session_by_id"),
+		MySQLStrongReadTokenBySHA256:  v.GetBool("mysql.strong_read.token_by_sha256"),
 		RedisAddr:                     strings.TrimSpace(v.GetString("redis.addr")),
 		RedisPassword:                 v.GetString("redis.password"),
 		RedisDB:                       v.GetInt("redis.db"),
@@ -197,6 +206,9 @@ func loadConfig() (*config, error) {
 
 	if cfg.MySQLDSN == "" {
 		cfg.MySQLDSN = buildMySQLDSN(v)
+	}
+	if cfg.MySQLReadDSN == "" {
+		cfg.MySQLReadDSN = cfg.MySQLDSN
 	}
 	if cfg.RedisAddr == "" {
 		cfg.RedisAddr = buildRedisAddr(v)
@@ -544,7 +556,9 @@ func resolveConfigSearchPaths(paths []string) []string {
 		}
 		if strings.HasPrefix(path, "~") {
 			if homeDir != "" {
-				path = filepath.Join(homeDir, strings.TrimPrefix(path, "~"))
+				suffix := strings.TrimPrefix(path, "~")
+				suffix = strings.TrimLeft(suffix, `/\`)
+				path = filepath.Join(homeDir, suffix)
 			}
 		}
 		result = append(result, path)

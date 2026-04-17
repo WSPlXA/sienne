@@ -12,7 +12,7 @@ import (
 //go:generate wire
 func initializeApp(ctx context.Context, cfg *config) (*App, error) {
 	wire.Build(
-		provideMySQL,
+		provideMySQLDatabases,
 		provideRedis,
 		provideKeyBuilder,
 		provideSecretCodec,

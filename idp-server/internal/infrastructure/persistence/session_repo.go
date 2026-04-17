@@ -10,17 +10,29 @@ import (
 )
 
 type SessionRepository struct {
-	db *sql.DB
+	db                   dbRouter
+	forcePrimaryReadByID bool
 }
 
 func NewSessionRepository(db *sql.DB) *SessionRepository {
-	return &SessionRepository{db: db}
+	return NewSessionRepositoryRW(db, nil)
+}
+
+func NewSessionRepositoryRW(writeDB, readDB *sql.DB) *SessionRepository {
+	return NewSessionRepositoryRWWithPolicy(writeDB, readDB, false)
+}
+
+func NewSessionRepositoryRWWithPolicy(writeDB, readDB *sql.DB, forcePrimaryReadByID bool) *SessionRepository {
+	return &SessionRepository{
+		db:                   newDBRouter(writeDB, readDB),
+		forcePrimaryReadByID: forcePrimaryReadByID,
+	}
 }
 
 func (r *SessionRepository) Create(ctx context.Context, model *session.Model) error {
 	// session 持久化保存的是服务端会话真相来源；
 	// Redis 只是性能优化层，不能替代数据库中的生命周期记录。
-	result, err := r.db.ExecContext(
+	result, err := r.db.writer().ExecContext(
 		ctx,
 		sessionRepositorySQL.createSession,
 		model.SessionID,
@@ -48,12 +60,16 @@ func (r *SessionRepository) Create(ctx context.Context, model *session.Model) er
 
 func (r *SessionRepository) FindBySessionID(ctx context.Context, sessionID string) (*session.Model, error) {
 	// 单会话查询复用 getOne，统一处理 sql.ErrNoRows -> nil 的语义。
-	return r.getOne(ctx, sessionRepositorySQL.findBySessionID, sessionID)
+	db := r.db.reader()
+	if r.forcePrimaryReadByID {
+		db = r.db.writer()
+	}
+	return r.getOne(ctx, db, sessionRepositorySQL.findBySessionID, sessionID)
 }
 
 func (r *SessionRepository) ListActiveByUserID(ctx context.Context, userID int64) ([]*session.Model, error) {
 	// 查询“某个用户当前所有活跃 session”是整用户登出的基础能力。
-	rows, err := r.db.QueryContext(ctx, sessionRepositorySQL.listActiveByUserID, userID)
+	rows, err := r.db.reader().QueryContext(ctx, sessionRepositorySQL.listActiveByUserID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -77,19 +93,19 @@ func (r *SessionRepository) ListActiveByUserID(ctx context.Context, userID int64
 
 func (r *SessionRepository) LogoutBySessionID(ctx context.Context, sessionID string, loggedOutAt time.Time) error {
 	// 退出时采用打时间戳标记，而不是删除记录，方便审计和问题追踪。
-	_, err := r.db.ExecContext(ctx, sessionRepositorySQL.logoutBySessionID, loggedOutAt, sessionID)
+	_, err := r.db.writer().ExecContext(ctx, sessionRepositorySQL.logoutBySessionID, loggedOutAt, sessionID)
 	return err
 }
 
 func (r *SessionRepository) LogoutAllByUserID(ctx context.Context, userID int64, loggedOutAt time.Time) error {
 	// 管理员强制下线和用户“退出全部设备”都会走到这条批量更新语句。
-	_, err := r.db.ExecContext(ctx, sessionRepositorySQL.logoutAllByUserID, loggedOutAt, userID)
+	_, err := r.db.writer().ExecContext(ctx, sessionRepositorySQL.logoutAllByUserID, loggedOutAt, userID)
 	return err
 }
 
-func (r *SessionRepository) getOne(ctx context.Context, query string, arg any) (*session.Model, error) {
+func (r *SessionRepository) getOne(ctx context.Context, db *sql.DB, query string, arg any) (*session.Model, error) {
 	// getOne 把“没查到”转换成 nil 返回，减少上层仓储调用点的样板判断。
-	row := r.db.QueryRowContext(ctx, query, arg)
+	row := db.QueryRowContext(ctx, query, arg)
 	model, err := scanSession(row)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
