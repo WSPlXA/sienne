@@ -23,15 +23,16 @@ services:
     ports:
       - "${IDP_MYSQL_PUBLISH:-127.0.0.1:13306}:3306"
     healthcheck:
-      test: [ "CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent" ]
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysqladmin ping -h 127.0.0.1 -uroot --silent"]
       interval: 10s
       timeout: 5s
-      retries: 20
-      start_period: 20s
+      retries: 30
+      start_period: 60s
 
   db-replica:
     image: mysql:8.4
     restart: unless-stopped
+    profiles: ["replication"]
     command:
       - "mysqld"
       - "--server-id=2"
@@ -51,22 +52,25 @@ services:
       db:
         condition: service_healthy
     healthcheck:
-      test: [ "CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent" ]
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysqladmin ping -h 127.0.0.1 -uroot --silent"]
       interval: 10s
       timeout: 5s
-      retries: 20
-      start_period: 20s
+      retries: 30
+      start_period: 60s
 
   db-replica-init:
     image: mysql:8.4
     restart: "no"
+    profiles: ["replication"]
     environment:
       MYSQL_ROOT_PASSWORD: ${IDP_MYSQL_ROOT_PASSWORD:-ChangeThisRootPassword_32CharsMin}
       MYSQL_DATABASE: ${IDP_MYSQL_DATABASE:-app}
       MYSQL_REPL_USER: ${IDP_MYSQL_REPL_USER:-repl}
+      MYSQL_REPL_HOST: ${IDP_MYSQL_REPL_HOST:-%}
       MYSQL_REPL_PASSWORD: ${IDP_MYSQL_REPL_PASSWORD:-ChangeThisReplPassword_32Chars}
       MYSQL_READ_USER: ${IDP_MYSQL_READ_USER:-idp_ro}
-      MYSQL_READ_PASSWORD: ${IDP_MYSQL_READ_PASSWORD:-ChangeThisReplicaReadPassword_32CharsMin}
+      MYSQL_READ_HOST: ${IDP_MYSQL_READ_HOST:-%}
+      MYSQL_READ_PASSWORD: ${IDP_MYSQL_READ_PASSWORD:-ChangeThisReplicaReadPassword32}
     depends_on:
       db:
         condition: service_healthy
@@ -76,13 +80,19 @@ services:
       - "sh"
       - "-ec"
       - |
+        set -eu
+        if [ "$${#MYSQL_REPL_PASSWORD}" -gt 32 ]; then
+          echo "MYSQL_REPL_PASSWORD must be <= 32 bytes for CHANGE REPLICATION SOURCE"
+          exit 1
+        fi
+
         mysql -h db -uroot -p"$${MYSQL_ROOT_PASSWORD}" <<EOSQL
-        CREATE USER IF NOT EXISTS '$${MYSQL_REPL_USER}'@'%' IDENTIFIED BY '$${MYSQL_REPL_PASSWORD}';
-        ALTER USER '$${MYSQL_REPL_USER}'@'%' IDENTIFIED BY '$${MYSQL_REPL_PASSWORD}';
-        GRANT REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO '$${MYSQL_REPL_USER}'@'%';
-        CREATE USER IF NOT EXISTS '$${MYSQL_READ_USER}'@'%' IDENTIFIED BY '$${MYSQL_READ_PASSWORD}';
-        ALTER USER '$${MYSQL_READ_USER}'@'%' IDENTIFIED BY '$${MYSQL_READ_PASSWORD}';
-        GRANT SELECT ON \`$${MYSQL_DATABASE}\`.* TO '$${MYSQL_READ_USER}'@'%';
+        CREATE USER IF NOT EXISTS '$${MYSQL_REPL_USER}'@'$${MYSQL_REPL_HOST}' IDENTIFIED BY '$${MYSQL_REPL_PASSWORD}';
+        ALTER USER '$${MYSQL_REPL_USER}'@'$${MYSQL_REPL_HOST}' IDENTIFIED BY '$${MYSQL_REPL_PASSWORD}';
+        GRANT REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO '$${MYSQL_REPL_USER}'@'$${MYSQL_REPL_HOST}';
+        CREATE USER IF NOT EXISTS '$${MYSQL_READ_USER}'@'$${MYSQL_READ_HOST}' IDENTIFIED BY '$${MYSQL_READ_PASSWORD}';
+        ALTER USER '$${MYSQL_READ_USER}'@'$${MYSQL_READ_HOST}' IDENTIFIED BY '$${MYSQL_READ_PASSWORD}';
+        GRANT SELECT ON \`$${MYSQL_DATABASE}\`.* TO '$${MYSQL_READ_USER}'@'$${MYSQL_READ_HOST}';
         FLUSH PRIVILEGES;
         EOSQL
 
@@ -97,10 +107,6 @@ services:
           SOURCE_AUTO_POSITION=1,
           GET_SOURCE_PUBLIC_KEY=1;
         START REPLICA;
-        SET GLOBAL read_only = ON;
-        SET GLOBAL super_read_only = ON;
-        SET PERSIST read_only = ON;
-        SET PERSIST super_read_only = ON;
         EOSQL
 
         i=0
@@ -108,23 +114,32 @@ services:
           status="$$(mysql -h db-replica -uroot -p"$${MYSQL_ROOT_PASSWORD}" -Nse "SHOW REPLICA STATUS\\G")"
           echo "$$status" | grep -q "Replica_IO_Running: Yes" && \
           echo "$$status" | grep -q "Replica_SQL_Running: Yes" && \
-          exit 0
+          break
           i=$$((i + 1))
           sleep 2
         done
-        echo "replica init failed: replication is not running"
-        exit 1
+        if [ "$$i" -ge 60 ]; then
+          echo "replica init failed: replication is not running"
+          exit 1
+        fi
+
+        mysql -h db-replica -uroot -p"$${MYSQL_ROOT_PASSWORD}" <<EOSQL
+        SET GLOBAL read_only = ON;
+        SET GLOBAL super_read_only = ON;
+        SET PERSIST read_only = ON;
+        SET PERSIST super_read_only = ON;
+        EOSQL
 
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: [ "redis-server", "--appendonly", "yes" ]
+    command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - idp-redis-data:/data
     ports:
       - "${IDP_REDIS_PUBLISH:-127.0.0.1:16379}:6379"
     healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 20
@@ -134,17 +149,17 @@ services:
     image: ${IDP_SERVER_IMAGE:-ghcr.io/wsplxa/sienne-idp-server:latest}
     restart: unless-stopped
     environment:
-      # Optional explicit primary DSN (if set, overrides MYSQL_HOST/MYSQL_PORT/...).
       MYSQL_DSN: ${IDP_MYSQL_DSN:-}
       MYSQL_HOST: db
       MYSQL_PORT: 3306
       MYSQL_DATABASE: ${IDP_MYSQL_DATABASE:-app}
       MYSQL_USER: ${IDP_MYSQL_USER:-app}
       MYSQL_PASSWORD: ${IDP_MYSQL_PASSWORD:-ChangeThisAppPassword_32CharsMin}
-      # Replica DSN should use read-only account (e.g. idp_ro). Leave empty to fallback to primary.
-      MYSQL_READ_DSN: ${IDP_MYSQL_READ_DSN:-idp_ro:ChangeThisReplicaReadPassword_32CharsMin@tcp(db-replica:3306)/app?parseTime=true&charset=utf8mb4&collation=utf8mb4_unicode_ci}
-      MYSQL_STRONG_READ_SESSION_BY_ID: ${IDP_MYSQL_STRONG_READ_SESSION_BY_ID:-true}
-      MYSQL_STRONG_READ_TOKEN_BY_SHA256: ${IDP_MYSQL_STRONG_READ_TOKEN_BY_SHA256:-true}
+      # 开启 replication profile 时，建议显式设置：
+      # IDP_MYSQL_READ_DSN=idp_ro:<read_password>@tcp(db-replica:3306)/app?parseTime=true&charset=utf8mb4&collation=utf8mb4_unicode_ci
+      MYSQL_READ_DSN: ${IDP_MYSQL_READ_DSN:-}
+      MYSQL_STRONG_READ_SESSION_BY_ID: ${IDP_MYSQL_STRONG_READ_SESSION_BY_ID:-false}
+      MYSQL_STRONG_READ_TOKEN_BY_SHA256: ${IDP_MYSQL_STRONG_READ_TOKEN_BY_SHA256:-false}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: 0
@@ -162,6 +177,13 @@ services:
       SIGNING_KEY_CHECK_INTERVAL: ${IDP_SIGNING_KEY_CHECK_INTERVAL:-1h}
       SIGNING_KEY_ROTATE_BEFORE: ${IDP_SIGNING_KEY_ROTATE_BEFORE:-24h}
       SIGNING_KEY_RETIRE_AFTER: ${IDP_SIGNING_KEY_RETIRE_AFTER:-24h}
+      FEDERATED_OIDC_PROVIDER_NAME: ${IDP_FEDERATED_OIDC_PROVIDER_NAME:-Google}
+      FEDERATED_OIDC_ISSUER: ${IDP_FEDERATED_OIDC_ISSUER:-}
+      FEDERATED_OIDC_CLIENT_ID: ${IDP_FEDERATED_OIDC_CLIENT_ID:-}
+      FEDERATED_OIDC_CLIENT_SECRET: ${IDP_FEDERATED_OIDC_CLIENT_SECRET:-}
+      FEDERATED_OIDC_REDIRECT_URI: ${IDP_FEDERATED_OIDC_REDIRECT_URI:-}
+      FEDERATED_OIDC_CLIENT_AUTH_METHOD: ${IDP_FEDERATED_OIDC_CLIENT_AUTH_METHOD:-client_secret_post}
+      FEDERATED_OIDC_USERNAME_CLAIM: ${IDP_FEDERATED_OIDC_USERNAME_CLAIM:-email}
     volumes:
       - idp-signing-keys:/var/lib/idp/keys
     expose:
@@ -169,12 +191,13 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      db-replica-init:
-        condition: service_completed_successfully
       redis:
         condition: service_healthy
+      db-replica-init:
+        condition: service_completed_successfully
+        required: false
     healthcheck:
-      test: [ "CMD", "sh", "-c", "kill -0 1" ]
+      test: ["CMD", "sh", "-c", "kill -0 1"]
       interval: 15s
       timeout: 5s
       retries: 20
@@ -185,13 +208,13 @@ services:
     restart: unless-stopped
     depends_on:
       server:
-        condition: service_healthy
+        condition: service_started
     ports:
       - "${IDP_HTTP_PORT:-80}:80"
     volumes:
       - ./idp-server/deploy/nginx/idp.conf:/etc/nginx/conf.d/default.conf:ro
     healthcheck:
-      test: [ "CMD-SHELL", "wget -q -O - http://127.0.0.1/healthz >/dev/null 2>&1 || exit 1" ]
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/healthz >/dev/null 2>&1 || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 20
