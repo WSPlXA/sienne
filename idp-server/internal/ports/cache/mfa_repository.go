@@ -52,4 +52,6 @@ type MFAChallengeEntry struct {
 	DecidedAt          time.Time
 	PasskeySessionJSON string
 	ExpiresAt          time.Time
+	StateMask          uint32
+	StateVersion       uint32
 }

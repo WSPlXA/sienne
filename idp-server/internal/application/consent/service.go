@@ -114,7 +114,7 @@ func (s *Service) loadContext(ctx context.Context, returnTo, sessionID string) (
 			return nil, nil, nil, nil, err
 		}
 		if cacheEntry != nil {
-			if cacheEntry.Status != "active" || !cacheEntry.ExpiresAt.After(s.now()) {
+			if !cache.IsSessionEntryActive(cacheEntry, s.now()) {
 				return nil, nil, nil, nil, ErrLoginRequired
 			}
 

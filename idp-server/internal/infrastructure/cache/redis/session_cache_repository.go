@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	cacheport "idp-server/internal/ports/cache"
@@ -33,6 +34,11 @@ func NewSessionCacheRepository(rdb *goredis.Client, key *KeyBuilder) *SessionCac
 func (r *SessionCacheRepository) Save(ctx context.Context, entry cacheport.SessionCacheEntry, ttl time.Duration) error {
 	// Save 把 session 正文和用户索引一起写入 Redis，
 	// 这样既能按 sessionID 取会话，也能在“全端登出”时按用户枚举会话。
+	stateMask := cacheport.NormalizeSessionStateMask(entry.StateMask, entry.Status)
+	stateVersion := entry.StateVersion
+	if stateVersion == 0 {
+		stateVersion = 1
+	}
 	_, err := runScript(
 		ctx,
 		r.scripts.saveSession,
@@ -50,38 +56,57 @@ func (r *SessionCacheRepository) Save(ctx context.Context, entry cacheport.Sessi
 		entry.UserAgent,
 		formatTime(entry.AuthenticatedAt),
 		formatTime(entry.ExpiresAt),
-		entry.Status,
+		cacheport.SessionStatusFromMask(stateMask, entry.Status),
 		durationSeconds(ttl),
+		strconv.FormatUint(uint64(stateMask), 10),
+		strconv.FormatUint(uint64(stateVersion), 10),
 	).Result()
 	return err
 }
 
 func (r *SessionCacheRepository) Get(ctx context.Context, sessionID string) (*cacheport.SessionCacheEntry, error) {
-	// 缓存里的时间统一用 RFC3339 字符串保存，便于 Lua/Go 双端稳定读写。
+	// 热路径改为固定字段 HMGET，避免 HGETALL map 分配和哈希遍历。
 	key := r.key.Session(sessionID)
-
-	res, err := r.rdb.HGetAll(ctx, key).Result()
+	values, err := r.rdb.HMGet(
+		ctx,
+		key,
+		"user_id",
+		"subject",
+		"acr",
+		"amr_json",
+		"ip",
+		"user_agent",
+		"authenticated_at",
+		"expires_at",
+		"status",
+		"state_mask",
+		"state_ver",
+	).Result()
 	if err != nil {
 		return nil, err
 	}
-	if len(res) == 0 {
+	if len(values) == 0 || values[0] == nil {
 		return nil, nil
 	}
 
-	authenticatedAt, _ := time.Parse(time.RFC3339, res["authenticated_at"])
-	expiresAt, _ := time.Parse(time.RFC3339, res["expires_at"])
+	authenticatedAt := parseTime(readRedisString(values[6]))
+	expiresAt := parseTime(readRedisString(values[7]))
+	stateMask := cacheport.NormalizeSessionStateMask(parseUint32(readRedisString(values[9])), readRedisString(values[8]))
+	status := cacheport.SessionStatusFromMask(stateMask, readRedisString(values[8]))
 
 	return &cacheport.SessionCacheEntry{
 		SessionID:       sessionID,
-		UserID:          res["user_id"],
-		Subject:         res["subject"],
-		ACR:             res["acr"],
-		AMRJSON:         res["amr_json"],
-		IPAddress:       res["ip"],
-		UserAgent:       res["user_agent"],
+		UserID:          readRedisString(values[0]),
+		Subject:         readRedisString(values[1]),
+		ACR:             readRedisString(values[2]),
+		AMRJSON:         readRedisString(values[3]),
+		IPAddress:       readRedisString(values[4]),
+		UserAgent:       readRedisString(values[5]),
 		AuthenticatedAt: authenticatedAt.UTC(),
 		ExpiresAt:       expiresAt.UTC(),
-		Status:          res["status"],
+		Status:          status,
+		StateMask:       stateMask,
+		StateVersion:    parseUint32(readRedisString(values[10])),
 	}, nil
 }
 
@@ -128,4 +153,18 @@ func (r *SessionCacheRepository) ListUserSessionIDs(ctx context.Context, userID 
 func (r *SessionCacheRepository) RemoveUserSessionIndex(ctx context.Context, userID string, sessionID string) error {
 	// 索引移除是幂等的，session 已不在集合中时也不会报错。
 	return r.rdb.SRem(ctx, r.key.UserSessionIndex(userID), sessionID).Err()
+}
+
+func readRedisString(value any) string {
+	if value == nil {
+		return ""
+	}
+	switch typed := value.(type) {
+	case string:
+		return typed
+	case []byte:
+		return string(typed)
+	default:
+		return ""
+	}
 }

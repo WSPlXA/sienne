@@ -166,7 +166,7 @@ func (s *Service) loadContext(ctx context.Context, sessionID string, userCode st
 		if err != nil {
 			return nil, 0, "", err
 		}
-		if cacheEntry != nil && cacheEntry.Status == "active" && cacheEntry.ExpiresAt.After(s.now()) {
+		if cacheport.IsSessionEntryActive(cacheEntry, s.now()) {
 			userID, err := strconv.ParseInt(cacheEntry.UserID, 10, 64)
 			if err == nil && userID > 0 {
 				return entry, userID, cacheEntry.Subject, nil

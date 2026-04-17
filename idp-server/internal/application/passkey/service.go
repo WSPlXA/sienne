@@ -166,7 +166,7 @@ func (s *Service) loadUser(ctx context.Context, sessionID string) (*repositoryUs
 		if err != nil {
 			return nil, err
 		}
-		if entry != nil && strings.EqualFold(strings.TrimSpace(entry.Status), "active") && entry.ExpiresAt.After(now) {
+		if cacheport.IsSessionEntryActive(entry, now) {
 			userID, err := strconv.ParseInt(strings.TrimSpace(entry.UserID), 10, 64)
 			if err == nil && userID > 0 {
 				user, err := s.users.FindByID(ctx, userID)

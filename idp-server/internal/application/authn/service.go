@@ -370,6 +370,9 @@ func (s *Service) BeginMFAPasskey(ctx context.Context, input BeginMFAPasskeyInpu
 	}
 	challenge.PasskeySessionJSON = string(sessionJSON)
 	if err := s.mfaCache.SaveMFAChallenge(ctx, *challenge, ttlUntil(now, challenge.ExpiresAt)); err != nil {
+		if errors.Is(err, cache.ErrStateVersionConflict) || errors.Is(err, cache.ErrInvalidStateTransition) {
+			return nil, ErrMFAChallengeExpired
+		}
 		return nil, err
 	}
 	return &BeginMFAPasskeyResult{
@@ -506,6 +509,12 @@ func (s *Service) DecideMFAPush(ctx context.Context, input DecideMFAPushInput) (
 	challenge.ApproverUserID = strconv.FormatInt(approverUserID, 10)
 	challenge.DecidedAt = now
 	if err := s.mfaCache.SaveMFAChallenge(ctx, *challenge, ttlUntil(now, challenge.ExpiresAt)); err != nil {
+		if errors.Is(err, cache.ErrStateVersionConflict) {
+			return nil, ErrMFAChallengeExpired
+		}
+		if errors.Is(err, cache.ErrInvalidStateTransition) {
+			return nil, ErrInvalidMFAAction
+		}
 		return nil, err
 	}
 
@@ -812,7 +821,13 @@ func (s *Service) updateMFAChallengeMode(ctx context.Context, challengeID, mode 
 		return ErrMFAChallengeExpired
 	}
 	challenge.MFAMode = normalizeMFAMode(mode)
-	return s.mfaCache.SaveMFAChallenge(ctx, *challenge, ttlUntil(now, challenge.ExpiresAt))
+	if err := s.mfaCache.SaveMFAChallenge(ctx, *challenge, ttlUntil(now, challenge.ExpiresAt)); err != nil {
+		if errors.Is(err, cache.ErrStateVersionConflict) || errors.Is(err, cache.ErrInvalidStateTransition) {
+			return ErrMFAChallengeExpired
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *Service) createMFAChallenge(ctx context.Context, user *userdomain.Model, input AuthenticateInput) (string, error) {
@@ -838,6 +853,9 @@ func (s *Service) createMFAChallenge(ctx context.Context, user *userdomain.Model
 		PushCode:    pushCode,
 		ExpiresAt:   s.now().Add(s.mfaTTL),
 	}, s.mfaTTL)
+	if errors.Is(err, cache.ErrStateVersionConflict) || errors.Is(err, cache.ErrInvalidStateTransition) {
+		return "", ErrMFARequired
+	}
 	return challengeID, err
 }
 
@@ -878,6 +896,7 @@ func (s *Service) createSession(ctx context.Context, user *userdomain.Model, met
 			AuthenticatedAt: now,
 			ExpiresAt:       expiresAt,
 			Status:          "active",
+			StateMask:       cache.SessionStateActive,
 		}
 		if err := s.sessionCache.Save(ctx, cacheEntry, s.sessionTTL); err != nil {
 			return nil, err
@@ -906,7 +925,7 @@ func (s *Service) resolveActiveSessionUserID(ctx context.Context, sessionID stri
 		if err != nil {
 			return 0, err
 		}
-		if entry != nil && entry.ExpiresAt.After(now) && strings.EqualFold(strings.TrimSpace(entry.Status), "active") {
+		if cache.IsSessionEntryActive(entry, now) {
 			userID, err := strconv.ParseInt(strings.TrimSpace(entry.UserID), 10, 64)
 			if err == nil && userID > 0 {
 				return userID, nil

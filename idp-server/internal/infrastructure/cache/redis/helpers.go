@@ -44,3 +44,12 @@ func parseInt64(value string) int64 {
 	parsed, _ := strconv.ParseInt(value, 10, 64)
 	return parsed
 }
+
+func parseUint32(value string) uint32 {
+	// Redis 数值字段统一按十进制字符串存储；解析失败按 0 处理。
+	parsed, err := strconv.ParseUint(value, 10, 32)
+	if err != nil {
+		return 0
+	}
+	return uint32(parsed)
+}

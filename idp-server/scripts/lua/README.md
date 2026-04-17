@@ -31,6 +31,8 @@ Atomically writes the browser session hash and the reverse user-to-session index
 - `ARGV[9]`: expires at
 - `ARGV[10]`: status
 - `ARGV[11]`: ttl seconds
+- `ARGV[12]`: state mask (u32)
+- `ARGV[13]`: state version (u32)
 
 ### `delete_session.lua`
 
@@ -76,6 +78,22 @@ Reserves a nonce exactly once using `SET NX EX`.
 - `ARGV[2]`: ttl seconds
 
 Returns `1` when reserved and `0` when it already exists.
+
+### `save_mfa_challenge.lua`
+
+Creates or updates an MFA challenge hash with bitmask state and optimistic CAS.
+
+- `KEYS[1]`: mfa challenge hash key
+- `ARGV[1]`~`ARGV[15]`: challenge payload fields
+- `ARGV[16]`: ttl seconds
+- `ARGV[17]`: next state mask (u32)
+- `ARGV[18]`: expected version (u32), `-1` means no CAS
+
+Returns:
+
+- `{1, next_ver}` on success
+- `{-2, cur_ver}` on version conflict
+- `{-3, cur_ver}` on invalid transition
 
 ### `increment_with_ttl.lua`
 

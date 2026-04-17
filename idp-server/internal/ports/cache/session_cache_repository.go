@@ -29,4 +29,6 @@ type SessionCacheEntry struct {
 	AuthenticatedAt time.Time
 	ExpiresAt       time.Time
 	Status          string
+	StateMask       uint32
+	StateVersion    uint32
 }

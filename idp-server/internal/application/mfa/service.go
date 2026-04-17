@@ -227,7 +227,7 @@ func (s *Service) loadUser(ctx context.Context, sessionID string) (mfaAuthContex
 		if err != nil {
 			return mfaAuthContext{}, err
 		}
-		if entry != nil && entry.Status == "active" && entry.ExpiresAt.After(now) {
+		if cacheport.IsSessionEntryActive(entry, now) {
 			userID, err := strconv.ParseInt(entry.UserID, 10, 64)
 			if err == nil && userID > 0 {
 				user, err := s.users.FindByID(ctx, userID)

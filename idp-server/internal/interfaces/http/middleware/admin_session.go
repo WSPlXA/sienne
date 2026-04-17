@@ -123,7 +123,7 @@ func (m *SessionPermissionMiddleware) findSession(c *gin.Context, sessionID stri
 		if err != nil {
 			return nil, err
 		}
-		if entry != nil && entry.ExpiresAt.After(m.now()) && strings.EqualFold(strings.TrimSpace(entry.Status), "active") {
+		if cacheport.IsSessionEntryActive(entry, m.now()) {
 			return &sessiondomain.Model{
 				SessionID:       entry.SessionID,
 				UserID:          mustParseInt64(entry.UserID),

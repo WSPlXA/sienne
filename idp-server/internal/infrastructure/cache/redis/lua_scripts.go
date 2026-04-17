@@ -13,6 +13,7 @@ import (
 
 type scriptSet struct {
 	saveSession              *goredis.Script
+	saveMFAChallenge         *goredis.Script
 	deleteSession            *goredis.Script
 	consumeAuthorizationCode *goredis.Script
 	saveOAuthState           *goredis.Script
@@ -33,6 +34,7 @@ func loadScripts() (*scriptSet, error) {
 	scriptsOnce.Do(func() {
 		scriptsSingleton = &scriptSet{
 			saveSession:              mustLoadScript("save_session.lua"),
+			saveMFAChallenge:         mustLoadScript("save_mfa_challenge.lua"),
 			deleteSession:            mustLoadScript("delete_session.lua"),
 			consumeAuthorizationCode: mustLoadScript("consume_authorization_code.lua"),
 			saveOAuthState:           mustLoadScript("save_oauth_state.lua"),
@@ -85,6 +87,7 @@ func PreloadScripts(ctx context.Context, rdb *goredis.Client) error {
 
 	for _, script := range []*goredis.Script{
 		scripts.saveSession,
+		scripts.saveMFAChallenge,
 		scripts.deleteSession,
 		scripts.consumeAuthorizationCode,
 		scripts.saveOAuthState,
