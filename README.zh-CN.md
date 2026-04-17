@@ -14,7 +14,7 @@
 ### 认证与会话
 - 本地注册、登录、登出
 - 浏览器会话 Cookie（`idp_session`）由 MySQL + Redis 联合承载
-- Federated OIDC 登录（上游 OP 回调后映射本地用户）
+- Federated OIDC 登录（上游 OP 回调后映射本地用户，首登可自动建号）
 - OIDC End Session（`/connect/logout`）
 - 当前会话登出与当前用户全端下线
 

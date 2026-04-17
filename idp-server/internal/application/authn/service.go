@@ -3,6 +3,8 @@ package authn
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha1"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strconv"
@@ -63,6 +65,7 @@ type userAccountLocker interface {
 }
 
 const totpStepReplayTTL = 120 * time.Second
+const federatedPasswordHashPlaceholder = "!federated_oidc_only"
 
 func NewService(
 	userRepo repository.UserRepository,
@@ -190,7 +193,11 @@ func (s *Service) Authenticate(ctx context.Context, input AuthenticateInput) (*A
 	}
 
 	user, err := runWithPool(ctx, s.ioPool, func(execCtx context.Context) (*userdomain.Model, error) {
-		return s.resolveUser(execCtx, authnResult)
+		existing, lookupErr := s.resolveExistingUser(execCtx, authnResult)
+		if lookupErr != nil || existing != nil || methodType != pluginport.AuthnMethodTypeFederatedOIDC {
+			return existing, lookupErr
+		}
+		return s.provisionFederatedUser(execCtx, authnResult)
 	})
 	if err != nil {
 		return nil, err
@@ -585,7 +592,7 @@ func resolveMethodType(input AuthenticateInput) (pluginport.AuthnMethodType, err
 	return pluginport.AuthnMethodTypePassword, nil
 }
 
-func (s *Service) resolveUser(ctx context.Context, result *pluginport.AuthenticateResult) (*userdomain.Model, error) {
+func (s *Service) resolveExistingUser(ctx context.Context, result *pluginport.AuthenticateResult) (*userdomain.Model, error) {
 	if result == nil {
 		return nil, nil
 	}
@@ -605,6 +612,13 @@ func (s *Service) resolveUser(ctx context.Context, result *pluginport.Authentica
 		if err != nil || user != nil {
 			return user, err
 		}
+		federatedUUID := federatedSubjectUserUUID(result.IdentityProvider, subject)
+		if federatedUUID != "" && federatedUUID != subject {
+			user, err = s.userRepo.FindByUserUUID(ctx, federatedUUID)
+			if err != nil || user != nil {
+				return user, err
+			}
+		}
 	}
 
 	if username := strings.TrimSpace(result.Username); username != "" {
@@ -614,7 +628,7 @@ func (s *Service) resolveUser(ctx context.Context, result *pluginport.Authentica
 		}
 	}
 
-	if email := strings.TrimSpace(result.Email); email != "" {
+	if email := normalizeFederatedEmail(result.Email); email != "" {
 		user, err := s.userRepo.FindByEmail(ctx, email)
 		if err != nil || user != nil {
 			return user, err
@@ -622,6 +636,167 @@ func (s *Service) resolveUser(ctx context.Context, result *pluginport.Authentica
 	}
 
 	return nil, nil
+}
+
+func (s *Service) provisionFederatedUser(ctx context.Context, result *pluginport.AuthenticateResult) (*userdomain.Model, error) {
+	// 联邦首登自动建号：优先用上游 subject 做稳定映射，再补本地用户名和邮箱。
+	if result == nil || s.userRepo == nil {
+		return nil, nil
+	}
+	subject := strings.TrimSpace(result.Subject)
+	if subject == "" {
+		return nil, nil
+	}
+	userUUID := federatedSubjectUserUUID(result.IdentityProvider, subject)
+	if userUUID == "" {
+		userUUID = uuid.NewString()
+	}
+
+	username, err := s.allocateFederatedUsername(ctx, result, userUUID)
+	if err != nil {
+		return nil, err
+	}
+	email := normalizeFederatedEmail(result.Email)
+	if email == "" {
+		email = userUUID + "@federated.local"
+	}
+	displayName := strings.TrimSpace(result.DisplayName)
+	if displayName == "" {
+		displayName = username
+	}
+	now := s.now().UTC()
+	model := &userdomain.Model{
+		UserUUID:         userUUID,
+		Username:         username,
+		Email:            email,
+		EmailVerified:    email != "",
+		DisplayName:      displayName,
+		PasswordHash:     federatedPasswordHashPlaceholder,
+		Status:           "active",
+		FailedLoginCount: 0,
+		CreatedAt:        now,
+		UpdatedAt:        now,
+	}
+	if err := s.userRepo.Create(ctx, model); err != nil {
+		// 并发首登时可能发生唯一键冲突，回查一次已创建用户即可收敛。
+		existing, lookupErr := s.resolveExistingUser(ctx, result)
+		if lookupErr == nil && existing != nil {
+			return existing, nil
+		}
+		return nil, err
+	}
+	return model, nil
+}
+
+func (s *Service) allocateFederatedUsername(ctx context.Context, result *pluginport.AuthenticateResult, userUUID string) (string, error) {
+	base := sanitizeFederatedUsername(candidateFederatedUsername(result, userUUID))
+	if base == "" {
+		base = "oidc_user"
+	}
+	base = trimUsernameTo(base, 26)
+	for i := 0; i < 100; i++ {
+		candidate := base
+		if i > 0 {
+			suffix := fmt.Sprintf("_%02d", i)
+			candidate = trimUsernameTo(base, 32-len(suffix)) + suffix
+		}
+		user, err := s.userRepo.FindByUsername(ctx, candidate)
+		if err != nil {
+			return "", err
+		}
+		if user == nil {
+			return candidate, nil
+		}
+	}
+	return "", fmt.Errorf("allocate federated username exhausted")
+}
+
+func candidateFederatedUsername(result *pluginport.AuthenticateResult, userUUID string) string {
+	if result != nil {
+		if value := strings.TrimSpace(result.Username); value != "" {
+			return value
+		}
+		if email := normalizeFederatedEmail(result.Email); email != "" {
+			if idx := strings.IndexByte(email, '@'); idx > 0 {
+				return email[:idx]
+			}
+			return email
+		}
+		if value := strings.TrimSpace(result.DisplayName); value != "" {
+			return value
+		}
+		if subject := strings.TrimSpace(result.Subject); subject != "" {
+			return "oidc_" + shortStableID(subject)
+		}
+	}
+	if strings.TrimSpace(userUUID) != "" {
+		return "oidc_" + strings.ReplaceAll(strings.TrimSpace(userUUID), "-", "")
+	}
+	return "oidc_user"
+}
+
+func federatedSubjectUserUUID(identityProvider, subject string) string {
+	subject = strings.TrimSpace(subject)
+	if subject == "" {
+		return ""
+	}
+	namespaced := strings.TrimSpace(identityProvider) + "|" + subject
+	return uuid.NewSHA1(uuid.NameSpaceOID, []byte(namespaced)).String()
+}
+
+func shortStableID(value string) string {
+	sum := sha1.Sum([]byte(strings.TrimSpace(value)))
+	return hex.EncodeToString(sum[:6])
+}
+
+func normalizeFederatedEmail(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return ""
+	}
+	if strings.Contains(value, " ") || !strings.Contains(value, "@") {
+		return ""
+	}
+	return value
+}
+
+func sanitizeFederatedUsername(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return ""
+	}
+	var b strings.Builder
+	b.Grow(len(value))
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z':
+			b.WriteRune(r)
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == '.', r == '_', r == '-':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('_')
+		}
+		if b.Len() >= 32 {
+			break
+		}
+	}
+	out := strings.Trim(b.String(), "._-")
+	for len(out) < 3 {
+		out += "x"
+	}
+	return trimUsernameTo(out, 32)
+}
+
+func trimUsernameTo(value string, limit int) string {
+	if limit <= 0 {
+		return ""
+	}
+	if len(value) <= limit {
+		return value
+	}
+	return value[:limit]
 }
 
 func sessionAuthContext(methodType pluginport.AuthnMethodType) (string, string) {

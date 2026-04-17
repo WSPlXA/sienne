@@ -14,7 +14,7 @@ This README is rebuilt from the current project docs:
 ### Authentication and Session
 - Local registration, login, logout
 - Browser session cookie (`idp_session`) backed by MySQL + Redis
-- Federated OIDC login (upstream OP -> local user mapping)
+- Federated OIDC login (upstream OP -> local user mapping with first-login auto-provisioning)
 - OIDC end-session endpoint (`/connect/logout`)
 - Logout current session and logout all sessions for current user
 

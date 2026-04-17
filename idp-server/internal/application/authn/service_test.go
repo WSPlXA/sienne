@@ -19,6 +19,9 @@ type stubAuthnUserRepository struct {
 	usersByUsername            map[string]*userdomain.Model
 	usersByUUID                map[string]*userdomain.Model
 	usersByEmail               map[string]*userdomain.Model
+	createCalls                int
+	lastCreated                *userdomain.Model
+	nextID                     int64
 	findByUsernameCalls        int
 	findByUserUUIDCalls        int
 	findByEmailCalls           int
@@ -32,7 +35,33 @@ type stubAuthnUserRepository struct {
 	lockAccountAt              time.Time
 }
 
-func (s *stubAuthnUserRepository) Create(context.Context, *userdomain.Model) error {
+func (s *stubAuthnUserRepository) Create(_ context.Context, model *userdomain.Model) error {
+	if s == nil || model == nil {
+		return nil
+	}
+	copyModel := *model
+	s.createCalls++
+	if copyModel.ID <= 0 {
+		if s.nextID <= 0 {
+			s.nextID = 100
+		}
+		copyModel.ID = s.nextID
+		s.nextID++
+	}
+	s.lastCreated = &copyModel
+	if s.usersByUsername == nil {
+		s.usersByUsername = map[string]*userdomain.Model{}
+	}
+	if s.usersByUUID == nil {
+		s.usersByUUID = map[string]*userdomain.Model{}
+	}
+	if s.usersByEmail == nil {
+		s.usersByEmail = map[string]*userdomain.Model{}
+	}
+	s.usersByUsername[copyModel.Username] = &copyModel
+	s.usersByUUID[copyModel.UserUUID] = &copyModel
+	s.usersByEmail[copyModel.Email] = &copyModel
+	model.ID = copyModel.ID
 	return nil
 }
 
@@ -423,6 +452,23 @@ func (s *stubPasswordAuthnMethod) Authenticate(ctx context.Context, input plugin
 		DisplayName:   user.DisplayName,
 		Email:         user.Email,
 	}, nil
+}
+
+type stubFederatedAuthnMethod struct {
+	result *pluginport.AuthenticateResult
+	err    error
+}
+
+func (s *stubFederatedAuthnMethod) Name() string {
+	return "federated_oidc"
+}
+
+func (s *stubFederatedAuthnMethod) Type() pluginport.AuthnMethodType {
+	return pluginport.AuthnMethodTypeFederatedOIDC
+}
+
+func (s *stubFederatedAuthnMethod) Authenticate(context.Context, pluginport.AuthenticateInput) (*pluginport.AuthenticateResult, error) {
+	return s.result, s.err
 }
 
 func TestAuthenticatePasswordRejectsRateLimitedIPBeforeLookup(t *testing.T) {
@@ -845,5 +891,120 @@ func TestAuthenticatePasswordRequiresMFAWhenPasskeyExistsWithoutTOTP(t *testing.
 	}
 	if _, ok := mfaCache.challenges[result.MFAChallengeID]; !ok {
 		t.Fatalf("challenge %q not stored in mfa cache", result.MFAChallengeID)
+	}
+}
+
+func TestAuthenticateFederatedAutoProvisionCreatesUser(t *testing.T) {
+	now := time.Date(2026, 4, 17, 14, 12, 0, 0, time.UTC)
+	userRepo := &stubAuthnUserRepository{}
+	sessionRepo := &stubAuthnSessionRepository{}
+	sessionCache := &stubAuthnSessionCache{}
+	service := NewService(
+		userRepo,
+		sessionRepo,
+		sessionCache,
+		nil,
+		nil,
+		pluginregistry.NewAuthnRegistry(&stubFederatedAuthnMethod{
+			result: &pluginport.AuthenticateResult{
+				Handled:          true,
+				Authenticated:    true,
+				IdentityProvider: "federated_oidc",
+				Subject:          "google-subject-001",
+				Email:            "NEW.USER@Example.COM",
+				DisplayName:      "New User",
+			},
+		}),
+		nil,
+		nil,
+		8*time.Hour,
+		5*time.Minute,
+		false,
+		DefaultRateLimitPolicy(),
+	)
+	service.now = func() time.Time { return now }
+
+	result, err := service.Authenticate(context.Background(), AuthenticateInput{
+		Method:    "federated_oidc",
+		Code:      "code-1",
+		State:     "state-1",
+		IPAddress: "203.0.113.99",
+		UserAgent: "federated-test",
+	})
+	if err != nil {
+		t.Fatalf("Authenticate() error = %v", err)
+	}
+	if userRepo.createCalls != 1 {
+		t.Fatalf("create calls = %d, want 1", userRepo.createCalls)
+	}
+	if userRepo.lastCreated == nil {
+		t.Fatal("lastCreated = nil, want created user")
+	}
+	if userRepo.lastCreated.Status != "active" {
+		t.Fatalf("status = %q, want active", userRepo.lastCreated.Status)
+	}
+	if userRepo.lastCreated.Email != "new.user@example.com" {
+		t.Fatalf("email = %q, want normalized email", userRepo.lastCreated.Email)
+	}
+	if userRepo.lastCreated.PasswordHash != federatedPasswordHashPlaceholder {
+		t.Fatalf("password hash = %q, want %q", userRepo.lastCreated.PasswordHash, federatedPasswordHashPlaceholder)
+	}
+	if result.UserID != userRepo.lastCreated.ID {
+		t.Fatalf("result user id = %d, want %d", result.UserID, userRepo.lastCreated.ID)
+	}
+	if result.Subject != userRepo.lastCreated.UserUUID {
+		t.Fatalf("result subject = %q, want %q", result.Subject, userRepo.lastCreated.UserUUID)
+	}
+}
+
+func TestAuthenticateFederatedAutoProvisionReusesExistingBySubject(t *testing.T) {
+	now := time.Date(2026, 4, 17, 14, 25, 0, 0, time.UTC)
+	userRepo := &stubAuthnUserRepository{}
+	sessionRepo := &stubAuthnSessionRepository{}
+	sessionCache := &stubAuthnSessionCache{}
+	service := NewService(
+		userRepo,
+		sessionRepo,
+		sessionCache,
+		nil,
+		nil,
+		pluginregistry.NewAuthnRegistry(&stubFederatedAuthnMethod{
+			result: &pluginport.AuthenticateResult{
+				Handled:          true,
+				Authenticated:    true,
+				IdentityProvider: "federated_oidc",
+				Subject:          "google-subject-no-email",
+			},
+		}),
+		nil,
+		nil,
+		8*time.Hour,
+		5*time.Minute,
+		false,
+		DefaultRateLimitPolicy(),
+	)
+	service.now = func() time.Time { return now }
+
+	first, err := service.Authenticate(context.Background(), AuthenticateInput{
+		Method: "federated_oidc",
+		Code:   "code-1",
+		State:  "state-1",
+	})
+	if err != nil {
+		t.Fatalf("first Authenticate() error = %v", err)
+	}
+	second, err := service.Authenticate(context.Background(), AuthenticateInput{
+		Method: "federated_oidc",
+		Code:   "code-2",
+		State:  "state-2",
+	})
+	if err != nil {
+		t.Fatalf("second Authenticate() error = %v", err)
+	}
+	if userRepo.createCalls != 1 {
+		t.Fatalf("create calls = %d, want 1", userRepo.createCalls)
+	}
+	if first.UserID != second.UserID {
+		t.Fatalf("user id mismatch: first=%d second=%d", first.UserID, second.UserID)
 	}
 }
