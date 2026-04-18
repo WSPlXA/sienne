@@ -23,6 +23,11 @@ type stubMFASetupManager struct {
 	confirmSession  string
 	confirmCode     string
 	confirmReturnTo string
+
+	challengeResult   *appmfa.ConfirmResult
+	challengeErr      error
+	challengeSession  string
+	challengeReturnTo string
 }
 
 func (s *stubMFASetupManager) BeginSetup(_ context.Context, _ string) (*appmfa.SetupResult, error) {
@@ -34,6 +39,55 @@ func (s *stubMFASetupManager) ConfirmSetup(_ context.Context, sessionID string, 
 	s.confirmCode = code
 	s.confirmReturnTo = returnTo
 	return s.confirmResult, s.confirmErr
+}
+
+func (s *stubMFASetupManager) BeginLoginChallenge(_ context.Context, sessionID string, returnTo string) (*appmfa.ConfirmResult, error) {
+	s.challengeSession = sessionID
+	s.challengeReturnTo = returnTo
+	return s.challengeResult, s.challengeErr
+}
+
+func TestTOTPSetupHandlerGetAlreadyEnabledStartsLoginTOTP(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	service := &stubMFASetupManager{
+		beginResult: &appmfa.SetupResult{
+			AlreadyEnabled: true,
+		},
+		challengeResult: &appmfa.ConfirmResult{
+			Enabled:        true,
+			TOTPRequired:   true,
+			MFAChallengeID: "challenge-existing",
+		},
+	}
+	router := gin.New()
+	router.GET("/mfa/totp/setup", NewTOTPSetupHandler(service).Handle)
+
+	req := httptest.NewRequest(http.MethodGet, "/mfa/totp/setup?return_to=%2Fadmin", nil)
+	req.Header.Set("Accept", "text/html")
+	req.AddCookie(&http.Cookie{Name: "idp_session", Value: "session-low-acr"})
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusFound {
+		t.Fatalf("status code = %d, want %d", recorder.Code, http.StatusFound)
+	}
+	if got := recorder.Header().Get("Location"); got != "/login/totp" {
+		t.Fatalf("location = %q, want /login/totp", got)
+	}
+	if service.challengeSession != "session-low-acr" {
+		t.Fatalf("challenge session = %q, want session-low-acr", service.challengeSession)
+	}
+	if service.challengeReturnTo != "/admin" {
+		t.Fatalf("challenge return_to = %q, want /admin", service.challengeReturnTo)
+	}
+	if cookie := findCookie(recorder.Result().Cookies(), mfaChallengeCookieName); cookie == nil || cookie.Value != "challenge-existing" {
+		t.Fatalf("mfa challenge cookie = %#v, want challenge-existing", cookie)
+	}
+	if cookie := findCookie(recorder.Result().Cookies(), "idp_session"); cookie == nil || cookie.Value != "" {
+		t.Fatalf("idp_session cookie = %#v, want cleared cookie", cookie)
+	}
 }
 
 func TestTOTPSetupHandlerPostSuccessRedirectsToLoginTOTP(t *testing.T) {

@@ -56,7 +56,29 @@ func (h *TOTPSetupHandler) Handle(c *gin.Context) {
 			return
 		}
 		if result.AlreadyEnabled && returnTo != "" {
-			// 已经绑定过时不重复展示二维码，直接回到来源页面。
+			// 已经绑定过时不重复展示二维码，但仍要补一次登录 MFA，避免低保证级别 session 直接进入后台。
+			challenge, err := h.service.BeginLoginChallenge(c.Request.Context(), sessionID, returnTo)
+			if err != nil {
+				h.writeError(c, err, false, returnTo)
+				return
+			}
+			if challenge != nil && challenge.MFAChallengeID != "" {
+				c.SetCookie(mfaChallengeCookieName, challenge.MFAChallengeID, 300, "/", "", false, true)
+				c.SetCookie("idp_session", "", -1, "/", "", false, true)
+				if wantsHTML(c.GetHeader("Accept")) {
+					c.Redirect(http.StatusFound, loginTOTPRoutingPath)
+					return
+				}
+				c.JSON(http.StatusOK, gin.H{
+					"enabled":         challenge.Enabled,
+					"mfa_required":    challenge.TOTPRequired,
+					"challenge_id":    challenge.MFAChallengeID,
+					"redirect_uri":    loginTOTPRoutingPath,
+					"return_to":       returnTo,
+					"already_enabled": true,
+				})
+				return
+			}
 			c.Redirect(http.StatusFound, returnTo)
 			return
 		}

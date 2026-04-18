@@ -173,6 +173,39 @@ func (s *Service) ConfirmSetup(ctx context.Context, sessionID string, code strin
 	}, nil
 }
 
+func (s *Service) BeginLoginChallenge(ctx context.Context, sessionID string, returnTo string) (*ConfirmResult, error) {
+	authCtx, err := s.loadUser(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	returnTo = strings.TrimSpace(returnTo)
+	if returnTo == "" {
+		return &ConfirmResult{Enabled: true}, nil
+	}
+	existing, err := s.totps.FindByUserID(ctx, authCtx.UserID)
+	if err != nil {
+		return nil, err
+	}
+	if existing == nil {
+		return nil, ErrEnrollmentExpired
+	}
+	now := s.now().UTC()
+	challengeID, err := s.createLoginChallenge(ctx, authCtx, returnTo, now)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.invalidateCurrentSession(ctx, authCtx, now); err != nil {
+		return nil, err
+	}
+	return &ConfirmResult{
+		Enabled:        true,
+		TOTPRequired:   true,
+		MFAChallengeID: challengeID,
+		RedirectURI:    loginTOTPRedirectRoute,
+		ReturnTo:       returnTo,
+	}, nil
+}
+
 func (s *Service) createLoginChallenge(ctx context.Context, authCtx mfaAuthContext, returnTo string, now time.Time) (string, error) {
 	// 这里复用登录 MFA challenge 结构，把“刚绑定完成，需要再次验证”也纳入同一条 TOTP 登录链路。
 	challengeID := uuid.NewString()

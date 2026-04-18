@@ -16,6 +16,7 @@ var (
 type Manager interface {
 	BeginSetup(ctx context.Context, sessionID string) (*SetupResult, error)
 	ConfirmSetup(ctx context.Context, sessionID string, code string, returnTo string) (*ConfirmResult, error)
+	BeginLoginChallenge(ctx context.Context, sessionID string, returnTo string) (*ConfirmResult, error)
 }
 
 type SetupResult struct {
