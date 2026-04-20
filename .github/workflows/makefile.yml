@@ -2,16 +2,13 @@ name: CI
 
 on:
   push:
-    branches:
-      - main
-    tags:
-      - 'v*'
+    branches: [ main ]
+    tags: [ 'v*' ]
     paths:
       - ".github/workflows/makefile.yml"
       - "idp-server/**"
   pull_request:
-    branches:
-      - main
+    branches: [ main ]
     paths:
       - ".github/workflows/makefile.yml"
       - "idp-server/**"
@@ -24,6 +21,12 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  REGISTRY: ghcr.io
+  GO_VERSION_FILE: idp-server/go.mod
+  GO_CACHE_PATH: idp-server/go.sum
+  WORKING_DIR: idp-server
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -34,14 +37,14 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: idp-server/go.mod
-          cache-dependency-path: idp-server/go.sum
+          go-version-file: ${{ env.GO_VERSION_FILE }}
+          cache-dependency-path: ${{ env.GO_CACHE_PATH }}
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v9
+        uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
-          working-directory: idp-server
+          version: v1.60.3
+          working-directory: ${{ env.WORKING_DIR }}
 
   vulncheck:
     runs-on: ubuntu-latest
@@ -52,14 +55,14 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: idp-server/go.mod
-          cache-dependency-path: idp-server/go.sum
+          go-version-file: ${{ env.GO_VERSION_FILE }}
+          cache-dependency-path: ${{ env.GO_CACHE_PATH }}
 
       - name: govulncheck
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
           govulncheck ./...
-        working-directory: idp-server
+        working-directory: ${{ env.WORKING_DIR }}
 
   wire-check:
     runs-on: ubuntu-latest
@@ -70,8 +73,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: idp-server/go.mod
-          cache-dependency-path: idp-server/go.sum
+          go-version-file: ${{ env.GO_VERSION_FILE }}
+          cache-dependency-path: ${{ env.GO_CACHE_PATH }}
 
       - name: Check wire generation
         run: |
@@ -82,7 +85,7 @@ jobs:
             git status --porcelain
             exit 1
           fi
-        working-directory: idp-server
+        working-directory: ${{ env.WORKING_DIR }}
 
   test:
     needs: [lint, vulncheck, wire-check]
@@ -94,12 +97,16 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: idp-server/go.mod
-          cache-dependency-path: idp-server/go.sum
+          go-version-file: ${{ env.GO_VERSION_FILE }}
+          cache-dependency-path: ${{ env.GO_CACHE_PATH }}
+          
+      - name: Install dependencies
+        run: go mod download
+        working-directory: ${{ env.WORKING_DIR }}
 
       - name: Run tests
-        run: make test
-        working-directory: idp-server
+        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+        working-directory: ${{ env.WORKING_DIR }}
 
   build-binaries:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
@@ -119,14 +126,21 @@ jobs:
             artifact_name: idp-server-windows-amd64
 
     steps:
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: idp-server/go.mod
-          cache-dependency-path: idp-server/go.sum
+          go-version-file: ${{ env.GO_VERSION_FILE }}
+          cache-dependency-path: ${{ env.GO_CACHE_PATH }}
 
       - name: Build binary
         env:
@@ -135,24 +149,35 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
         run: |
           mkdir -p bin
-          go build -o ${{ matrix.output }} ./cmd/idp
-        working-directory: idp-server
+          go build -trimpath -ldflags="-s -w" -o ${{ matrix.output }} ./cmd/idp
+        working-directory: ${{ env.WORKING_DIR }}
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
-          path: idp-server/${{ matrix.output }}
+          path: ${{ env.WORKING_DIR }}/${{ matrix.output }}
           if-no-files-found: error
+          retention-days: 7
 
   docker:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    env:
+      IMAGE_NAME: ${{ github.repository }}-idp-server
 
     steps:
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -162,7 +187,7 @@ jobs:
       - name: Prepare image name
         id: image
         run: |
-          echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${GITHUB_REPOSITORY#*/}-idp-server" >> "$GITHUB_OUTPUT"
+          echo "name=${{ env.REGISTRY }}/${GITHUB_REPOSITORY_OWNER,,}/${GITHUB_REPOSITORY#*/}-idp-server" >> "$GITHUB_OUTPUT"
 
       - name: Extract Docker metadata
         id: meta
@@ -171,23 +196,25 @@ jobs:
           images: ${{ steps.image.outputs.name }}
           tags: |
             type=ref,event=branch
-            type=ref,event=tag
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
             type=sha
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Log in to GHCR
+      - name: Log in to Container Registry
         if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
         uses: docker/login-action@v3
         with:
-          registry: ghcr.io
+          registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and optionally push Docker image
         uses: docker/build-push-action@v6
         with:
-          context: ./idp-server
-          file: ./idp-server/dockerfile.server
+          context: ./${{ env.WORKING_DIR }}
+          file: ./${{ env.WORKING_DIR }}/dockerfile.server
           push: ${{ github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
