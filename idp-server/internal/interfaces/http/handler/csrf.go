@@ -31,7 +31,7 @@ func ensureCSRFToken(c *gin.Context) (string, error) {
 		return "", err
 	}
 
-	c.SetCookie(csrfCookieName, token, csrfCookieMaxAge, "/", "", false, false)
+	c.SetCookie(csrfCookieName, token, csrfCookieMaxAge, "/", "", true, false)
 	return token, nil
 }
 

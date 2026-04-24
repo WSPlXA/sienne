@@ -95,6 +95,8 @@ func TestLoginHandlerHandleGetHTML(t *testing.T) {
 	}
 	if cookie := findCookie(recorder.Result().Cookies(), csrfCookieName); cookie == nil || cookie.Value == "" {
 		t.Fatalf("csrf cookie was not issued")
+	} else if !cookie.Secure {
+		t.Fatalf("csrf cookie Secure = %v, want true", cookie.Secure)
 	}
 }
 
@@ -135,6 +137,8 @@ func TestLoginHandlerHandlePostSuccessRedirects(t *testing.T) {
 	}
 	if cookie := findCookie(recorder.Result().Cookies(), "idp_session"); cookie == nil || cookie.Value != "session-123" {
 		t.Fatalf("idp_session cookie = %#v, want session-123", cookie)
+	} else if !cookie.Secure {
+		t.Fatalf("idp_session cookie Secure = %v, want true", cookie.Secure)
 	}
 	if service.input.Username != "alice" {
 		t.Fatalf("username = %q, want alice", service.input.Username)
@@ -426,9 +430,13 @@ func TestLoginHandlerHandleGetFederatedCallbackSetsSessionAndRedirects(t *testin
 	}
 	if cookie := findCookie(recorder.Result().Cookies(), "idp_session"); cookie == nil || cookie.Value != "session-456" {
 		t.Fatalf("idp_session cookie = %#v, want session-456", cookie)
+	} else if !cookie.Secure {
+		t.Fatalf("idp_session cookie Secure = %v, want true", cookie.Secure)
 	}
 	if cookie := findCookie(recorder.Result().Cookies(), csrfCookieName); cookie == nil || cookie.Value == "" {
 		t.Fatalf("csrf cookie was not issued")
+	} else if !cookie.Secure {
+		t.Fatalf("csrf cookie Secure = %v, want true", cookie.Secure)
 	}
 }
 

@@ -170,7 +170,7 @@ func (h *LoginHandler) handleAuthenticate(c *gin.Context, req dto.LoginRequest) 
 			// “要求补绑 MFA” 与“登录失败”不同：
 			// 用户第一要素已经通过，所以会先发会话，再把前端导向绑定页面。
 			maxAge := int(time.Until(result.ExpiresAt).Seconds())
-			c.SetCookie("idp_session", result.SessionID, maxAge, "/", "", false, true)
+			c.SetCookie("idp_session", result.SessionID, maxAge, "/", "", true, true)
 			setupURI := buildMFASetupURI(req.ReturnTo)
 			if wantsHTML(c.GetHeader("Accept")) {
 				c.Redirect(http.StatusFound, setupURI)
@@ -187,7 +187,7 @@ func (h *LoginHandler) handleAuthenticate(c *gin.Context, req dto.LoginRequest) 
 
 		if errors.Is(err, authn.ErrMFARequired) && result != nil && result.MFAChallengeID != "" {
 			// MFA 挑战 ID 单独放在短时 cookie 中，让后续 TOTP / Passkey 页能继续这次挑战。
-			c.SetCookie(mfaChallengeCookieName, result.MFAChallengeID, 300, "/", "", false, true)
+			c.SetCookie(mfaChallengeCookieName, result.MFAChallengeID, 300, "/", "", true, true)
 			if wantsHTML(c.GetHeader("Accept")) {
 				c.Redirect(http.StatusFound, "/login/totp")
 				return
@@ -243,7 +243,7 @@ func (h *LoginHandler) handleAuthenticate(c *gin.Context, req dto.LoginRequest) 
 	}
 	maxAge := int(time.Until(result.ExpiresAt).Seconds())
 	// session cookie 设置为 HttpOnly，减少前端脚本直接读取会话标识的机会。
-	c.SetCookie("idp_session", result.SessionID, maxAge, "/", "", false, true)
+	c.SetCookie("idp_session", result.SessionID, maxAge, "/", "", true, true)
 	recordLoginSuccessAuditEvent(c.Request.Context(), h.auditRepo, c, result.UserID, result.Subject, result.RoleCode, req.Method, redirectURI)
 	log.Printf("login authenticate_succeeded method=%q ip=%s username=%q user_id=%d redirect_uri=%q", req.Method, c.ClientIP(), req.Username, result.UserID, redirectURI)
 	if redirectURI != "" {

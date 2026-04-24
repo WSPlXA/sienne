@@ -62,6 +62,8 @@ func TestLogoutHandlerHandleJSON(t *testing.T) {
 	}
 	if cookie := findCookie(recorder.Result().Cookies(), "idp_session"); cookie == nil || cookie.Value != "" {
 		t.Fatalf("idp_session cookie = %#v, want cleared cookie", cookie)
+	} else if !cookie.Secure {
+		t.Fatalf("idp_session cookie Secure = %v, want true", cookie.Secure)
 	}
 }
 
@@ -139,6 +141,8 @@ func TestLogoutAllHandlerHandleJSON(t *testing.T) {
 	}
 	if cookie := findCookie(recorder.Result().Cookies(), "idp_session"); cookie == nil || cookie.Value != "" {
 		t.Fatalf("idp_session cookie = %#v, want cleared cookie", cookie)
+	} else if !cookie.Secure {
+		t.Fatalf("idp_session cookie Secure = %v, want true", cookie.Secure)
 	}
 }
 

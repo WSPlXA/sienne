@@ -81,9 +81,13 @@ func TestTOTPSetupHandlerPostSuccessRedirectsToLoginTOTP(t *testing.T) {
 	}
 	if cookie := findCookie(recorder.Result().Cookies(), mfaChallengeCookieName); cookie == nil || cookie.Value != "challenge-123" {
 		t.Fatalf("mfa challenge cookie = %#v, want challenge-123", cookie)
+	} else if !cookie.Secure {
+		t.Fatalf("mfa challenge cookie Secure = %v, want true", cookie.Secure)
 	}
 	if cookie := findCookie(recorder.Result().Cookies(), "idp_session"); cookie == nil || cookie.Value != "" {
 		t.Fatalf("idp_session cookie = %#v, want cleared cookie", cookie)
+	} else if !cookie.Secure {
+		t.Fatalf("idp_session cookie Secure = %v, want true", cookie.Secure)
 	}
 }
 

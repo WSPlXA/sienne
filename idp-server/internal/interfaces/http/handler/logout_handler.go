@@ -55,7 +55,7 @@ func (h *LogoutHandler) Handle(c *gin.Context) {
 	}
 
 	// 负 max-age 明确要求浏览器立刻清除旧 cookie。
-	c.SetCookie("idp_session", "", -1, "/", "", false, true)
+	c.SetCookie("idp_session", "", -1, "/", "", true, true)
 	log.Printf("logout succeeded ip=%s session_present=%t return_to=%q", c.ClientIP(), sessionID != "", req.ReturnTo)
 
 	if req.ReturnTo != "" {

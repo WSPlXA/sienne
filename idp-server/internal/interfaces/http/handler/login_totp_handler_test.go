@@ -46,6 +46,8 @@ func TestLoginTOTPStatusFinalizesApprovedPush(t *testing.T) {
 	}
 	if cookie := findCookie(recorder.Result().Cookies(), "idp_session"); cookie == nil || cookie.Value != "session-1" {
 		t.Fatalf("idp_session cookie = %#v, want session-1", cookie)
+	} else if !cookie.Secure {
+		t.Fatalf("idp_session cookie Secure = %v, want true", cookie.Secure)
 	}
 	if !strings.Contains(recorder.Body.String(), `"authenticated":true`) {
 		t.Fatalf("response body should indicate authenticated=true: %s", recorder.Body.String())
@@ -176,6 +178,8 @@ func TestLoginTOTPPasskeyFinishSetsSessionCookie(t *testing.T) {
 	}
 	if cookie := findCookie(recorder.Result().Cookies(), "idp_session"); cookie == nil || cookie.Value != "session-passkey-1" {
 		t.Fatalf("idp_session cookie = %#v, want session-passkey-1", cookie)
+	} else if !cookie.Secure {
+		t.Fatalf("idp_session cookie Secure = %v, want true", cookie.Secure)
 	}
 	if !strings.Contains(recorder.Body.String(), `"authenticated":true`) {
 		t.Fatalf("response should indicate authenticated=true: %s", recorder.Body.String())
@@ -218,6 +222,8 @@ func TestLoginTOTPVerifyRedirectsToPasskeySetupWhenEnrollmentRequired(t *testing
 	}
 	if cookie := findCookie(recorder.Result().Cookies(), "idp_session"); cookie == nil || cookie.Value != "session-totp-1" {
 		t.Fatalf("idp_session cookie = %#v, want session-totp-1", cookie)
+	} else if !cookie.Secure {
+		t.Fatalf("idp_session cookie Secure = %v, want true", cookie.Secure)
 	}
 }
 

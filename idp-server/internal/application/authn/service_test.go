@@ -3,6 +3,7 @@ package authn
 import (
 	"context"
 	"errors"
+	"strconv"
 	"testing"
 	"time"
 
@@ -845,5 +846,32 @@ func TestAuthenticatePasswordRequiresMFAWhenPasskeyExistsWithoutTOTP(t *testing.
 	}
 	if _, ok := mfaCache.challenges[result.MFAChallengeID]; !ok {
 		t.Fatalf("challenge %q not stored in mfa cache", result.MFAChallengeID)
+	}
+	challenge := mfaCache.challenges[result.MFAChallengeID]
+	if result.PushCode != challenge.PushCode {
+		t.Fatalf("result push code = %q, challenge push code = %q, want equal", result.PushCode, challenge.PushCode)
+	}
+	if len(result.PushCode) != 2 {
+		t.Fatalf("result push code length = %d, want 2", len(result.PushCode))
+	}
+	if _, err := strconv.Atoi(result.PushCode); err != nil {
+		t.Fatalf("result push code = %q, want numeric", result.PushCode)
+	}
+}
+
+func TestBuildPushMatchCodeReturnsTwoDigitCode(t *testing.T) {
+	code, err := buildPushMatchCode()
+	if err != nil {
+		t.Fatalf("buildPushMatchCode() error = %v", err)
+	}
+	if len(code) != 2 {
+		t.Fatalf("code length = %d, want 2", len(code))
+	}
+	value, err := strconv.Atoi(code)
+	if err != nil {
+		t.Fatalf("code = %q, want numeric", code)
+	}
+	if value < 10 || value > 99 {
+		t.Fatalf("code value = %d, want [10,99]", value)
 	}
 }

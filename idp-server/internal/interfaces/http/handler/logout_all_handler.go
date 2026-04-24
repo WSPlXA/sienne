@@ -56,7 +56,7 @@ func (h *LogoutAllHandler) Handle(c *gin.Context) {
 	}
 
 	// 当前浏览器自己的 cookie 无论如何都要删掉，保证本地状态立即失效。
-	c.SetCookie("idp_session", "", -1, "/", "", false, true)
+	c.SetCookie("idp_session", "", -1, "/", "", true, true)
 	log.Printf("logout_all succeeded ip=%s session_present=%t revoked_sessions=%d revoked_access=%d revoked_refresh=%d return_to=%q",
 		c.ClientIP(),
 		sessionID != "",

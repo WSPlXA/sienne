@@ -10,7 +10,7 @@ import (
 var ErrUnsupportedPasswordHash = errors.New("unsupported password hash")
 
 // PasswordVerifier 封装密码哈希与比对逻辑。
-// 当前实现使用 bcrypt，并保留一个仅供开发夹具使用的明文前缀后门。
+// 当前实现使用 bcrypt，不接受任何明文前缀旁路。
 type PasswordVerifier struct{}
 
 func NewPasswordVerifier() *PasswordVerifier {
@@ -30,14 +30,6 @@ func (v *PasswordVerifier) VerifyPassword(password, encodedHash string) error {
 	// 空哈希直接视为不支持，避免把“没有密码”误判成校验失败。
 	if strings.TrimSpace(encodedHash) == "" {
 		return ErrUnsupportedPasswordHash
-	}
-
-	// Dev helper: allow explicit plain-text fixtures without pretending they are hashed.
-	if strings.HasPrefix(encodedHash, "plain:") {
-		if password == strings.TrimPrefix(encodedHash, "plain:") {
-			return nil
-		}
-		return bcrypt.ErrMismatchedHashAndPassword
 	}
 
 	return bcrypt.CompareHashAndPassword([]byte(encodedHash), []byte(password))

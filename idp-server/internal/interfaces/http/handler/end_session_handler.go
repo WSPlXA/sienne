@@ -119,7 +119,7 @@ func (h *EndSessionHandler) Post(c *gin.Context) {
 	}
 
 	// IdP 本地会话失效后，浏览器 cookie 也立即清除。
-	c.SetCookie("idp_session", "", -1, "/", "", false, true)
+	c.SetCookie("idp_session", "", -1, "/", "", true, true)
 
 	if validatedRedirect != "" {
 		redirectTarget := buildPostLogoutRedirect(validatedRedirect, strings.TrimSpace(req.State))

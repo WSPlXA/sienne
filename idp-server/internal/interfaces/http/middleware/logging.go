@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"log"
+	"net/url"
 	"strings"
 	"time"
 
@@ -14,6 +15,14 @@ const (
 	ContextRequestID = "request_id"
 	RequestIDHeader  = "X-Request-ID"
 )
+
+var safeQueryLogAllowlist = map[string]struct{}{
+	"client_id":     {},
+	"grant_type":    {},
+	"response_type": {},
+	"scope":         {},
+	"method":        {},
+}
 
 type LoggingMiddleware struct {
 	logger *log.Logger
@@ -27,17 +36,12 @@ func (m *LoggingMiddleware) Handler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 日志中间件在请求开始时分配 request id，在结束后统一记录摘要。
 		startedAt := time.Now()
-		path := c.Request.URL.Path
-		rawQuery := c.Request.URL.RawQuery
+		path := sanitizeRequestPath(c.Request.URL.Path, c.Request.URL.RawQuery)
 		requestID := resolveRequestID(c)
 		c.Set(ContextRequestID, requestID)
 		c.Writer.Header().Set(RequestIDHeader, requestID)
 
 		c.Next()
-
-		if rawQuery != "" {
-			path = path + "?" + rawQuery
-		}
 
 		logger := m.logger
 		if logger == nil {
@@ -59,6 +63,27 @@ func (m *LoggingMiddleware) Handler() gin.HandlerFunc {
 			len(c.Errors),
 		)
 	}
+}
+
+func sanitizeRequestPath(path, rawQuery string) string {
+	if rawQuery == "" {
+		return path
+	}
+	values, err := url.ParseQuery(rawQuery)
+	if err != nil {
+		return path
+	}
+	safe := url.Values{}
+	for key, entries := range values {
+		if _, ok := safeQueryLogAllowlist[strings.ToLower(strings.TrimSpace(key))]; !ok {
+			continue
+		}
+		safe[key] = entries
+	}
+	if encoded := safe.Encode(); encoded != "" {
+		return path + "?" + encoded
+	}
+	return path
 }
 
 func resolveRequestID(c *gin.Context) string {

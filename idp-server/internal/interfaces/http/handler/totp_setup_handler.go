@@ -100,8 +100,8 @@ func (h *TOTPSetupHandler) Handle(c *gin.Context) {
 	if result.MFAChallengeID != "" {
 		// 这说明本次绑定是从“首次登录必须完成 MFA”流程里进入的，
 		// 启用后还要再走一次 TOTP 登录验证。
-		c.SetCookie(mfaChallengeCookieName, result.MFAChallengeID, 300, "/", "", false, true)
-		c.SetCookie("idp_session", "", -1, "/", "", false, true)
+		c.SetCookie(mfaChallengeCookieName, result.MFAChallengeID, 300, "/", "", true, true)
+		c.SetCookie("idp_session", "", -1, "/", "", true, true)
 		if wantsHTML(c.GetHeader("Accept")) {
 			c.Redirect(http.StatusFound, loginTOTPRoutingPath)
 			return

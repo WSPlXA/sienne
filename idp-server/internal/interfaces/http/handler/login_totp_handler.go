@@ -104,7 +104,7 @@ func (h *LoginTOTPHandler) Handle(c *gin.Context) {
 		switch {
 		case errors.Is(err, authn.ErrMFAChallengeExpired):
 			status = http.StatusUnauthorized
-			c.SetCookie(mfaChallengeCookieName, "", -1, "/", "", false, true)
+			c.SetCookie(mfaChallengeCookieName, "", -1, "/", "", true, true)
 		case errors.Is(err, authn.ErrInvalidTOTPCode), errors.Is(err, authn.ErrTOTPCodeReused):
 			status = http.StatusUnauthorized
 		default:
@@ -115,9 +115,9 @@ func (h *LoginTOTPHandler) Handle(c *gin.Context) {
 		h.render(c, status, data)
 		return
 	}
-	c.SetCookie(mfaChallengeCookieName, "", -1, "/", "", false, true)
+	c.SetCookie(mfaChallengeCookieName, "", -1, "/", "", true, true)
 	maxAge := int(time.Until(result.ExpiresAt).Seconds())
-	c.SetCookie("idp_session", result.SessionID, maxAge, "/", "", false, true)
+	c.SetCookie("idp_session", result.SessionID, maxAge, "/", "", true, true)
 	if result.MFAEnrollmentRequired {
 		targetReturnTo := resolveBrowserPostLoginRedirect(result.ReturnTo, result.RedirectURI, result.RoleCode)
 		setupURI := buildMFASetupURI(targetReturnTo)
@@ -168,7 +168,7 @@ func (h *LoginTOTPHandler) handlePasskeyBegin(c *gin.Context, req dto.LoginTOTPR
 		switch {
 		case errors.Is(err, authn.ErrMFAChallengeExpired):
 			status = http.StatusUnauthorized
-			c.SetCookie(mfaChallengeCookieName, "", -1, "/", "", false, true)
+			c.SetCookie(mfaChallengeCookieName, "", -1, "/", "", true, true)
 		case errors.Is(err, authn.ErrPasskeyUnavailable), errors.Is(err, authn.ErrPasskeySessionMissing):
 			status = http.StatusBadRequest
 		default:
@@ -209,7 +209,7 @@ func (h *LoginTOTPHandler) handlePasskeyFinish(c *gin.Context, req dto.LoginTOTP
 		switch {
 		case errors.Is(err, authn.ErrMFAChallengeExpired):
 			status = http.StatusUnauthorized
-			c.SetCookie(mfaChallengeCookieName, "", -1, "/", "", false, true)
+			c.SetCookie(mfaChallengeCookieName, "", -1, "/", "", true, true)
 		case errors.Is(err, authn.ErrPasskeyUnavailable), errors.Is(err, authn.ErrPasskeySessionMissing), errors.Is(err, authn.ErrInvalidCredentials):
 			status = http.StatusUnauthorized
 		default:
@@ -219,9 +219,9 @@ func (h *LoginTOTPHandler) handlePasskeyFinish(c *gin.Context, req dto.LoginTOTP
 		return
 	}
 
-	c.SetCookie(mfaChallengeCookieName, "", -1, "/", "", false, true)
+	c.SetCookie(mfaChallengeCookieName, "", -1, "/", "", true, true)
 	maxAge := int(time.Until(result.ExpiresAt).Seconds())
-	c.SetCookie("idp_session", result.SessionID, maxAge, "/", "", false, true)
+	c.SetCookie("idp_session", result.SessionID, maxAge, "/", "", true, true)
 	redirectURI := resolveBrowserPostLoginRedirect(result.ReturnTo, result.RedirectURI, result.RoleCode)
 	if redirectURI == "" {
 		redirectURI = defaultPostLoginRedirect
@@ -292,7 +292,7 @@ func (h *LoginTOTPHandler) writePushStatus(c *gin.Context) {
 	if err != nil {
 		status := http.StatusUnauthorized
 		if errors.Is(err, authn.ErrMFAChallengeExpired) {
-			c.SetCookie(mfaChallengeCookieName, "", -1, "/", "", false, true)
+			c.SetCookie(mfaChallengeCookieName, "", -1, "/", "", true, true)
 			status = http.StatusUnauthorized
 		} else {
 			status = http.StatusInternalServerError
@@ -306,9 +306,9 @@ func (h *LoginTOTPHandler) writePushStatus(c *gin.Context) {
 			ChallengeID: challengeID,
 		})
 		if err == nil {
-			c.SetCookie(mfaChallengeCookieName, "", -1, "/", "", false, true)
+			c.SetCookie(mfaChallengeCookieName, "", -1, "/", "", true, true)
 			maxAge := int(time.Until(result.ExpiresAt).Seconds())
-			c.SetCookie("idp_session", result.SessionID, maxAge, "/", "", false, true)
+			c.SetCookie("idp_session", result.SessionID, maxAge, "/", "", true, true)
 			redirectURI := resolveBrowserPostLoginRedirect(result.ReturnTo, result.RedirectURI, result.RoleCode)
 			if redirectURI == "" {
 				redirectURI = defaultPostLoginRedirect
@@ -353,7 +353,7 @@ func (h *LoginTOTPHandler) loadChallengeData(c *gin.Context) loginTOTPPageData {
 	})
 	if err != nil {
 		if errors.Is(err, authn.ErrMFAChallengeExpired) {
-			c.SetCookie(mfaChallengeCookieName, "", -1, "/", "", false, true)
+			c.SetCookie(mfaChallengeCookieName, "", -1, "/", "", true, true)
 		}
 		return data
 	}
