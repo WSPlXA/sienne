@@ -1032,9 +1032,9 @@ func (s *Service) createMFAChallenge(ctx context.Context, user *userdomain.Model
 		ExpiresAt:   s.now().Add(s.mfaTTL),
 	}, s.mfaTTL)
 	if errors.Is(err, cache.ErrStateVersionConflict) || errors.Is(err, cache.ErrInvalidStateTransition) {
-		return "", ErrMFARequired
+		return "", "", ErrMFARequired
 	}
-	return challengeID, err
+	return challengeID, pushCode, err
 }
 
 func (s *Service) createSession(ctx context.Context, user *userdomain.Model, methodType pluginport.AuthnMethodType, ipAddress, userAgent, redirectURI, returnTo string, now time.Time) (*AuthenticateResult, error) {
