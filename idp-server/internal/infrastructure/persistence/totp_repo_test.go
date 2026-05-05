@@ -13,7 +13,7 @@ import (
 )
 
 func TestTOTPRepositoryEncryptDecryptSecret(t *testing.T) {
-	codec, err := infrasecurity.NewSecretCodec("dev_totp_secret_encryption_key!!")
+	codec, err := infrasecurity.NewSecretCodec("ChangeThisTOTPSecretKey32Chars!!")
 	if err != nil {
 		t.Fatalf("NewSecretCodec() error = %v", err)
 	}
@@ -53,7 +53,7 @@ func TestTOTPRepositoryFindSupportsLegacyPlaintextRow(t *testing.T) {
 		t.Fatalf("insert legacy row error = %v", err)
 	}
 
-	codec, err := infrasecurity.NewSecretCodec("dev_totp_secret_encryption_key!!")
+	codec, err := infrasecurity.NewSecretCodec("ChangeThisTOTPSecretKey32Chars!!")
 	if err != nil {
 		t.Fatalf("NewSecretCodec() error = %v", err)
 	}

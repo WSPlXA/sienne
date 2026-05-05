@@ -270,10 +270,11 @@ func provideAuthnService(
 func provideAuthzService(
 	clientRepo repository.ClientRepository,
 	sessionRepo repository.SessionRepository,
+	sessionCache cacheport.SessionCacheRepository,
 	authCodeRepo repository.AuthorizationCodeRepository,
 	consentRepo repository.ConsentRepository,
 ) authz.Service {
-	return authz.NewService(clientRepo, sessionRepo, authCodeRepo, consentRepo, 10*time.Minute)
+	return authz.NewService(clientRepo, sessionRepo, sessionCache, authCodeRepo, consentRepo, 10*time.Minute)
 }
 
 func provideConsentManager(

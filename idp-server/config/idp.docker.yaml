@@ -6,7 +6,7 @@ mysql:
   port: 3306
   database: "app"
   user: "app"
-  password: "apppass"
+  password: "ChangeThisAppPassword_32CharsMin"
   read_dsn: ""
   strong_read:
     session_by_id: true
@@ -37,7 +37,7 @@ audit:
 
 totp:
   issuer: "IDP Server"
-  secret_encryption_key: "dev_totp_secret_encryption_key!!"
+  secret_encryption_key: "ChangeThisTOTPSecretKey32Chars!!"
 
 jwt:
   key_id: "kid-2026-01-rs256"
@@ -76,10 +76,10 @@ federated_oidc:
     - "profile"
     - "email"
   state_ttl: "10m"
-  # Google OIDC quick start:
+  # Google OIDC quick start. Keep real values in private env/config only:
   # issuer: "https://accounts.google.com"
-  # client_id: "YOUR_GOOGLE_CLIENT_ID"
-  # client_secret: "YOUR_GOOGLE_CLIENT_SECRET"
+  # client_id: "replace-with-private-client-id"
+  # client_secret: "replace-with-private-client-secret"
   # redirect_uri: "http://localhost:8080/login"
   # provider_name: "Google"
   # client_auth_method: "client_secret_post"

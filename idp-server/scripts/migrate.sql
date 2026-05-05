@@ -955,45 +955,7 @@ FROM users u
 WHERE
     u.username = 'alice';
 
--- Sample active JWK metadata
-INSERT INTO
-    jwk_keys (
-        kid,
-        kty,
-        alg,
-        use_type,
-        public_jwk_json,
-        private_key_ref,
-        is_active,
-        created_at,
-        rotates_at,
-        deactivated_at
-    )
-VALUES (
-        'kid-2026-01-rs256',
-        'RSA',
-        'RS256',
-        'sig',
-        JSON_OBJECT(
-            'kty',
-            'RSA',
-            'kid',
-            'kid-2026-01-rs256',
-            'use',
-            'sig',
-            'alg',
-            'RS256',
-            'n',
-            'pFqjbNu3IvACehqIGssAnR4AtskQHJQqvwN1bhqco80wajHEZhz0fE4dPO4BfVhJvepvqrp8LIf3DTMzypGcKwBMpj6J5ds25-qkILk9gfKoBDas_onDbiqAJclishuT-GpEqx_igyd3Nj5fFXWcSxw5-nhFu_SZ1lKISEK_9QOe8MwWrjRaJcasDgWCIo6HTrT4PkWp48QvAMrFUFcXM2jw3GdeSlY5dDxWZsoGglJXAhCySAX4ZptIGsLwrWjXJDVmeqs849on1uI5N-PLEEu_ZWBUxKngTxVxWRquwAXT8n1wDU2woL6OPVjmB8K2pz7SRz9YFCXNzeUwkFFTTw',
-            'e',
-            'AQAB'
-        ),
-        'file://scripts/dev_keys/kid-2026-01-rs256.pem',
-        1,
-        NOW(),
-        DATE_ADD(NOW(), INTERVAL 90 DAY),
-        NULL
-    );
+-- Signing keys are generated at runtime by the key rotation service.
 
 -- Sample login session
 INSERT INTO

@@ -224,7 +224,7 @@ func loadConfig() (*config, error) {
 		cfg.AuditDLQStream = keyBuilder.AuditDLQStream()
 	}
 	if cfg.TOTPSecretEncryptionKey == "" && strings.EqualFold(cfg.AppEnv, "dev") {
-		cfg.TOTPSecretEncryptionKey = "dev_totp_secret_encryption_key!!"
+		cfg.TOTPSecretEncryptionKey = "ChangeThisTOTPSecretKey32Chars!!"
 	}
 
 	if err := validateConfig(cfg); err != nil {

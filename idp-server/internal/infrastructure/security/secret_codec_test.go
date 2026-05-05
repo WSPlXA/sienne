@@ -6,7 +6,7 @@ import (
 )
 
 func TestSecretCodecEncryptDecryptRoundTrip(t *testing.T) {
-	codec, err := NewSecretCodec("dev_totp_secret_encryption_key!!")
+	codec, err := NewSecretCodec("ChangeThisTOTPSecretKey32Chars!!")
 	if err != nil {
 		t.Fatalf("NewSecretCodec() error = %v", err)
 	}
@@ -32,7 +32,7 @@ func TestSecretCodecEncryptDecryptRoundTrip(t *testing.T) {
 }
 
 func TestSecretCodecDecryptPlaintextCompatibility(t *testing.T) {
-	codec, err := NewSecretCodec("dev_totp_secret_encryption_key!!")
+	codec, err := NewSecretCodec("ChangeThisTOTPSecretKey32Chars!!")
 	if err != nil {
 		t.Fatalf("NewSecretCodec() error = %v", err)
 	}

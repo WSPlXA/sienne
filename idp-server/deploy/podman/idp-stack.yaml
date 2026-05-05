@@ -3,10 +3,11 @@ kind: Secret
 metadata:
   name: idp-runtime-secret
 type: Opaque
-data:
-  MYSQL_ROOT_PASSWORD: cm9vdHBhc3M=
-  MYSQL_PASSWORD: YXBwcGFzcw==
-  REDIS_PASSWORD: cmVkaXNwYXNz
+stringData:
+  MYSQL_ROOT_PASSWORD: ChangeThisRootPassword_32CharsMin
+  MYSQL_PASSWORD: ChangeThisAppPassword_32CharsMin
+  REDIS_PASSWORD: ChangeThisRedisPassword_32CharsMin
+  TOTP_SECRET_ENCRYPTION_KEY: ChangeThisTOTPSecretKey32Chars!!
 ---
 apiVersion: v1
 kind: ConfigMap

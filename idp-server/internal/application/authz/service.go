@@ -3,10 +3,13 @@ package authz
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"time"
 
 	authorizationdomain "idp-server/internal/domain/authorization"
+	"idp-server/internal/domain/session"
+	"idp-server/internal/ports/cache"
 	"idp-server/internal/ports/repository"
 	pkgoauth2 "idp-server/pkg/oauth2"
 
@@ -21,28 +24,31 @@ type Service interface {
 // 在用户已登录的前提下校验客户端、scope、PKCE 和 consent，
 // 然后签发一个短生命周期的 authorization code 交给前端回跳。
 type AuthorizationService struct {
-	clients   repository.ClientRepository
-	sessions  repository.SessionRepository
-	codes     repository.AuthorizationCodeRepository
-	consents  repository.ConsentRepository
-	codeTTL   time.Duration
-	now       func() time.Time
-	codeMaker func() string
+	clients      repository.ClientRepository
+	sessions     repository.SessionRepository
+	sessionCache cache.SessionCacheRepository
+	codes        repository.AuthorizationCodeRepository
+	consents     repository.ConsentRepository
+	codeTTL      time.Duration
+	now          func() time.Time
+	codeMaker    func() string
 }
 
 func NewService(
 	clients repository.ClientRepository,
 	sessions repository.SessionRepository,
+	sessionCache cache.SessionCacheRepository,
 	codes repository.AuthorizationCodeRepository,
 	consents repository.ConsentRepository,
 	codeTTL time.Duration,
 ) *AuthorizationService {
 	return &AuthorizationService{
-		clients:  clients,
-		sessions: sessions,
-		codes:    codes,
-		consents: consents,
-		codeTTL:  codeTTL,
+		clients:      clients,
+		sessions:     sessions,
+		sessionCache: sessionCache,
+		codes:        codes,
+		consents:     consents,
+		codeTTL:      codeTTL,
 		now: func() time.Time {
 			return time.Now().UTC()
 		},
@@ -102,11 +108,11 @@ func (s *AuthorizationService) Authorize(ctx context.Context, cmd *Authorization
 		}, nil
 	}
 
-	currentSession, err := s.sessions.FindBySessionID(ctx, sessionID)
+	currentSession, err := s.findActiveSession(ctx, sessionID)
 	if err != nil {
 		return nil, err
 	}
-	if currentSession == nil || currentSession.LoggedOutAt != nil || !currentSession.ExpiresAt.After(s.now()) {
+	if currentSession == nil {
 		return &AuthorizationResult{
 			RequireLogin:     true,
 			LoginRedirectURI: "/login",
@@ -134,7 +140,10 @@ func (s *AuthorizationService) Authorize(ctx context.Context, cmd *Authorization
 		return nil, err
 	}
 
-	sessionDBID := currentSession.ID
+	var sessionDBID *int64
+	if currentSession.ID > 0 {
+		sessionDBID = &currentSession.ID
+	}
 	// authorization code 本质上是一个短命“兑换凭证”：
 	// 它绑定 client、user、redirect_uri、scope、nonce 和 PKCE 元数据，
 	// 后续 token 端点会用这些字段做二次核验。
@@ -142,7 +151,7 @@ func (s *AuthorizationService) Authorize(ctx context.Context, cmd *Authorization
 		Code:                s.codeMaker(),
 		ClientDBID:          client.ID,
 		UserID:              currentSession.UserID,
-		SessionDBID:         &sessionDBID,
+		SessionDBID:         sessionDBID,
 		RedirectURI:         cmd.RedirectURI,
 		ScopesJSON:          string(scopeJSON),
 		StateValue:          strings.TrimSpace(cmd.State),
@@ -160,6 +169,42 @@ func (s *AuthorizationService) Authorize(ctx context.Context, cmd *Authorization
 		Code:        codeModel.Code,
 		State:       cmd.State,
 	}, nil
+}
+
+func (s *AuthorizationService) findActiveSession(ctx context.Context, sessionID string) (*session.Model, error) {
+	// 登录完成后的 authorize 回跳是热路径：优先使用 Redis 中刚写入的 session 快照。
+	now := s.now()
+	if s.sessionCache != nil {
+		entry, err := s.sessionCache.Get(ctx, sessionID)
+		if err != nil {
+			return nil, err
+		}
+		if cache.IsSessionEntryActive(entry, now) {
+			userID, err := strconv.ParseInt(strings.TrimSpace(entry.UserID), 10, 64)
+			if err == nil && userID > 0 {
+				return &session.Model{
+					SessionID:       entry.SessionID,
+					UserID:          userID,
+					Subject:         entry.Subject,
+					ACR:             entry.ACR,
+					AMRJSON:         entry.AMRJSON,
+					IPAddress:       entry.IPAddress,
+					UserAgent:       entry.UserAgent,
+					AuthenticatedAt: entry.AuthenticatedAt,
+					ExpiresAt:       entry.ExpiresAt,
+				}, nil
+			}
+		}
+	}
+
+	currentSession, err := s.sessions.FindBySessionID(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if currentSession == nil || currentSession.LoggedOutAt != nil || !currentSession.ExpiresAt.After(now) {
+		return nil, nil
+	}
+	return currentSession, nil
 }
 
 func normalizeScopes(scopes []string) []string {

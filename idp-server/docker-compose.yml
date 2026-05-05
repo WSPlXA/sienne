@@ -7,10 +7,10 @@ services:
     container_name: idp-db
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_ROOT_PASSWORD: ${IDP_MYSQL_ROOT_PASSWORD:-ChangeThisRootPassword_32CharsMin}
       MYSQL_DATABASE: app
       MYSQL_USER: app
-      MYSQL_PASSWORD: apppass
+      MYSQL_PASSWORD: ${IDP_MYSQL_PASSWORD:-ChangeThisAppPassword_32CharsMin}
     ports:
       - "3306:3306"
     volumes:
@@ -53,6 +53,9 @@ services:
     volumes:
       - ./config/idp.docker.yaml:/app/config/idp.yaml
       - ./scripts/dev_keys:/app/scripts/dev_keys
+    environment:
+      MYSQL_PASSWORD: ${IDP_MYSQL_PASSWORD:-ChangeThisAppPassword_32CharsMin}
+      TOTP_SECRET_ENCRYPTION_KEY: ${IDP_TOTP_SECRET_ENCRYPTION_KEY:-ChangeThisTOTPSecretKey32Chars!!}
     ports:
       - "8080:8080"
     depends_on:

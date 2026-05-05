@@ -1,0 +1,22 @@
+# Local secrets and environment overrides
+.env
+.env.*
+!.env.example
+*.local.yaml
+*.local.yml
+
+# Private signing material
+idp-server/scripts/dev_keys/
+*.pem
+*.key
+*.crt
+
+# Build outputs
+idp-server/bin/
+idp-server/target/
+idp-server/dist/
+
+# Editor and OS noise
+.DS_Store
+.idea/
+.vscode/

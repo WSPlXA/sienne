@@ -1295,7 +1295,7 @@ components:
         password:
           type: string
           format: password
-          example: alice123
+          example: ChangeThisUserPassword
         csrf_token:
           type: string
         email_verified:

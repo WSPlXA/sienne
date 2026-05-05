@@ -339,6 +339,8 @@ func (s *Service) VerifyTOTP(ctx context.Context, input VerifyTOTPInput) (*Authe
 }
 
 func (s *Service) BeginMFAPasskey(ctx context.Context, input BeginMFAPasskeyInput) (*BeginMFAPasskeyResult, error) {
+	// Passkey MFA 分两步完成：这里只生成 WebAuthn options，
+	// 并把 provider 返回的临时 session 绑定回原 MFA challenge。
 	if s.mfaCache == nil || s.passkey == nil || s.passkeyRepo == nil {
 		return nil, ErrPasskeyUnavailable
 	}
@@ -375,6 +377,7 @@ func (s *Service) BeginMFAPasskey(ctx context.Context, input BeginMFAPasskeyInpu
 	if err != nil {
 		return nil, err
 	}
+	// 保留原 challenge 的过期时间，只补充 Passkey 临时状态，避免延长登录窗口。
 	challenge.PasskeySessionJSON = string(sessionJSON)
 	if err := s.mfaCache.SaveMFAChallenge(ctx, *challenge, ttlUntil(now, challenge.ExpiresAt)); err != nil {
 		if errors.Is(err, cache.ErrStateVersionConflict) || errors.Is(err, cache.ErrInvalidStateTransition) {
@@ -390,6 +393,7 @@ func (s *Service) BeginMFAPasskey(ctx context.Context, input BeginMFAPasskeyInpu
 }
 
 func (s *Service) VerifyMFAPasskey(ctx context.Context, input VerifyMFAPasskeyInput) (*AuthenticateResult, error) {
+	// 完成 Passkey MFA 后立即消费 challenge，并沿用第一要素阶段保存的登录上下文创建 session。
 	if s.mfaCache == nil || s.passkey == nil || s.passkeyRepo == nil {
 		return nil, ErrPasskeyUnavailable
 	}
@@ -435,6 +439,7 @@ func (s *Service) VerifyMFAPasskey(ctx context.Context, input VerifyMFAPasskeyIn
 		return nil, err
 	}
 	if strings.TrimSpace(credentialID) != "" && strings.TrimSpace(updatedCredentialJSON) != "" {
+		// WebAuthn 签名计数等凭证状态由 provider 更新，认证成功后尽量回写。
 		lastUsedAt := now
 		_ = s.passkeyRepo.Upsert(ctx, &passkeydomain.Model{
 			UserID:         user.ID,
@@ -452,6 +457,7 @@ func (s *Service) VerifyMFAPasskey(ctx context.Context, input VerifyMFAPasskeyIn
 }
 
 func (s *Service) PollMFAChallenge(ctx context.Context, input PollMFAChallengeInput) (*PollMFAChallengeResult, error) {
+	// 前端轮询只暴露 challenge 的可展示状态，不推进认证状态机。
 	if s.mfaCache == nil {
 		return nil, ErrMFAChallengeExpired
 	}
@@ -474,6 +480,8 @@ func (s *Service) PollMFAChallenge(ctx context.Context, input PollMFAChallengeIn
 }
 
 func (s *Service) DecideMFAPush(ctx context.Context, input DecideMFAPushInput) (*PollMFAChallengeResult, error) {
+	// Push MFA 的批准动作必须来自同一用户的已登录 session，
+	// 并通过短码确认，避免误点或跨账号批准。
 	if s.mfaCache == nil {
 		return nil, ErrMFAChallengeExpired
 	}
@@ -507,6 +515,7 @@ func (s *Service) DecideMFAPush(ctx context.Context, input DecideMFAPushInput) (
 	}
 
 	if action == MFAPushStatusApproved {
+		// 只有批准需要校验匹配码；拒绝可以直接终止待确认的登录请求。
 		if strings.TrimSpace(input.MatchCode) == "" || strings.TrimSpace(input.MatchCode) != strings.TrimSpace(challenge.PushCode) {
 			return nil, ErrInvalidPushMatchCode
 		}
@@ -535,6 +544,7 @@ func (s *Service) DecideMFAPush(ctx context.Context, input DecideMFAPushInput) (
 }
 
 func (s *Service) FinalizeMFAPush(ctx context.Context, input FinalizeMFAPushInput) (*AuthenticateResult, error) {
+	// 被登录端只在 Push 已批准后收尾创建 session；拒绝和未决状态都保持显式错误。
 	if s.mfaCache == nil {
 		return nil, ErrMFAChallengeExpired
 	}
@@ -572,6 +582,8 @@ func (s *Service) FinalizeMFAPush(ctx context.Context, input FinalizeMFAPushInpu
 }
 
 func resolveMethodType(input AuthenticateInput) (pluginport.AuthnMethodType, error) {
+	// 调用方显式指定 method 时优先相信 method；
+	// 未指定时根据凭证字段做兼容推断，保留旧密码登录入口的默认行为。
 	method := pluginport.AuthnMethodType(strings.ToLower(strings.TrimSpace(input.Method)))
 	if method != "" {
 		switch method {
@@ -593,6 +605,8 @@ func resolveMethodType(input AuthenticateInput) (pluginport.AuthnMethodType, err
 }
 
 func (s *Service) resolveExistingUser(ctx context.Context, result *pluginport.AuthenticateResult) (*userdomain.Model, error) {
+	// 插件可能直接返回本地用户 ID，也可能只返回联邦身份属性。
+	// 这里按稳定标识优先、用户名/邮箱兜底的顺序合并到本地账号。
 	if result == nil {
 		return nil, nil
 	}
@@ -689,6 +703,7 @@ func (s *Service) provisionFederatedUser(ctx context.Context, result *pluginport
 }
 
 func (s *Service) allocateFederatedUsername(ctx context.Context, result *pluginport.AuthenticateResult, userUUID string) (string, error) {
+	// 联邦资料里的用户名不一定唯一；生成短候选名后追加序号探测可用值。
 	base := sanitizeFederatedUsername(candidateFederatedUsername(result, userUUID))
 	if base == "" {
 		base = "oidc_user"
@@ -712,6 +727,7 @@ func (s *Service) allocateFederatedUsername(ctx context.Context, result *pluginp
 }
 
 func candidateFederatedUsername(result *pluginport.AuthenticateResult, userUUID string) string {
+	// 用户名候选尽量取上游可读字段，缺失时退化为稳定短 ID。
 	if result != nil {
 		if value := strings.TrimSpace(result.Username); value != "" {
 			return value
@@ -736,6 +752,7 @@ func candidateFederatedUsername(result *pluginport.AuthenticateResult, userUUID 
 }
 
 func federatedSubjectUserUUID(identityProvider, subject string) string {
+	// 用 provider + subject 生成确定性 UUID，保证同一联邦身份重复登录能命中同一用户。
 	subject = strings.TrimSpace(subject)
 	if subject == "" {
 		return ""
@@ -745,11 +762,13 @@ func federatedSubjectUserUUID(identityProvider, subject string) string {
 }
 
 func shortStableID(value string) string {
+	// 只用于生成可读兜底用户名，不作为安全凭证。
 	sum := sha1.Sum([]byte(strings.TrimSpace(value)))
 	return hex.EncodeToString(sum[:6])
 }
 
 func normalizeFederatedEmail(value string) string {
+	// 只接受最基础的邮箱形态，避免把无效上游字段写成本地唯一邮箱。
 	value = strings.ToLower(strings.TrimSpace(value))
 	if value == "" {
 		return ""
@@ -761,6 +780,7 @@ func normalizeFederatedEmail(value string) string {
 }
 
 func sanitizeFederatedUsername(value string) string {
+	// 本地用户名只保留小写字母、数字和少量分隔符，其他字符统一折叠为下划线。
 	value = strings.ToLower(strings.TrimSpace(value))
 	if value == "" {
 		return ""
@@ -790,6 +810,7 @@ func sanitizeFederatedUsername(value string) string {
 }
 
 func trimUsernameTo(value string, limit int) string {
+	// 用户名候选目前只由 ASCII 清洗函数产生，按字节截断即可。
 	if limit <= 0 {
 		return ""
 	}
@@ -800,6 +821,7 @@ func trimUsernameTo(value string, limit int) string {
 }
 
 func sessionAuthContext(methodType pluginport.AuthnMethodType) (string, string) {
+	// ACR/AMR 记录认证强度和使用方式，后续授权或审计可直接读取 session。
 	switch methodType {
 	case pluginport.AuthnMethodTypeFederatedOIDC:
 		return "urn:idp:acr:federated_oidc", `["federated_oidc"]`
@@ -809,6 +831,7 @@ func sessionAuthContext(methodType pluginport.AuthnMethodType) (string, string) 
 }
 
 func (s *Service) preparePasswordAuthentication(ctx context.Context, username, ipAddress string) (*userdomain.Model, error) {
+	// 密码校验前先做轻量防护：IP 级限流优先，用户级锁定在查到用户后再判断。
 	username = strings.TrimSpace(username)
 	ipAddress = strings.TrimSpace(ipAddress)
 
@@ -840,6 +863,7 @@ func (s *Service) preparePasswordAuthentication(ctx context.Context, username, i
 }
 
 func (s *Service) registerPasswordFailure(ctx context.Context, username, ipAddress string, user *userdomain.Model) error {
+	// 登录失败同时记用户维度和 IP 维度；达到永久阈值时再把用户状态落库为 locked。
 	username = strings.TrimSpace(username)
 	ipAddress = strings.TrimSpace(ipAddress)
 
@@ -886,6 +910,7 @@ func (s *Service) registerPasswordFailure(ctx context.Context, username, ipAddre
 	}
 
 	if userID != "" && username != "" && s.ratePolicy.PermanentUserLockThreshold > 0 {
+		// 永久锁定需要数据库支持；如果落库失败，要清掉刚写入的缓存锁，避免状态不一致。
 		result, err := s.rateLimits.IncrementBlacklistByUser(ctx, username, userID, s.ratePolicy.PermanentUserLockThreshold)
 		if err != nil {
 			return err
@@ -912,6 +937,7 @@ func (s *Service) registerPasswordFailure(ctx context.Context, username, ipAddre
 }
 
 func (s *Service) resetPasswordRateLimit(ctx context.Context, username, ipAddress string) error {
+	// 第一要素成功后清理失败计数，避免历史失败继续影响后续正常登录。
 	if s.rateLimits == nil {
 		return nil
 	}
@@ -937,6 +963,7 @@ func (s *Service) resetPasswordRateLimit(ctx context.Context, username, ipAddres
 }
 
 func (s *Service) lookupUserByUsername(ctx context.Context, username string) (*userdomain.Model, error) {
+	// 空用户名视为未命中，让插件统一返回无效凭证，避免泄露额外状态。
 	username = strings.TrimSpace(username)
 	if username == "" || s.userRepo == nil {
 		return nil, nil
@@ -945,6 +972,7 @@ func (s *Service) lookupUserByUsername(ctx context.Context, username string) (*u
 }
 
 func (s *Service) lookupTOTP(ctx context.Context, userID int64) (*totpdomain.Model, error) {
+	// TOTP 仓储是可选依赖，缺失时等价于用户未启用 TOTP。
 	if s.totpRepo == nil || userID <= 0 {
 		return nil, nil
 	}
@@ -952,6 +980,7 @@ func (s *Service) lookupTOTP(ctx context.Context, userID int64) (*totpdomain.Mod
 }
 
 func (s *Service) lookupPasskeyCredentialJSON(ctx context.Context, userID int64) ([]string, error) {
+	// WebAuthn provider 只需要有效的 credential JSON，仓储里的空记录在这里过滤掉。
 	if s.passkeyRepo == nil || userID <= 0 {
 		return nil, nil
 	}
@@ -980,6 +1009,7 @@ func (s *Service) lookupPasskeyCredentialJSON(ctx context.Context, userID int64)
 }
 
 func (s *Service) updateMFAChallengeMode(ctx context.Context, challengeID, mode string) error {
+	// challenge 创建后再按可用能力修正模式，写回时保持原 TTL 不变。
 	if s.mfaCache == nil {
 		return ErrMFAChallengeExpired
 	}
@@ -1006,6 +1036,7 @@ func (s *Service) updateMFAChallengeMode(ctx context.Context, challengeID, mode 
 }
 
 func (s *Service) createMFAChallenge(ctx context.Context, user *userdomain.Model, input AuthenticateInput) (string, string, error) {
+	// MFA challenge 是第一要素成功后的短期登录上下文，第二要素通过后才会换成 session。
 	if s.mfaCache == nil || user == nil {
 		return "", "", ErrMFARequired
 	}
@@ -1038,10 +1069,12 @@ func (s *Service) createMFAChallenge(ctx context.Context, user *userdomain.Model
 }
 
 func (s *Service) createSession(ctx context.Context, user *userdomain.Model, methodType pluginport.AuthnMethodType, ipAddress, userAgent, redirectURI, returnTo string, now time.Time) (*AuthenticateResult, error) {
+	// session 先落库再写缓存，数据库作为最终真相，缓存用于后续请求快速校验。
 	sessionID := uuid.NewString()
 	expiresAt := now.Add(s.sessionTTL)
 	acr, amrJSON := sessionAuthContext(methodType)
 	if strings.Contains(amrJSON, `"pwd"`) {
+		// 密码路径如果用户已启用 TOTP，最终 session 标记为 MFA 强度。
 		credential, err := s.lookupTOTP(ctx, user.ID)
 		if err == nil && credential != nil {
 			acr = "urn:idp:acr:mfa"
@@ -1093,6 +1126,7 @@ func (s *Service) createSession(ctx context.Context, user *userdomain.Model, met
 }
 
 func (s *Service) resolveActiveSessionUserID(ctx context.Context, sessionID string) (int64, error) {
+	// Push 批准端必须带一个仍然有效的 session；优先读缓存，缺失时回表兜底。
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
 		return 0, ErrMFAApproverMismatch
@@ -1121,6 +1155,7 @@ func (s *Service) resolveActiveSessionUserID(ctx context.Context, sessionID stri
 }
 
 func normalizeMFAMode(mode string) string {
+	// 未知模式统一降级为 TOTP-only，保证旧缓存或空值仍可被安全处理。
 	switch strings.TrimSpace(mode) {
 	case MFAModePasskeyTOTPFallback:
 		return MFAModePasskeyTOTPFallback
@@ -1132,6 +1167,7 @@ func normalizeMFAMode(mode string) string {
 }
 
 func toPasskeyUser(user *userdomain.Model) securityport.PasskeyUser {
+	// WebAuthn user handle 优先使用稳定 UUID，缺失时才退化为数据库 ID。
 	if user == nil {
 		return securityport.PasskeyUser{}
 	}
@@ -1155,6 +1191,7 @@ func toPasskeyUser(user *userdomain.Model) securityport.PasskeyUser {
 }
 
 func normalizePushStatus(status string) string {
+	// Push 状态只接受三态，其余值都按 pending 处理，避免误完成登录。
 	switch strings.TrimSpace(strings.ToLower(status)) {
 	case MFAPushStatusApproved:
 		return MFAPushStatusApproved
@@ -1166,6 +1203,7 @@ func normalizePushStatus(status string) string {
 }
 
 func ttlUntil(now, expiresAt time.Time) time.Duration {
+	// 缓存接口需要正 TTL；过期边界统一给一个极短 TTL 让写入自然消亡。
 	ttl := expiresAt.Sub(now)
 	if ttl <= 0 {
 		return time.Second
@@ -1174,6 +1212,7 @@ func ttlUntil(now, expiresAt time.Time) time.Duration {
 }
 
 func buildPushMatchCode() (string, error) {
+	// 生成两位数字匹配码，用于批准端和登录端人工确认同一次 Push 请求。
 	var b [1]byte
 	if _, err := rand.Read(b[:]); err != nil {
 		return "", fmt.Errorf("generate push match code: %w", err)

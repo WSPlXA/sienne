@@ -97,6 +97,7 @@ func (s *Service) LogoutAll(ctx context.Context, input LogoutAllInput) (*LogoutA
 	// LogoutAll 以当前 session 为入口，找到所属用户后扩散到该用户的所有活跃会话。
 	sessionID := strings.TrimSpace(input.SessionID)
 	if sessionID == "" {
+		// 缺少当前会话时保持幂等，不做任何登出扩散。
 		return &LogoutAllResult{}, nil
 	}
 
@@ -105,6 +106,7 @@ func (s *Service) LogoutAll(ctx context.Context, input LogoutAllInput) (*LogoutA
 		return nil, err
 	}
 	if currentSession == nil {
+		// 数据库会话已不存在时仍清理缓存，避免客户端继续命中陈旧 session。
 		if s.sessionCache != nil {
 			if err := s.sessionCache.Delete(ctx, sessionID); err != nil {
 				return nil, err

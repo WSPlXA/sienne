@@ -17,7 +17,7 @@ MYSQL_HOST ?= db
 MYSQL_PORT ?= 3306
 MYSQL_DATABASE ?= app
 MYSQL_USER ?= app
-MYSQL_PASSWORD ?= apppass
+MYSQL_PASSWORD ?= ChangeThisAppPassword_32CharsMin
 
 REDIS_HOST ?= redis
 REDIS_PORT ?= 6379
