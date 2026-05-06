@@ -3,14 +3,23 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>404 Not Found</title>
+  <title>404 Not Found | Sienne IDP</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
       theme: {
         extend: {
           fontFamily: {
-            sans: ["Manrope", "sans-serif"]
+            serif: ["'Playfair Display'", "serif"],
+            sans: ["'Inter'", "sans-serif"],
+            mono: ["'JetBrains Mono'", "monospace"],
+          },
+          colors: {
+            brand: {
+              black: "#0F0F11",
+              white: "#FFFFFF",
+              accent: "#2563EB",
+            }
           }
         }
       }
@@ -18,29 +27,48 @@
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&family=Playfair+Display:ital,wght@0,600;0,800;1,600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 </head>
-<body class="min-h-screen bg-[radial-gradient(circle_at_15%_15%,#dbeafe_0%,transparent_30%),radial-gradient(circle_at_85%_20%,#fef3c7_0%,transparent_32%),linear-gradient(135deg,#f8fafc_0%,#eef2ff_55%,#f0fdfa_100%)] text-slate-900">
-  <div class="mx-auto flex min-h-screen w-full max-w-3xl items-center justify-center px-4 py-10 sm:px-6">
-    <main class="w-full max-w-xl rounded-3xl border border-slate-200 bg-white/90 p-7 text-center shadow-[0_30px_90px_rgba(15,23,42,0.12)] backdrop-blur sm:p-10">
-      <div class="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+<body class="min-h-screen bg-brand-white text-brand-black font-sans selection:bg-brand-accent selection:text-white flex flex-col antialiased">
+  <div class="absolute inset-0 bg-[linear-gradient(to_right,#e5e7eb_1px,transparent_1px),linear-gradient(to_bottom,#e5e7eb_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-30 pointer-events-none fixed"></div>
+
+  <header class="w-full border-b-2 border-brand-black px-6 py-4 flex justify-between items-center bg-white relative z-20">
+    <div class="flex items-center gap-3">
+      <div class="h-6 w-6 bg-brand-black text-white flex items-center justify-center text-xs">
         <i class="fa-solid fa-triangle-exclamation"></i>
       </div>
-      <p class="mt-4 text-xs font-bold uppercase tracking-[0.22em] text-slate-500">HTTP 404</p>
-      <h1 class="mt-2 text-3xl font-extrabold tracking-tight">Page Not Found</h1>
-      <p class="mt-3 text-sm text-slate-600">The requested route does not exist.</p>
+      <span class="font-mono text-xs font-bold uppercase tracking-widest">Sienne IDP</span>
+    </div>
+    <div class="font-mono text-xs text-gray-500 uppercase tracking-widest hidden sm:block">SYS.ERR.404</div>
+  </header>
 
-      <div class="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-left text-xs text-slate-600">
-        <div><span class="font-semibold text-slate-700">Method:</span> {{.Method}}</div>
-        <div class="mt-1 break-all"><span class="font-semibold text-slate-700">Path:</span> {{.Path}}</div>
+  <main class="flex-1 flex items-center justify-center p-6 relative z-10">
+    <div class="w-full max-w-2xl bg-white border-2 border-brand-black shadow-[8px_8px_0_0_#0F0F11]">
+      <div class="p-8 md:p-12 border-b-2 border-brand-black bg-gray-50 relative overflow-hidden">
+        <div class="absolute -right-5 top-0 opacity-10 text-[10rem] font-serif font-black leading-none pointer-events-none text-brand-black">404</div>
+        <p class="font-mono text-xs font-bold uppercase tracking-widest text-brand-accent mb-4">Route Error</p>
+        <h1 class="font-serif text-5xl md:text-6xl font-extrabold tracking-tight mb-4">Page Not Found</h1>
+        <p class="text-lg text-gray-600 font-sans">The requested route does not exist.</p>
       </div>
 
-      <a href="/login" class="mt-6 inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white transition hover:bg-slate-800">
-        <i class="fa-solid fa-arrow-left"></i>
-        Back to Sign In
-      </a>
-    </main>
-  </div>
+      <div class="p-8 md:p-12">
+        <div class="border-2 border-brand-black bg-brand-black text-white p-6 mb-8 font-mono text-sm space-y-2">
+          <div class="flex flex-col sm:flex-row sm:justify-between border-b border-gray-700 pb-2">
+            <span class="text-gray-400 font-bold uppercase tracking-widest">Method</span>
+            <span class="font-bold">{{.Method}}</span>
+          </div>
+          <div class="flex flex-col sm:flex-row sm:justify-between pt-2">
+            <span class="text-gray-400 font-bold uppercase tracking-widest">Path</span>
+            <span class="break-all text-brand-accent font-bold">{{.Path}}</span>
+          </div>
+        </div>
+
+        <a href="/login" class="inline-flex items-center justify-center gap-3 w-full border-2 border-brand-black bg-white px-4 py-4 font-mono text-sm font-bold text-brand-black transition-all hover:bg-brand-black hover:text-white hover:shadow-[4px_4px_0_0_#0F0F11]">
+          <i class="fa-solid fa-arrow-left"></i> BACK TO SIGN IN
+        </a>
+      </div>
+    </div>
+  </main>
 </body>
 </html>

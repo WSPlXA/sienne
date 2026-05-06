@@ -3,58 +3,99 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Control Router</title>
+  <title>Control Router | Sienne IDP</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
       theme: {
         extend: {
-          fontFamily: { sans: ["Manrope", "sans-serif"] }
+          fontFamily: {
+            serif: ["'Playfair Display'", "serif"],
+            sans: ["'Inter'", "sans-serif"],
+            mono: ["'JetBrains Mono'", "monospace"],
+          },
+          colors: {
+            brand: {
+              black: "#0F0F11",
+              white: "#FFFFFF",
+              accent: "#2563EB",
+            }
+          }
         }
       }
     }
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&family=Playfair+Display:ital,wght@0,600;0,800;1,600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 </head>
-<body class="min-h-screen bg-[radial-gradient(circle_at_10%_10%,#bfdbfe_0%,transparent_30%),radial-gradient(circle_at_85%_12%,#a7f3d0_0%,transparent_28%),linear-gradient(135deg,#f8fafc_0%,#eef2ff_45%,#ecfeff_100%)] text-slate-900">
-  <div class="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-    <header class="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.10)] backdrop-blur sm:p-8">
-      <p class="text-xs font-bold uppercase tracking-[0.22em] text-slate-500">Sienne IDP</p>
-      <h1 class="mt-2 text-3xl font-extrabold tracking-tight">Entry Router</h1>
-      <p class="mt-2 text-sm text-slate-600">Use this page to route by permission domain instead of landing on 404.</p>
-      <div class="mt-5 flex flex-wrap gap-2">
-        <a href="/login" class="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white"><i class="fa-solid fa-arrow-right-to-bracket"></i>Sign In</a>
-        <a href="/register" class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700">Register</a>
-        <a href="/device" class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700">Device Flow</a>
+<body class="min-h-screen bg-gray-50 text-brand-black font-sans selection:bg-brand-accent selection:text-white antialiased">
+  <div class="absolute inset-0 bg-[linear-gradient(to_right,#e5e7eb_1px,transparent_1px),linear-gradient(to_bottom,#e5e7eb_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-30 pointer-events-none fixed"></div>
+
+  <header class="w-full border-b-2 border-brand-black px-6 py-4 flex justify-between items-center bg-white sticky top-0 z-50">
+    <div class="flex items-center gap-3">
+      <div class="h-6 w-6 bg-brand-black text-white flex items-center justify-center text-xs">
+        <i class="fa-solid fa-route"></i>
+      </div>
+      <span class="font-mono text-xs font-bold uppercase tracking-widest">Sienne IDP</span>
+    </div>
+    <div class="font-mono text-xs text-gray-500 uppercase tracking-widest hidden sm:block">SYS.ROUTER.01</div>
+  </header>
+
+  <div class="mx-auto w-full max-w-7xl px-6 py-12 relative z-10">
+    <header class="border-2 border-brand-black bg-white p-8 md:p-12 shadow-[8px_8px_0_0_#0F0F11] mb-12 relative overflow-hidden">
+      <div class="absolute -right-10 -top-10 text-[10rem] text-gray-100 font-serif font-black leading-none select-none pointer-events-none">ROUTE</div>
+      <div class="relative z-10">
+        <p class="font-mono text-xs font-bold uppercase tracking-widest text-brand-accent mb-4">Entry Router</p>
+        <h1 class="font-serif text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight mb-4">Domain Control</h1>
+        <p class="text-lg text-gray-600 max-w-2xl font-sans mb-8">Route by permission domain instead of landing on 404.</p>
+        <div class="flex flex-wrap gap-4 font-mono text-sm">
+          <a href="/login" class="inline-flex items-center gap-2 border-2 border-brand-black bg-brand-black px-6 py-3 font-bold text-white transition hover:bg-white hover:text-brand-black hover:shadow-[4px_4px_0_0_#0F0F11]"><i class="fa-solid fa-arrow-right-to-bracket"></i>SIGN IN</a>
+          <a href="/register" class="inline-flex items-center gap-2 border-2 border-brand-black bg-white px-6 py-3 font-bold text-brand-black transition hover:bg-brand-black hover:text-white hover:shadow-[4px_4px_0_0_#0F0F11]">REGISTER</a>
+          <a href="/device" class="inline-flex items-center gap-2 border-2 border-brand-black bg-white px-6 py-3 font-bold text-brand-black transition hover:bg-brand-black hover:text-white hover:shadow-[4px_4px_0_0_#0F0F11]">DEVICE FLOW</a>
+        </div>
       </div>
     </header>
 
-    <section class="mt-6 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_20px_70px_rgba(15,23,42,0.08)] backdrop-blur sm:p-8">
-      <h2 class="text-xl font-extrabold tracking-tight">RBAC 32-bit Domain Layout</h2>
-      <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <section class="mb-12">
+      <div class="border-l-4 border-brand-black pl-4 mb-8">
+        <h2 class="font-serif text-3xl font-extrabold tracking-tight">RBAC 32-bit Domain Layout</h2>
+      </div>
+      <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {{range .Domains}}
-        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <p class="text-xs font-bold uppercase tracking-[0.15em] text-slate-500">{{.Bits}}</p>
-          <p class="mt-1 text-sm font-extrabold text-slate-900">{{.Name}}</p>
-          <p class="mt-1 text-xs text-slate-600">{{.Description}}</p>
+        <div class="border-2 border-brand-black bg-white p-6 shadow-[4px_4px_0_0_#0F0F11] transition-transform hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[8px_8px_0_0_#0F0F11]">
+          <p class="font-mono text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">{{.Bits}}</p>
+          <p class="font-serif text-2xl font-extrabold text-brand-black mb-2">{{.Name}}</p>
+          <p class="font-sans text-sm text-gray-600">{{.Description}}</p>
         </div>
         {{end}}
       </div>
     </section>
 
-    <section class="mt-6 grid gap-6 lg:grid-cols-2">
-      {{range .Roles}}
-      <article class="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_20px_70px_rgba(15,23,42,0.08)] backdrop-blur">
-        <h3 class="text-lg font-extrabold tracking-tight">{{.Title}}</h3>
-        <p class="mt-2 text-sm text-slate-600">Role: <span class="font-semibold text-slate-800">{{.RoleCode}}</span></p>
-        <p class="mt-1 text-sm text-slate-600">Default Mask: <span class="font-mono text-slate-800">{{.DefaultMask}}</span></p>
-        <p class="mt-1 text-sm text-slate-600">Required Ability: <span class="font-semibold text-slate-800">{{.RequiredAbility}}</span></p>
-        <a href="{{.EntryPath}}" class="mt-4 inline-flex items-center justify-center rounded-xl bg-indigo-700 px-4 py-2 text-sm font-bold text-white">Open</a>
-      </article>
-      {{end}}
+    <section>
+      <div class="border-l-4 border-brand-black pl-4 mb-8">
+        <h2 class="font-serif text-3xl font-extrabold tracking-tight">Available Roles</h2>
+      </div>
+      <div class="grid gap-6 lg:grid-cols-2">
+        {{range .Roles}}
+        <article class="border-2 border-brand-black bg-white flex flex-col md:flex-row shadow-[4px_4px_0_0_#0F0F11] transition-transform hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[8px_8px_0_0_#0F0F11]">
+          <div class="p-6 md:p-8 flex-1 flex flex-col justify-between">
+            <div>
+              <h3 class="font-serif text-2xl font-extrabold tracking-tight mb-4">{{.Title}}</h3>
+              <div class="font-mono text-xs space-y-2 text-gray-600">
+                <p class="flex justify-between border-b border-gray-200 pb-1"><span>Role Code:</span> <span class="font-bold text-brand-black">{{.RoleCode}}</span></p>
+                <p class="flex justify-between border-b border-gray-200 pb-1"><span>Default Mask:</span> <span class="font-bold text-brand-black">{{.DefaultMask}}</span></p>
+                <p class="flex justify-between pb-1"><span>Required Ability:</span> <span class="font-bold text-brand-black">{{.RequiredAbility}}</span></p>
+              </div>
+            </div>
+            <a href="{{.EntryPath}}" class="mt-6 inline-flex w-fit items-center gap-2 border-2 border-brand-black bg-brand-accent px-6 py-2 font-mono text-sm font-bold text-white transition hover:bg-brand-black">
+              OPEN CONSOLE <i class="fa-solid fa-arrow-right"></i>
+            </a>
+          </div>
+        </article>
+        {{end}}
+      </div>
     </section>
   </div>
 </body>

@@ -3,95 +3,143 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Audit Console</title>
+  <title>Audit Console | Sienne IDP</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
       theme: {
         extend: {
-          fontFamily: { sans: ["Manrope", "sans-serif"] }
+          fontFamily: {
+            serif: ["'Playfair Display'", "serif"],
+            sans: ["'Inter'", "sans-serif"],
+            mono: ["'JetBrains Mono'", "monospace"],
+          },
+          colors: {
+            brand: {
+              black: "#0F0F11",
+              white: "#FFFFFF",
+              accent: "#2563EB",
+            }
+          }
         }
       }
     }
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&family=Playfair+Display:ital,wght@0,600;0,800;1,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 </head>
-<body class="min-h-screen bg-[radial-gradient(circle_at_15%_10%,#dbeafe_0%,transparent_30%),radial-gradient(circle_at_85%_90%,#bbf7d0_0%,transparent_28%),linear-gradient(135deg,#f8fafc_0%,#eef2ff_52%,#ecfeff_100%)] text-slate-900">
-  <div class="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-    <header class="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.10)] backdrop-blur sm:p-8">
-      <p class="text-xs font-bold uppercase tracking-[0.22em] text-slate-500">Security Audit</p>
-      <h1 class="mt-2 text-3xl font-extrabold tracking-tight">Audit Console</h1>
-      <p class="mt-2 text-sm text-slate-600">Track login activity and privileged operations in one timeline.</p>
+<body class="min-h-screen bg-gray-50 text-brand-black font-sans selection:bg-brand-accent selection:text-white flex flex-col antialiased">
+  <div class="absolute inset-0 bg-[linear-gradient(to_right,#e5e7eb_1px,transparent_1px),linear-gradient(to_bottom,#e5e7eb_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-30 pointer-events-none fixed"></div>
 
-      <div class="mt-5 grid gap-3 sm:grid-cols-4">
-        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
-          <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Operator</p>
-          <p class="mt-1 font-bold text-slate-900">{{if .Username}}{{.Username}}{{else}}-{{end}}</p>
+  <header class="w-full border-b-2 border-brand-black px-6 py-4 flex justify-between items-center bg-white relative z-20">
+    <div class="flex items-center gap-3">
+      <div class="h-6 w-6 bg-brand-black text-white flex items-center justify-center text-xs">
+        <i class="fa-solid fa-list-check"></i>
+      </div>
+      <span class="font-mono text-xs font-bold uppercase tracking-widest">Sienne IDP</span>
+    </div>
+    <div class="font-mono text-xs text-gray-500 uppercase tracking-widest hidden sm:block">SYS.AUDIT.01</div>
+  </header>
+
+  <div class="mx-auto w-full max-w-7xl p-6 relative z-10 flex-1 space-y-8">
+    <header class="bg-white border-2 border-brand-black p-8 md:p-12 shadow-[8px_8px_0_0_#0F0F11]">
+      <p class="font-mono text-xs font-bold uppercase tracking-widest text-brand-accent mb-4">Security Audit</p>
+      <h1 class="font-serif text-4xl md:text-5xl font-extrabold tracking-tight mb-2">Audit Console</h1>
+      <p class="text-sm text-gray-600 font-sans mb-8">Track login activity and privileged operations in one timeline.</p>
+
+      <div class="grid gap-6 sm:grid-cols-4 mb-8 border-y-2 border-brand-black py-8">
+        <div>
+          <p class="font-mono text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">Operator</p>
+          <p class="font-mono font-bold text-brand-black break-all">{{if .Username}}{{.Username}}{{else}}-{{end}}</p>
         </div>
-        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
-          <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Role</p>
-          <p class="mt-1 font-bold text-slate-900">{{if .RoleCode}}{{.RoleCode}}{{else}}-{{end}}</p>
+        <div>
+          <p class="font-mono text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">Role</p>
+          <p class="font-mono font-bold text-brand-black break-all">{{if .RoleCode}}{{.RoleCode}}{{else}}-{{end}}</p>
         </div>
-        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
-          <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Loaded Events</p>
-          <p class="mt-1 font-bold text-slate-900">{{.LoadedCount}}</p>
+        <div>
+          <p class="font-mono text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">Loaded</p>
+          <p class="font-mono font-bold text-brand-accent text-xl">{{.LoadedCount}}</p>
         </div>
-        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
-          <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Login / Ops</p>
-          <p class="mt-1 font-bold text-slate-900">{{.LoginCount}} / {{.OperationCount}}</p>
+        <div>
+          <p class="font-mono text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">Login / Ops</p>
+          <p class="font-mono font-bold text-brand-black">{{.LoginCount}} / {{.OperationCount}}</p>
         </div>
       </div>
 
-      <div class="mt-5 flex flex-wrap gap-2">
-        <a href="/admin/workbench/support" class="inline-flex items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold uppercase tracking-[0.14em] text-slate-700">Back To Support Workbench</a>
+      <div class="flex flex-wrap gap-4">
+        <a href="/admin/workbench/support" class="inline-flex items-center justify-center gap-2 border-2 border-brand-black bg-white px-4 py-2 font-mono text-xs font-bold text-brand-black hover:bg-brand-black hover:text-white transition-colors">
+          <i class="fa-solid fa-arrow-left"></i> SUPPORT WB
+        </a>
       </div>
     </header>
 
-    <section class="mt-6 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_20px_70px_rgba(15,23,42,0.08)] backdrop-blur">
-      <h2 class="text-xl font-extrabold tracking-tight">Filters</h2>
-      <form method="get" action="/admin/audit" class="mt-4 grid gap-3 md:grid-cols-4">
-        <input name="event_type" value="{{.FilterEventType}}" placeholder="event_type (e.g. auth.login.succeeded)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-        <input name="actor_username" value="{{.FilterActorUsername}}" placeholder="actor_username (e.g. bob)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-        <input name="subject" value="{{.FilterSubject}}" placeholder="subject contains (e.g. user:42)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-        <input name="limit" value="{{.Limit}}" placeholder="limit (max 500)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-        <button type="submit" class="inline-flex items-center rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold uppercase tracking-[0.14em] text-white">Apply Filters</button>
+    <section class="bg-white border-2 border-brand-black p-8 shadow-[8px_8px_0_0_#0F0F11]">
+      <h2 class="font-serif text-2xl font-extrabold tracking-tight mb-6">Filters</h2>
+      <form method="get" action="/admin/audit" class="grid gap-4 md:grid-cols-5">
+        <input name="event_type" value="{{.FilterEventType}}" placeholder="event_type (e.g. auth.login)" class="w-full border-2 border-brand-black px-3 py-2 font-mono text-sm focus:outline-none focus:border-brand-accent bg-gray-50">
+        <input name="actor_username" value="{{.FilterActorUsername}}" placeholder="actor_username" class="w-full border-2 border-brand-black px-3 py-2 font-mono text-sm focus:outline-none focus:border-brand-accent bg-gray-50">
+        <input name="subject" value="{{.FilterSubject}}" placeholder="subject (e.g. user:42)" class="w-full border-2 border-brand-black px-3 py-2 font-mono text-sm focus:outline-none focus:border-brand-accent bg-gray-50">
+        <input name="limit" value="{{.Limit}}" placeholder="limit (max 500)" class="w-full border-2 border-brand-black px-3 py-2 font-mono text-sm focus:outline-none focus:border-brand-accent bg-gray-50">
+        <button type="submit" class="w-full border-2 border-brand-black bg-brand-black px-4 py-2 font-mono text-xs font-bold text-white hover:bg-brand-accent transition-colors">
+          APPLY
+        </button>
       </form>
       {{if .Error}}
-      <p class="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{{.Error}}</p>
+      <div class="mt-4 border-2 border-brand-black bg-red-100 p-3 font-mono text-xs font-bold text-red-900">
+        <i class="fa-solid fa-triangle-exclamation mr-2 text-red-700"></i>{{.Error}}
+      </div>
       {{end}}
     </section>
 
-    <section class="mt-6 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_20px_70px_rgba(15,23,42,0.08)] backdrop-blur">
-      <h2 class="text-xl font-extrabold tracking-tight">Event Timeline</h2>
-      <div class="mt-4 overflow-x-auto">
-        <table class="w-full min-w-[1120px] text-left text-sm">
-          <thead>
-            <tr class="border-b border-slate-200 text-xs uppercase tracking-[0.14em] text-slate-500">
-              <th class="px-2 py-2">Time</th>
-              <th class="px-2 py-2">Event Type</th>
-              <th class="px-2 py-2">Actor</th>
-              <th class="px-2 py-2">Subject</th>
-              <th class="px-2 py-2">IP</th>
-              <th class="px-2 py-2">User Agent</th>
-              <th class="px-2 py-2">Metadata</th>
+    <section class="bg-white border-2 border-brand-black p-8 shadow-[8px_8px_0_0_#0F0F11] overflow-hidden">
+      <h2 class="font-serif text-3xl font-extrabold tracking-tight mb-6">Event Timeline</h2>
+      <div class="overflow-x-auto border-2 border-brand-black">
+        <table class="w-full min-w-[1120px] text-left text-sm font-sans">
+          <thead class="bg-brand-black text-white">
+            <tr class="font-mono text-xs font-bold uppercase tracking-widest">
+              <th class="px-4 py-3 border-r-2 border-white/20">Time</th>
+              <th class="px-4 py-3 border-r-2 border-white/20">Event Type</th>
+              <th class="px-4 py-3 border-r-2 border-white/20">Actor</th>
+              <th class="px-4 py-3 border-r-2 border-white/20">Subject</th>
+              <th class="px-4 py-3 border-r-2 border-white/20">IP / Agent</th>
+              <th class="px-4 py-3">Metadata</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody class="divide-y-2 divide-brand-black">
             {{range .Rows}}
-            <tr class="border-b border-slate-100 align-top">
-              <td class="px-2 py-2 font-mono text-xs text-slate-700">{{.CreatedAt}}</td>
-              <td class="px-2 py-2 font-semibold text-slate-900">{{.EventType}}</td>
-              <td class="px-2 py-2 text-slate-700">{{if .ActorUserID}}{{.ActorUsername}} (id={{.ActorUserID}}){{else}}-{{end}}</td>
-              <td class="px-2 py-2 font-mono text-xs text-slate-700">{{if .Subject}}{{.Subject}}{{else}}-{{end}}</td>
-              <td class="px-2 py-2 font-mono text-xs text-slate-700">{{if .IPAddress}}{{.IPAddress}}{{else}}-{{end}}</td>
-              <td class="px-2 py-2 text-xs text-slate-600">{{if .UserAgent}}{{.UserAgent}}{{else}}-{{end}}</td>
-              <td class="px-2 py-2 text-xs text-slate-700"><pre class="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-slate-100 p-2">{{.Metadata}}</pre></td>
+            <tr class="hover:bg-gray-50 align-top transition-colors">
+              <td class="px-4 py-4 border-r-2 border-brand-black font-mono text-xs whitespace-nowrap">{{.CreatedAt}}</td>
+              <td class="px-4 py-4 border-r-2 border-brand-black font-mono font-bold text-brand-black">{{.EventType}}</td>
+              <td class="px-4 py-4 border-r-2 border-brand-black">
+                {{if .ActorUserID}}
+                <div class="font-bold">{{.ActorUsername}}</div>
+                <div class="font-mono text-xs text-gray-500">id:{{.ActorUserID}}</div>
+                {{else}}
+                <span class="text-gray-400 font-mono">-</span>
+                {{end}}
+              </td>
+              <td class="px-4 py-4 border-r-2 border-brand-black font-mono text-xs text-brand-accent break-all">
+                {{if .Subject}}{{.Subject}}{{else}}<span class="text-gray-400">-</span>{{end}}
+              </td>
+              <td class="px-4 py-4 border-r-2 border-brand-black text-xs space-y-1 w-48">
+                {{if .IPAddress}}<div class="font-mono bg-gray-100 px-1 py-0.5 border border-gray-300 inline-block">{{.IPAddress}}</div>{{else}}<span class="text-gray-400 font-mono">-</span>{{end}}
+                <div class="text-gray-500 truncate max-w-[180px]" title="{{.UserAgent}}">{{if .UserAgent}}{{.UserAgent}}{{end}}</div>
+              </td>
+              <td class="px-4 py-4">
+                <div class="border-2 border-brand-black bg-gray-50 p-2 font-mono text-xs text-brand-black overflow-auto max-h-32 whitespace-pre-wrap break-all">
+                  {{.Metadata}}
+                </div>
+              </td>
             </tr>
             {{end}}
             {{if eq .LoadedCount 0}}
-            <tr><td class="px-2 py-3 text-slate-500" colspan="7">No audit events matched current filters.</td></tr>
+            <tr>
+              <td class="px-4 py-8 text-center font-mono text-sm text-gray-500 font-bold tracking-widest" colspan="6">
+                [NO EVENTS MATCHED FILTERS]
+              </td>
+            </tr>
             {{end}}
           </tbody>
         </table>

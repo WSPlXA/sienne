@@ -3,44 +3,95 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Approve Sign-in</title>
+  <title>Approve Sign-in | Sienne IDP</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            serif: ["'Playfair Display'", "serif"],
+            sans: ["'Inter'", "sans-serif"],
+            mono: ["'JetBrains Mono'", "monospace"],
+          },
+          colors: {
+            brand: {
+              black: "#0F0F11",
+              white: "#FFFFFF",
+              accent: "#2563EB",
+            }
+          }
+        }
+      }
+    }
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&family=Playfair+Display:ital,wght@0,600;0,800;1,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <style>
+    input:-webkit-autofill {
+      -webkit-box-shadow: 0 0 0 1000px white inset !important;
+      -webkit-text-fill-color: #0F0F11 !important;
+    }
+  </style>
 </head>
-<body class="min-h-screen bg-[linear-gradient(140deg,#ecfeff_0%,#f8fafc_45%,#ecfccb_100%)] font-[Manrope] text-slate-900">
-  <div class="mx-auto flex min-h-screen w-full max-w-3xl items-center justify-center px-4 py-10">
-    <main class="w-full max-w-lg rounded-3xl border border-slate-200 bg-white/90 p-8 shadow-[0_20px_80px_rgba(15,23,42,0.15)]">
-      <p class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Push Approval</p>
-      <h1 class="mt-2 text-3xl font-extrabold tracking-tight">Approve Sign-in</h1>
-      <p class="mt-2 text-sm text-slate-600">Use this page on your trusted device after you are already logged in.</p>
+<body class="min-h-screen bg-brand-white text-brand-black font-sans selection:bg-brand-accent selection:text-white flex flex-col antialiased">
+  <!-- Minimalist Header -->
+  <header class="w-full border-b-2 border-brand-black px-6 py-4 flex justify-between items-center bg-white">
+    <div class="flex items-center gap-3">
+      <div class="h-6 w-6 bg-brand-black text-white flex items-center justify-center text-xs">
+        <i class="fa-solid fa-mobile-screen-button"></i>
+      </div>
+      <span class="font-mono text-xs font-bold uppercase tracking-widest">Sienne IDP</span>
+    </div>
+    <div class="font-mono text-xs text-gray-500 uppercase tracking-widest hidden sm:block">SYS.PUSH.01</div>
+  </header>
+
+  <main class="flex-1 flex items-center justify-center p-6 bg-gray-50 relative overflow-hidden">
+    <div class="absolute inset-0 bg-[linear-gradient(to_right,#e5e7eb_1px,transparent_1px),linear-gradient(to_bottom,#e5e7eb_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-30 pointer-events-none"></div>
+
+    <div class="w-full max-w-lg bg-white border-2 border-brand-black p-8 md:p-12 shadow-[8px_8px_0_0_#0F0F11] relative z-10">
+      <p class="font-mono text-xs font-bold uppercase tracking-widest text-brand-accent mb-4">Push Approval</p>
+      <h1 class="font-serif text-4xl md:text-5xl font-extrabold leading-tight tracking-tight mb-4 text-brand-black">Approve Sign-in</h1>
+      <p class="text-sm text-gray-600 font-sans mb-8">Use this page on your trusted device after you are already logged in.</p>
 
       {{if .Error}}
-      <div class="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{{.Error}}</div>
+      <div class="mb-6 border-2 border-brand-black bg-red-100 p-4 font-mono text-sm text-brand-black font-bold shadow-[4px_4px_0_0_#0F0F11]">
+        <i class="fa-solid fa-triangle-exclamation mr-2 text-red-600"></i>[ERR] {{.Error}}
+      </div>
       {{end}}
       {{if .Status}}
-      <div class="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Status: {{.Status}}</div>
+      <div class="mb-6 border-2 border-brand-black bg-green-100 p-4 font-mono text-sm text-brand-black font-bold shadow-[4px_4px_0_0_#0F0F11]">
+        <i class="fa-solid fa-info-circle mr-2 text-green-700"></i>Status: {{.Status}}
+      </div>
       {{end}}
 
-      <form method="post" class="mt-6 space-y-4">
+      <form method="post" class="space-y-6">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-        <label class="block">
-          <span class="mb-1 block text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Challenge ID</span>
-          <input name="challenge_id" value="{{.ChallengeID}}" class="w-full rounded-xl border border-slate-300 px-4 py-3 font-mono text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100">
-        </label>
-        <label class="block">
-          <span class="mb-1 block text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Match Code</span>
-          <input name="match_code" value="{{.MatchCode}}" maxlength="2" class="w-full rounded-xl border border-slate-300 px-4 py-3 text-xl font-black tracking-[0.2em] outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100">
-        </label>
+        <div class="space-y-2">
+          <label class="flex justify-between items-baseline">
+            <span class="font-mono text-xs font-bold uppercase tracking-widest text-brand-black">Challenge ID</span>
+          </label>
+          <input name="challenge_id" value="{{.ChallengeID}}" required class="w-full border-2 border-brand-black bg-white px-4 py-3 font-mono text-sm outline-none transition focus:shadow-[4px_4px_0_0_#2563EB] placeholder-gray-400">
+        </div>
+        <div class="space-y-2">
+          <label class="flex justify-between items-baseline">
+            <span class="font-mono text-xs font-bold uppercase tracking-widest text-brand-black">Match Code</span>
+          </label>
+          <input name="match_code" value="{{.MatchCode}}" maxlength="2" required class="w-full border-2 border-brand-black bg-white px-4 py-3 font-mono text-2xl font-bold text-center tracking-[0.2em] outline-none transition focus:shadow-[4px_4px_0_0_#2563EB] placeholder-gray-400">
+        </div>
 
-        <div class="grid grid-cols-2 gap-3 pt-2">
-          <button type="submit" name="action" value="approve" class="rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-700">Approve</button>
-          <button type="submit" name="action" value="deny" class="rounded-xl bg-rose-600 px-4 py-3 text-sm font-bold text-white hover:bg-rose-700">Deny</button>
+        <div class="grid grid-cols-2 gap-4 pt-4">
+          <button type="submit" name="action" value="approve" class="w-full border-2 border-brand-black bg-brand-black px-4 py-4 font-mono text-sm font-bold text-white transition-all hover:bg-white hover:text-brand-black hover:shadow-[4px_4px_0_0_#0F0F11]">
+            APPROVE
+          </button>
+          <button type="submit" name="action" value="deny" class="w-full border-2 border-brand-black bg-white px-4 py-4 font-mono text-sm font-bold text-brand-black transition-all hover:bg-red-600 hover:text-white hover:border-red-600 hover:shadow-[4px_4px_0_0_#DC2626]">
+            DENY
+          </button>
         </div>
       </form>
-    </main>
-  </div>
+    </div>
+  </main>
 </body>
 </html>
-

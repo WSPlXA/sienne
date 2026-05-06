@@ -3,14 +3,23 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Device Verification</title>
+  <title>Device Verification | Sienne IDP</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
       theme: {
         extend: {
           fontFamily: {
-            sans: ["Manrope", "sans-serif"]
+            serif: ["'Playfair Display'", "serif"],
+            sans: ["'Inter'", "sans-serif"],
+            mono: ["'JetBrains Mono'", "monospace"],
+          },
+          colors: {
+            brand: {
+              black: "#0F0F11",
+              white: "#FFFFFF",
+              accent: "#2563EB",
+            }
           }
         }
       }
@@ -18,81 +27,101 @@
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&family=Playfair+Display:ital,wght@0,600;0,800;1,600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 </head>
-<body class="min-h-screen bg-[radial-gradient(circle_at_10%_10%,#fde68a_0%,transparent_28%),radial-gradient(circle_at_92%_90%,#dbeafe_0%,transparent_30%),linear-gradient(135deg,#fefce8_0%,#f8fafc_48%,#eef2ff_100%)] text-slate-900">
-  <div class="mx-auto flex min-h-screen w-full max-w-4xl items-center justify-center px-4 py-10 sm:px-6">
-    <main class="w-full max-w-xl rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_30px_90px_rgba(15,23,42,0.12)] backdrop-blur sm:p-8">
-      <div class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-50 text-amber-700">
+<body class="min-h-screen bg-brand-white text-brand-black font-sans selection:bg-brand-accent selection:text-white flex flex-col antialiased">
+  <header class="w-full border-b-2 border-brand-black px-6 py-4 flex justify-between items-center bg-white z-20">
+    <div class="flex items-center gap-3">
+      <div class="h-6 w-6 bg-brand-black text-white flex items-center justify-center text-xs">
         <i class="fa-solid fa-tv"></i>
       </div>
-      <p class="mt-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Device Flow</p>
-      <h1 class="mt-2 text-3xl font-extrabold tracking-tight">Device Verification</h1>
+      <span class="font-mono text-xs font-bold uppercase tracking-widest">Sienne IDP</span>
+    </div>
+    <div class="font-mono text-xs text-gray-500 uppercase tracking-widest hidden sm:block">SYS.DEVICE.01</div>
+  </header>
 
-      {{if .Error}}
-      <div class="mt-5 rounded-xl border {{if .Success}}border-emerald-200 bg-emerald-50 text-emerald-700{{else}}border-red-200 bg-red-50 text-red-700{{end}} px-4 py-3 text-sm">
-        {{if .Success}}<i class="fa-solid fa-circle-check mr-2"></i>{{else}}<i class="fa-solid fa-circle-exclamation mr-2"></i>{{end}}{{.Error}}
+  <main class="flex-1 flex flex-col md:flex-row relative">
+    <div class="absolute inset-0 bg-[linear-gradient(to_right,#e5e7eb_1px,transparent_1px),linear-gradient(to_bottom,#e5e7eb_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-30 pointer-events-none z-0"></div>
+
+    <div class="border-b-2 md:border-b-0 md:border-r-2 border-brand-black p-8 md:p-16 lg:p-24 flex flex-col justify-center bg-white relative overflow-hidden flex-1 z-10">
+      <div class="absolute -left-10 -top-10 text-[10rem] text-gray-100 font-serif font-black leading-none select-none pointer-events-none">DEV</div>
+      <div class="relative z-10">
+        <p class="font-mono text-xs uppercase tracking-widest text-brand-accent mb-6 font-bold">Device Flow</p>
+        <h1 class="font-serif text-5xl md:text-6xl lg:text-7xl font-extrabold leading-none tracking-tight mb-8 text-brand-black">Device Verification</h1>
+        <p class="text-lg text-gray-600 max-w-md font-sans">Enter the code displayed on your device to authorize access.</p>
       </div>
-      {{end}}
+    </div>
 
-      {{if .UserCode}}
-      <div class="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
-        <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">User Code</p>
-        <p class="mt-2 text-2xl font-extrabold tracking-[0.2em] text-slate-900">{{.UserCode}}</p>
+    <div class="p-8 md:p-16 lg:p-24 flex flex-col justify-center relative bg-gray-50 flex-1 md:max-w-2xl z-10">
+      <div class="w-full mx-auto">
+        {{if .Error}}
+        <div class="mb-8 border-2 border-brand-black p-4 font-mono text-sm font-bold shadow-[4px_4px_0_0_#0F0F11] {{if .Success}}bg-green-100 text-brand-black{{else}}bg-red-100 text-brand-black{{end}}">
+          {{if .Success}}<i class="fa-solid fa-check mr-2 text-green-700"></i>{{else}}<i class="fa-solid fa-triangle-exclamation mr-2 text-red-600"></i>{{end}}{{.Error}}
+        </div>
+        {{end}}
 
-        {{if .ClientID}}
-        <div class="mt-5 space-y-4 text-sm">
-          <div>
-            <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Client</p>
-            <p class="mt-1 font-semibold text-slate-800">{{if .ClientName}}{{.ClientName}}{{else}}{{.ClientID}}{{end}}</p>
-          </div>
+        {{if .UserCode}}
+        <div class="border-2 border-brand-black bg-white p-8 shadow-[8px_8px_0_0_#0F0F11]">
+          <p class="font-mono text-xs font-bold uppercase tracking-widest text-brand-black border-b-2 border-brand-black pb-4 mb-6">User Code</p>
+          <p class="text-4xl md:text-5xl font-mono font-extrabold tracking-[0.2em] text-center text-brand-black mb-8">{{.UserCode}}</p>
 
-          {{if .Scopes}}
-          <div>
-            <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Scopes</p>
-            <div class="mt-2 flex flex-wrap gap-2">
-              {{range .Scopes}}
-              <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">{{.}}</span>
-              {{end}}
+          {{if .ClientID}}
+          <div class="space-y-6">
+            <div class="flex justify-between items-end border-b-2 border-gray-100 pb-2">
+              <p class="font-mono text-xs font-bold uppercase tracking-widest text-gray-500">Client</p>
+              <p class="font-mono text-sm font-bold text-brand-black">{{if .ClientName}}{{.ClientName}}{{else}}{{.ClientID}}{{end}}</p>
             </div>
-          </div>
-          {{end}}
 
-          {{if not .Success}}
-          <form method="post" class="pt-1">
-            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-            <input type="hidden" name="user_code" value="{{.UserCode}}">
-            <div class="flex flex-col gap-3 sm:flex-row">
-              <button class="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 px-4 py-3 text-sm font-bold text-white shadow-[0_14px_30px_rgba(5,150,105,0.25)] transition hover:brightness-105" type="submit" name="action" value="approve">
-                <i class="fa-solid fa-check"></i>
-                Approve
-              </button>
-              <button class="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50" type="submit" name="action" value="deny">
-                <i class="fa-solid fa-xmark"></i>
-                Deny
-              </button>
+            {{if .Scopes}}
+            <div>
+              <p class="font-mono text-xs font-bold uppercase tracking-widest text-gray-500 mb-3">Scopes</p>
+              <div class="flex flex-wrap gap-2">
+                {{range .Scopes}}
+                <span class="inline-block border-2 border-brand-black bg-brand-black px-3 py-1 font-mono text-xs font-bold text-white">{{.}}</span>
+                {{end}}
+              </div>
             </div>
-          </form>
+            {{end}}
+
+            {{if not .Success}}
+            <form method="post" class="pt-6 mt-6 border-t-2 border-brand-black">
+              <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+              <input type="hidden" name="user_code" value="{{.UserCode}}">
+              <div class="grid grid-cols-2 gap-4">
+                <button class="w-full border-2 border-brand-black bg-brand-black px-4 py-4 font-mono text-sm font-bold text-white transition-all hover:bg-white hover:text-brand-black hover:shadow-[4px_4px_0_0_#0F0F11]" type="submit" name="action" value="approve">
+                  APPROVE
+                </button>
+                <button class="w-full border-2 border-brand-black bg-white px-4 py-4 font-mono text-sm font-bold text-brand-black transition-all hover:bg-red-600 hover:text-white hover:border-red-600 hover:shadow-[4px_4px_0_0_#DC2626]" type="submit" name="action" value="deny">
+                  DENY
+                </button>
+              </div>
+            </form>
+            {{end}}
+          </div>
+          {{else}}
+          <p class="text-sm font-mono text-center text-gray-600 bg-gray-100 py-3 border-2 border-brand-black">Confirm the code and continue.</p>
           {{end}}
         </div>
         {{else}}
-        <p class="mt-4 text-sm text-slate-600">Confirm the code and continue.</p>
+        <form method="get" class="space-y-6 border-2 border-brand-black bg-white p-8 shadow-[8px_8px_0_0_#0F0F11]">
+          <div class="space-y-2">
+            <label class="flex justify-between items-baseline">
+              <span class="font-mono text-xs font-bold uppercase tracking-widest text-brand-black">Enter User Code</span>
+            </label>
+            <input type="text" name="user_code" placeholder="ABCD-EFGH" autocomplete="one-time-code" required
+              class="w-full border-2 border-brand-black bg-white px-4 py-4 font-mono text-2xl text-center font-bold tracking-[0.2em] outline-none transition focus:shadow-[4px_4px_0_0_#2563EB] placeholder-gray-300 uppercase">
+          </div>
+          <button class="w-full border-2 border-brand-black bg-brand-black px-4 py-4 font-mono text-sm font-bold text-white transition-all hover:bg-brand-accent hover:border-brand-accent hover:shadow-[4px_4px_0_0_#0F0F11] mt-4" type="submit">
+            <span class="flex items-center justify-center gap-3">
+              CONTINUE
+              <i class="fa-solid fa-arrow-right"></i>
+            </span>
+          </button>
+        </form>
         {{end}}
       </div>
-      {{else}}
-      <form method="get" class="mt-6 space-y-4">
-        <label class="block">
-          <span class="mb-2 block text-xs font-bold uppercase tracking-[0.18em] text-slate-500">User Code</span>
-          <input type="text" name="user_code" placeholder="ABCD-EFGH" autocomplete="one-time-code" class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold tracking-[0.15em] outline-none transition focus:border-amber-500 focus:ring-4 focus:ring-amber-100">
-        </label>
-        <button class="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 px-5 py-3 text-sm font-bold text-white shadow-[0_14px_30px_rgba(217,119,6,0.25)] transition hover:brightness-105" type="submit">
-          <i class="fa-solid fa-arrow-right"></i>
-          Continue
-        </button>
-      </form>
-      {{end}}
-    </main>
-  </div>
+    </div>
+  </main>
 </body>
 </html>

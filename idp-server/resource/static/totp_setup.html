@@ -3,14 +3,23 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>TOTP Setup</title>
+  <title>TOTP Setup | Sienne IDP</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
       theme: {
         extend: {
           fontFamily: {
-            sans: ["Manrope", "sans-serif"]
+            serif: ["'Playfair Display'", "serif"],
+            sans: ["'Inter'", "sans-serif"],
+            mono: ["'JetBrains Mono'", "monospace"],
+          },
+          colors: {
+            brand: {
+              black: "#0F0F11",
+              white: "#FFFFFF",
+              accent: "#2563EB",
+            }
           }
         }
       }
@@ -18,67 +27,92 @@
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&family=Playfair+Display:ital,wght@0,600;0,800;1,600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 </head>
-<body class="min-h-screen bg-[radial-gradient(circle_at_15%_15%,#e0f2fe_0%,transparent_30%),radial-gradient(circle_at_80%_5%,#fef3c7_0%,transparent_30%),linear-gradient(135deg,#f0f9ff_0%,#f8fafc_45%,#f5f3ff_100%)] text-slate-900">
-  <div class="mx-auto flex min-h-screen w-full max-w-4xl items-center justify-center px-4 py-10 sm:px-6 lg:px-8">
-    <main class="w-full overflow-hidden rounded-3xl border border-slate-200 bg-white/85 p-6 shadow-[0_30px_100px_rgba(15,23,42,0.12)] backdrop-blur sm:p-8 lg:p-10">
-      <div class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-50 text-cyan-700">
+<body class="min-h-screen bg-brand-white text-brand-black font-sans selection:bg-brand-accent selection:text-white flex flex-col antialiased">
+  <div class="absolute inset-0 bg-[linear-gradient(to_right,#e5e7eb_1px,transparent_1px),linear-gradient(to_bottom,#e5e7eb_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-30 pointer-events-none fixed"></div>
+
+  <header class="w-full border-b-2 border-brand-black px-6 py-4 flex justify-between items-center bg-white relative z-20">
+    <div class="flex items-center gap-3">
+      <div class="h-6 w-6 bg-brand-black text-white flex items-center justify-center text-xs">
         <i class="fa-solid fa-qrcode"></i>
       </div>
-      <p class="mt-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">MFA Enrollment</p>
-      <h1 class="mt-2 text-3xl font-extrabold tracking-tight">Enable TOTP</h1>
+      <span class="font-mono text-xs font-bold uppercase tracking-widest">Sienne IDP</span>
+    </div>
+    <div class="font-mono text-xs text-gray-500 uppercase tracking-widest hidden sm:block">SYS.TOTP.01</div>
+  </header>
 
-      {{if .Error}}
-      <div class="mt-5 rounded-xl border {{if .Success}}border-emerald-200 bg-emerald-50 text-emerald-700{{else}}border-red-200 bg-red-50 text-red-700{{end}} px-4 py-3 text-sm">
-        {{if .Success}}<i class="fa-solid fa-circle-check mr-2"></i>{{else}}<i class="fa-solid fa-circle-exclamation mr-2"></i>{{end}}{{.Error}}
+  <main class="flex-1 flex items-center justify-center p-6 relative z-10">
+    <div class="w-full max-w-4xl bg-white border-2 border-brand-black shadow-[8px_8px_0_0_#0F0F11]">
+      <div class="p-8 md:p-12 border-b-2 border-brand-black bg-gray-50 relative overflow-hidden">
+        <div class="absolute right-0 top-0 opacity-10 text-[8rem] font-serif font-black leading-none pointer-events-none text-brand-black">2FA</div>
+        <p class="font-mono text-xs font-bold uppercase tracking-widest text-brand-accent mb-4">MFA Enrollment</p>
+        <h1 class="font-serif text-4xl md:text-5xl font-extrabold tracking-tight">Enable TOTP</h1>
       </div>
-      {{end}}
 
-      {{if .AlreadyEnabled}}
-      <div class="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-sm text-emerald-700">
-        <i class="fa-solid fa-shield-check mr-2"></i>TOTP is already enabled for this account.
-      </div>
-      {{else if .Success}}
-      <div class="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-sm text-emerald-700">
-        <i class="fa-solid fa-check mr-2"></i>TOTP setup completed.
-      </div>
-      {{else}}
-      <div class="mt-6 grid gap-5 rounded-2xl border border-slate-200 bg-white p-5 sm:grid-cols-[220px_1fr]">
-        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-          {{if .QRCodeURL}}
-          <img src="{{.QRCodeURL}}" alt="TOTP QR Code" class="mx-auto h-auto w-full max-w-[220px] rounded-lg">
-          {{else}}
-          <div class="flex h-[220px] items-center justify-center text-sm text-slate-500">QR unavailable</div>
-          {{end}}
+      <div class="p-8 md:p-12">
+        {{if .Error}}
+        <div class="mb-8 border-2 border-brand-black {{if .Success}}bg-green-100{{else}}bg-red-100{{end}} p-4 font-mono text-sm text-brand-black font-bold shadow-[4px_4px_0_0_#0F0F11]">
+          {{if .Success}}<i class="fa-solid fa-check mr-2 text-green-700"></i>{{else}}<i class="fa-solid fa-triangle-exclamation mr-2 text-red-600"></i>{{end}}[{{if .Success}}OK{{else}}ERR{{end}}] {{.Error}}
         </div>
-        <div class="space-y-4">
-          <div>
-            <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Secret</p>
-            <p class="mt-2 break-all rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-sm">{{.Secret}}</p>
+        {{end}}
+
+        {{if .AlreadyEnabled}}
+        <div class="border-2 border-brand-black bg-brand-black text-white p-6 font-mono text-sm shadow-[4px_4px_0_0_#0F0F11]">
+          <i class="fa-solid fa-shield-check mr-2"></i>TOTP IS ALREADY ENABLED FOR THIS ACCOUNT.
+        </div>
+        {{else if .Success}}
+        <div class="border-2 border-brand-black bg-brand-black text-white p-6 font-mono text-sm shadow-[4px_4px_0_0_#0F0F11]">
+          <i class="fa-solid fa-check mr-2"></i>TOTP SETUP COMPLETED SUCCESSFULLY.
+        </div>
+        {{else}}
+        <div class="grid md:grid-cols-[auto_1fr] gap-8 mb-8 border-2 border-brand-black p-6 bg-gray-50 shadow-[4px_4px_0_0_#0F0F11]">
+          <div class="border-2 border-brand-black bg-white p-4 mx-auto w-full max-w-[240px]">
+            {{if .QRCodeURL}}
+            <img src="{{.QRCodeURL}}" alt="TOTP QR Code" class="w-full h-auto" style="image-rendering: pixelated;">
+            {{else}}
+            <div class="w-full h-[200px] flex items-center justify-center font-mono text-xs text-gray-500 bg-gray-100 border border-dashed border-gray-300">
+              [QR UNAVAILABLE]
+            </div>
+            {{end}}
           </div>
-          <div>
-            <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">otpauth URI</p>
-            <p class="mt-2 break-all rounded-xl border border-dashed border-cyan-300 bg-cyan-50/70 px-3 py-2 text-xs text-slate-700">{{.ProvisioningURI}}</p>
+
+          <div class="space-y-6">
+            <div>
+              <p class="font-mono text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">Secret Key</p>
+              <div class="border-2 border-brand-black bg-white p-3 font-mono text-sm break-all font-bold">
+                {{.Secret}}
+              </div>
+            </div>
+            <div>
+              <p class="font-mono text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">Provisioning URI</p>
+              <div class="border-2 border-brand-black bg-brand-black text-white p-3 font-mono text-xs break-all opacity-80 hover:opacity-100 transition-opacity">
+                {{.ProvisioningURI}}
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <form method="post" class="mt-6 space-y-4">
-        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-        <input type="hidden" name="return_to" value="{{.ReturnTo}}">
-        <label class="block">
-          <span class="mb-2 block text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Authenticator Code</span>
-          <input id="code" name="code" maxlength="6" autocomplete="one-time-code" inputmode="numeric" placeholder="123456" class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-center text-2xl font-bold tracking-[0.35em] outline-none transition focus:border-cyan-500 focus:ring-4 focus:ring-cyan-100">
-        </label>
-        <button class="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-600 to-teal-700 px-5 py-3 text-sm font-bold text-white shadow-[0_14px_30px_rgba(8,145,178,0.25)] transition hover:brightness-105" type="submit">
-          <i class="fa-solid fa-shield"></i>
-          Enable TOTP
-        </button>
-      </form>
-      {{end}}
-    </main>
-  </div>
+        <form method="post" class="space-y-6">
+          <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+          <input type="hidden" name="return_to" value="{{.ReturnTo}}">
+          
+          <div class="space-y-2">
+            <label for="code" class="font-mono text-xs font-bold uppercase tracking-widest text-gray-500 block">Authenticator Code</label>
+            <input id="code" name="code" type="text" maxlength="6" autocomplete="one-time-code" inputmode="numeric" placeholder="------" required
+                   class="w-full border-2 border-brand-black px-4 py-3 font-mono text-2xl text-center tracking-[1em] focus:outline-none focus:ring-0 focus:border-brand-accent transition-colors bg-white">
+          </div>
+
+          <button type="submit" class="w-full border-2 border-brand-black bg-brand-accent px-4 py-4 font-mono text-sm font-bold text-white transition-all hover:bg-brand-black hover:shadow-[4px_4px_0_0_#0F0F11]">
+            <span class="flex items-center justify-center gap-2">
+              <i class="fa-solid fa-shield"></i> VERIFY AND ENABLE TOTP
+            </span>
+          </button>
+        </form>
+        {{end}}
+      </div>
+    </div>
+  </main>
 </body>
 </html>

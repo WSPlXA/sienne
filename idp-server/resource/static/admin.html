@@ -3,291 +3,300 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Admin Console</title>
+  <title>Admin Console | Sienne IDP</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
       theme: {
         extend: {
-          fontFamily: { sans: ["Manrope", "sans-serif"] }
+          fontFamily: {
+            serif: ["'Playfair Display'", "serif"],
+            sans: ["'Inter'", "sans-serif"],
+            mono: ["'JetBrains Mono'", "monospace"],
+          },
+          colors: {
+            brand: {
+              black: "#0F0F11",
+              white: "#FFFFFF",
+              accent: "#2563EB",
+            }
+          }
         }
       }
     }
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&family=Playfair+Display:ital,wght@0,600;0,800;1,600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 </head>
-<body class="min-h-screen bg-[radial-gradient(circle_at_12%_10%,#dbeafe_0%,transparent_30%),radial-gradient(circle_at_88%_14%,#dcfce7_0%,transparent_28%),linear-gradient(135deg,#f8fafc_0%,#eef2ff_50%,#f0fdfa_100%)] text-slate-900">
-  <div class="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-    <header class="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.10)] backdrop-blur sm:p-8">
-      <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+<body class="min-h-screen bg-gray-50 text-brand-black font-sans selection:bg-brand-accent selection:text-white flex flex-col antialiased">
+  <div class="absolute inset-0 bg-[linear-gradient(to_right,#e5e7eb_1px,transparent_1px),linear-gradient(to_bottom,#e5e7eb_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-30 pointer-events-none fixed"></div>
+
+  <header class="w-full border-b-2 border-brand-black px-6 py-4 flex justify-between items-center bg-white relative z-20">
+    <div class="flex items-center gap-3">
+      <div class="h-6 w-6 bg-brand-black text-white flex items-center justify-center text-xs">
+        <i class="fa-solid fa-server"></i>
+      </div>
+      <span class="font-mono text-xs font-bold uppercase tracking-widest">Sienne IDP</span>
+    </div>
+    <div class="font-mono text-xs text-gray-500 uppercase tracking-widest hidden sm:block">SYS.ADMIN.01</div>
+  </header>
+
+  <div class="mx-auto w-full max-w-7xl p-6 relative z-10 flex-1 space-y-8">
+    <header class="bg-white border-2 border-brand-black p-8 md:p-12 shadow-[8px_8px_0_0_#0F0F11]">
+      <div class="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-6">
         <div>
-          <p class="text-xs font-bold uppercase tracking-[0.22em] text-slate-500">Sienne IDP</p>
-          <h1 class="mt-2 text-3xl font-extrabold tracking-tight">RBAC Console</h1>
-          <p class="mt-2 text-sm text-slate-600">Operational control plane for role, privilege, and account actions.</p>
+          <p class="font-mono text-xs font-bold uppercase tracking-widest text-brand-accent mb-4">Operational Control Plane</p>
+          <h1 class="font-serif text-4xl md:text-5xl font-extrabold tracking-tight mb-2">RBAC Console</h1>
+          <p class="text-sm text-gray-600 font-sans">Manage roles, privileges, and identities.</p>
         </div>
-        <div class="flex flex-wrap gap-2">
-          <a href="/" class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50">
-            <i class="fa-solid fa-compass"></i>
-            Router
+        <div class="flex flex-wrap gap-4">
+          <a href="/" class="inline-flex items-center justify-center gap-2 border-2 border-brand-black bg-white px-4 py-2 font-mono text-xs font-bold text-brand-black hover:bg-brand-black hover:text-white transition-colors">
+            <i class="fa-solid fa-compass"></i> ROUTER
           </a>
-          <a href="/connect/logout" class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50">
-            <i class="fa-solid fa-arrow-right-from-bracket"></i>
-            Sign Out
+          <a href="/connect/logout" class="inline-flex items-center justify-center gap-2 border-2 border-brand-black bg-brand-black px-4 py-2 font-mono text-xs font-bold text-white hover:bg-brand-accent transition-colors">
+            <i class="fa-solid fa-power-off"></i> SIGN OUT
           </a>
         </div>
       </div>
 
-      <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Operator</p>
-          <p class="mt-2 font-bold text-slate-900">{{if .Username}}{{.Username}}{{else}}unknown{{end}}</p>
+      <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 mt-10">
+        <div class="border-2 border-brand-black bg-gray-50 p-4">
+          <p class="font-mono text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">Operator</p>
+          <p class="font-mono font-bold text-brand-black">{{if .Username}}{{.Username}}{{else}}unknown{{end}}</p>
         </div>
-        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Role Code</p>
-          <p class="mt-2 font-bold text-slate-900">{{if .RoleCode}}{{.RoleCode}}{{else}}-{{end}}</p>
+        <div class="border-2 border-brand-black bg-gray-50 p-4">
+          <p class="font-mono text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">Role Code</p>
+          <p class="font-mono font-bold text-brand-black">{{if .RoleCode}}{{.RoleCode}}{{else}}-{{end}}</p>
         </div>
-        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Privilege Mask</p>
-          <p class="mt-2 font-mono font-bold text-slate-900">{{.PrivilegeMask}}</p>
+        <div class="border-2 border-brand-black bg-brand-black text-white p-4">
+          <p class="font-mono text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">Privilege Mask</p>
+          <p class="font-mono font-bold">{{.PrivilegeMask}}</p>
         </div>
-        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Tenant Scope</p>
-          <p class="mt-2 font-bold text-slate-900">{{if .TenantScope}}{{.TenantScope}}{{else}}global{{end}}</p>
+        <div class="border-2 border-brand-black bg-gray-50 p-4">
+          <p class="font-mono text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">Tenant Scope</p>
+          <p class="font-mono font-bold text-brand-black">{{if .TenantScope}}{{.TenantScope}}{{else}}global{{end}}</p>
         </div>
       </div>
 
-      <div class="mt-5 flex flex-wrap gap-2">
-        <a href="/admin/workbench/support" class="inline-flex items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold uppercase tracking-[0.14em] text-slate-700">Support Workbench</a>
-        <a href="/admin/workbench/oauth" class="inline-flex items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold uppercase tracking-[0.14em] text-slate-700">OAuth Workbench</a>
-        <a href="/admin/workbench/security" class="inline-flex items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold uppercase tracking-[0.14em] text-slate-700">Security Workbench</a>
+      <div class="flex flex-wrap gap-4 mt-8 pt-8 border-t-2 border-brand-black">
+        <a href="/admin/workbench/support" class="inline-flex items-center justify-center border-2 border-brand-black bg-white px-4 py-2 font-mono text-xs font-bold text-brand-black hover:shadow-[4px_4px_0_0_#0F0F11] transition-shadow">SUPPORT WB</a>
+        <a href="/admin/workbench/oauth" class="inline-flex items-center justify-center border-2 border-brand-black bg-white px-4 py-2 font-mono text-xs font-bold text-brand-black hover:shadow-[4px_4px_0_0_#0F0F11] transition-shadow">OAUTH WB</a>
+        <a href="/admin/workbench/security" class="inline-flex items-center justify-center border-2 border-brand-black bg-white px-4 py-2 font-mono text-xs font-bold text-brand-black hover:shadow-[4px_4px_0_0_#0F0F11] transition-shadow">SECURITY WB</a>
       </div>
 
       {{if .Notice}}
-      <div class="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-        <i class="fa-solid fa-circle-check mr-2"></i>{{.Notice}}
+      <div class="mt-8 border-2 border-brand-black bg-green-100 p-4 font-mono text-sm text-green-900 font-bold flex items-center">
+        <i class="fa-solid fa-check mr-3 text-green-700"></i> {{.Notice}}
       </div>
       {{end}}
 
       {{if .Error}}
-      <div class="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-        <i class="fa-solid fa-circle-exclamation mr-2"></i>{{.Error}}
+      <div class="mt-8 border-2 border-brand-black bg-red-100 p-4 font-mono text-sm text-red-900 font-bold flex items-center">
+        <i class="fa-solid fa-triangle-exclamation mr-3 text-red-700"></i> {{.Error}}
       </div>
       {{end}}
     </header>
 
-    <section class="mt-6 grid gap-6 lg:grid-cols-2">
-      <article class="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_20px_70px_rgba(15,23,42,0.08)] backdrop-blur">
-        <h2 class="text-xl font-extrabold tracking-tight">Roles</h2>
-        <div class="mt-4 overflow-x-auto">
-          <table class="w-full min-w-[560px] text-left text-sm">
-            <thead>
-              <tr class="border-b border-slate-200 text-xs uppercase tracking-[0.14em] text-slate-500">
-                <th class="px-2 py-2">Role</th>
-                <th class="px-2 py-2">Display Name</th>
-                <th class="px-2 py-2">Mask</th>
-                <th class="px-2 py-2">System</th>
+    <div class="grid lg:grid-cols-2 gap-8">
+      <section class="bg-white border-2 border-brand-black p-8 shadow-[8px_8px_0_0_#0F0F11]">
+        <h2 class="font-serif text-3xl font-extrabold tracking-tight mb-6">Roles</h2>
+        <div class="overflow-x-auto border-2 border-brand-black">
+          <table class="w-full text-left text-sm font-sans whitespace-nowrap">
+            <thead class="bg-gray-50 border-b-2 border-brand-black">
+              <tr class="font-mono text-xs font-bold uppercase tracking-widest text-brand-black">
+                <th class="px-4 py-3 border-r-2 border-brand-black">Role</th>
+                <th class="px-4 py-3 border-r-2 border-brand-black">Name</th>
+                <th class="px-4 py-3 border-r-2 border-brand-black">Mask</th>
+                <th class="px-4 py-3">Sys</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody class="divide-y-2 divide-brand-black">
               {{range .Roles}}
-              <tr class="border-b border-slate-100 align-top">
-                <td class="px-2 py-2 font-semibold text-slate-900">{{.RoleCode}}</td>
-                <td class="px-2 py-2 text-slate-700">{{.DisplayName}}</td>
-                <td class="px-2 py-2 font-mono text-slate-700">{{.PrivilegeMask}}</td>
-                <td class="px-2 py-2 text-slate-700">{{if .IsSystem}}yes{{else}}no{{end}}</td>
+              <tr class="hover:bg-gray-50">
+                <td class="px-4 py-3 border-r-2 border-brand-black font-mono font-bold">{{.RoleCode}}</td>
+                <td class="px-4 py-3 border-r-2 border-brand-black">{{.DisplayName}}</td>
+                <td class="px-4 py-3 border-r-2 border-brand-black font-mono text-xs text-brand-accent">{{.PrivilegeMask}}</td>
+                <td class="px-4 py-3 font-mono text-xs">{{if .IsSystem}}Y{{else}}N{{end}}</td>
               </tr>
               {{else}}
-              <tr><td class="px-2 py-3 text-slate-500" colspan="4">No roles found.</td></tr>
+              <tr><td class="px-4 py-4 text-center font-mono text-xs text-gray-500" colspan="4">NO ROLES FOUND</td></tr>
               {{end}}
             </tbody>
           </table>
         </div>
-      </article>
+      </section>
 
-      <article class="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_20px_70px_rgba(15,23,42,0.08)] backdrop-blur">
-        <h2 class="text-xl font-extrabold tracking-tight">Role Usage</h2>
-        <div class="mt-4 overflow-x-auto">
-          <table class="w-full min-w-[560px] text-left text-sm">
-            <thead>
-              <tr class="border-b border-slate-200 text-xs uppercase tracking-[0.14em] text-slate-500">
-                <th class="px-2 py-2">Role</th>
-                <th class="px-2 py-2">Users</th>
-                <th class="px-2 py-2">Mask</th>
-                <th class="px-2 py-2">System</th>
+      <section class="bg-white border-2 border-brand-black p-8 shadow-[8px_8px_0_0_#0F0F11]">
+        <h2 class="font-serif text-3xl font-extrabold tracking-tight mb-6">Role Usage</h2>
+        <div class="overflow-x-auto border-2 border-brand-black">
+          <table class="w-full text-left text-sm font-sans whitespace-nowrap">
+            <thead class="bg-gray-50 border-b-2 border-brand-black">
+              <tr class="font-mono text-xs font-bold uppercase tracking-widest text-brand-black">
+                <th class="px-4 py-3 border-r-2 border-brand-black">Role</th>
+                <th class="px-4 py-3 border-r-2 border-brand-black">Users</th>
+                <th class="px-4 py-3 border-r-2 border-brand-black">Mask</th>
+                <th class="px-4 py-3">Sys</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody class="divide-y-2 divide-brand-black">
               {{range .Usage}}
-              <tr class="border-b border-slate-100 align-top">
-                <td class="px-2 py-2 font-semibold text-slate-900">{{.RoleCode}}</td>
-                <td class="px-2 py-2 text-slate-700">{{.UserCount}}</td>
-                <td class="px-2 py-2 font-mono text-slate-700">{{.PrivilegeMask}}</td>
-                <td class="px-2 py-2 text-slate-700">{{if .IsSystem}}yes{{else}}no{{end}}</td>
+              <tr class="hover:bg-gray-50">
+                <td class="px-4 py-3 border-r-2 border-brand-black font-mono font-bold">{{.RoleCode}}</td>
+                <td class="px-4 py-3 border-r-2 border-brand-black font-mono">{{.UserCount}}</td>
+                <td class="px-4 py-3 border-r-2 border-brand-black font-mono text-xs text-brand-accent">{{.PrivilegeMask}}</td>
+                <td class="px-4 py-3 font-mono text-xs">{{if .IsSystem}}Y{{else}}N{{end}}</td>
               </tr>
               {{else}}
-              <tr><td class="px-2 py-3 text-slate-500" colspan="4">No usage data found.</td></tr>
+              <tr><td class="px-4 py-4 text-center font-mono text-xs text-gray-500" colspan="4">NO USAGE DATA</td></tr>
               {{end}}
             </tbody>
           </table>
         </div>
-      </article>
-    </section>
+      </section>
+    </div>
 
-    <section class="mt-6 grid gap-6 lg:grid-cols-2">
-      <article class="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_20px_70px_rgba(15,23,42,0.08)] backdrop-blur">
-        <h3 class="text-lg font-extrabold tracking-tight">Role Operations</h3>
-        <div class="mt-4 space-y-4">
-          <form method="post" action="/admin/actions/rbac/bootstrap" class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+    <div class="grid lg:grid-cols-2 gap-8">
+      <section class="bg-white border-2 border-brand-black p-8 shadow-[8px_8px_0_0_#0F0F11]">
+        <h3 class="font-serif text-2xl font-extrabold tracking-tight mb-6">Role Operations</h3>
+        <div class="space-y-6">
+          <form method="post" action="/admin/actions/rbac/bootstrap" class="border-2 border-brand-black p-4 bg-gray-50">
             <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-            <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Bootstrap System Roles</p>
-            <button class="mt-3 inline-flex items-center justify-center rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white" type="submit">Bootstrap</button>
+            <div class="flex items-center justify-between">
+              <p class="font-mono text-xs font-bold uppercase tracking-widest text-brand-black">Bootstrap System</p>
+              <button class="border-2 border-brand-black bg-brand-black px-4 py-2 font-mono text-xs font-bold text-white hover:bg-brand-accent transition-colors" type="submit">EXECUTE</button>
+            </div>
           </form>
 
-          <form method="post" action="/admin/actions/rbac/roles/create" class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+          <form method="post" action="/admin/actions/rbac/roles/create" class="border-2 border-brand-black p-6 space-y-4">
             <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-            <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Create Role</p>
-            <input name="role_code" placeholder="role_code" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <input name="display_name" placeholder="Display Name" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <input name="description" placeholder="Description" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <input name="privilege_mask" placeholder="Privilege Mask (uint32, supports 0x hex)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <button class="inline-flex items-center justify-center rounded-lg bg-indigo-700 px-3 py-2 text-xs font-bold text-white" type="submit">Create</button>
+            <p class="font-mono text-xs font-bold uppercase tracking-widest text-brand-accent border-b-2 border-brand-black pb-2">Create Role</p>
+            <input name="role_code" placeholder="role_code" class="w-full border-2 border-brand-black px-3 py-2 font-mono text-sm focus:outline-none focus:ring-0 focus:border-brand-accent">
+            <input name="display_name" placeholder="Display Name" class="w-full border-2 border-brand-black px-3 py-2 font-mono text-sm focus:outline-none focus:ring-0 focus:border-brand-accent">
+            <input name="description" placeholder="Description" class="w-full border-2 border-brand-black px-3 py-2 font-mono text-sm focus:outline-none focus:ring-0 focus:border-brand-accent">
+            <input name="privilege_mask" placeholder="Mask (uint32 / 0x...)" class="w-full border-2 border-brand-black px-3 py-2 font-mono text-sm focus:outline-none focus:ring-0 focus:border-brand-accent">
+            <button class="w-full border-2 border-brand-black bg-brand-black px-4 py-3 font-mono text-sm font-bold text-white hover:bg-brand-accent transition-colors" type="submit">CREATE</button>
           </form>
 
-          <form method="post" action="/admin/actions/rbac/roles/update" class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+          <form method="post" action="/admin/actions/rbac/roles/update" class="border-2 border-brand-black p-6 space-y-4">
             <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-            <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Update Role</p>
-            <input name="role_code" placeholder="role_code" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <input name="display_name" placeholder="Display Name" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <input name="description" placeholder="Description" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <input name="privilege_mask" placeholder="Privilege Mask (uint32, supports 0x hex)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <button class="inline-flex items-center justify-center rounded-lg bg-amber-600 px-3 py-2 text-xs font-bold text-white" type="submit">Update</button>
+            <p class="font-mono text-xs font-bold uppercase tracking-widest text-brand-accent border-b-2 border-brand-black pb-2">Update Role</p>
+            <input name="role_code" placeholder="role_code" class="w-full border-2 border-brand-black px-3 py-2 font-mono text-sm focus:outline-none focus:ring-0 focus:border-brand-accent">
+            <input name="display_name" placeholder="Display Name" class="w-full border-2 border-brand-black px-3 py-2 font-mono text-sm focus:outline-none focus:ring-0 focus:border-brand-accent">
+            <input name="description" placeholder="Description" class="w-full border-2 border-brand-black px-3 py-2 font-mono text-sm focus:outline-none focus:ring-0 focus:border-brand-accent">
+            <input name="privilege_mask" placeholder="Mask (uint32 / 0x...)" class="w-full border-2 border-brand-black px-3 py-2 font-mono text-sm focus:outline-none focus:ring-0 focus:border-brand-accent">
+            <button class="w-full border-2 border-brand-black bg-white px-4 py-3 font-mono text-sm font-bold text-brand-black hover:bg-brand-black hover:text-white transition-colors" type="submit">UPDATE</button>
           </form>
 
-          <form method="post" action="/admin/actions/rbac/roles/delete" class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+          <form method="post" action="/admin/actions/rbac/roles/delete" class="border-2 border-brand-black p-6 space-y-4 bg-red-50">
             <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-            <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Delete Role</p>
-            <input name="role_code" placeholder="role_code" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <button class="inline-flex items-center justify-center rounded-lg bg-rose-700 px-3 py-2 text-xs font-bold text-white" type="submit">Delete</button>
+            <p class="font-mono text-xs font-bold uppercase tracking-widest text-red-600 border-b-2 border-red-600 pb-2">Delete Role</p>
+            <input name="role_code" placeholder="role_code" class="w-full border-2 border-brand-black px-3 py-2 font-mono text-sm focus:outline-none focus:ring-0 focus:border-red-600">
+            <button class="w-full border-2 border-red-600 bg-red-600 px-4 py-3 font-mono text-sm font-bold text-white hover:bg-red-700 transition-colors" type="submit">DELETE</button>
           </form>
         </div>
-      </article>
+      </section>
 
-      <article class="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_20px_70px_rgba(15,23,42,0.08)] backdrop-blur">
-        <h3 class="text-lg font-extrabold tracking-tight">User Operations</h3>
-        <div class="mt-4 space-y-4">
-          <form method="get" action="/admin" class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
-            <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Lookup User ID By Username</p>
-            <input name="lookup_username" value="{{.LookupUsername}}" placeholder="username, e.g. alice" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <button class="inline-flex items-center justify-center rounded-lg bg-indigo-700 px-3 py-2 text-xs font-bold text-white" type="submit">Lookup User ID</button>
-            <p class="text-xs text-slate-600">API: <span class="font-mono">GET /admin/users/lookup-by-username?username=alice</span></p>
+      <section class="bg-white border-2 border-brand-black p-8 shadow-[8px_8px_0_0_#0F0F11]">
+        <h3 class="font-serif text-2xl font-extrabold tracking-tight mb-6">User Operations</h3>
+        <div class="space-y-6">
+          <form method="get" action="/admin" class="border-2 border-brand-black p-6 space-y-4 bg-gray-50">
+            <p class="font-mono text-xs font-bold uppercase tracking-widest text-brand-black border-b-2 border-brand-black pb-2">Lookup By Username</p>
+            <div class="flex gap-2">
+              <input name="lookup_username" value="{{.LookupUsername}}" placeholder="username" class="flex-1 border-2 border-brand-black px-3 py-2 font-mono text-sm focus:outline-none focus:ring-0 focus:border-brand-accent">
+              <button class="border-2 border-brand-black bg-brand-black px-4 py-2 font-mono text-xs font-bold text-white hover:bg-brand-accent transition-colors" type="submit">FIND</button>
+            </div>
           </form>
 
           {{if .LookupUserError}}
-          <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            <i class="fa-solid fa-triangle-exclamation mr-2"></i>{{.LookupUserError}}
+          <div class="border-2 border-brand-black bg-red-100 p-4 font-mono text-sm font-bold text-red-900">
+            <i class="fa-solid fa-triangle-exclamation mr-2 text-red-700"></i>{{.LookupUserError}}
           </div>
           {{end}}
 
           {{if .LookupUser}}
-          <div class="rounded-xl border border-slate-200 bg-white p-4 overflow-x-auto">
-            <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Lookup Result</p>
-            <table class="mt-3 w-full min-w-[560px] text-left text-sm">
-              <thead>
-                <tr class="border-b border-slate-200 text-xs uppercase tracking-[0.14em] text-slate-500">
-                  <th class="px-2 py-2">User ID</th>
-                  <th class="px-2 py-2">Username</th>
-                  <th class="px-2 py-2">Email</th>
-                  <th class="px-2 py-2">Role</th>
-                  <th class="px-2 py-2">Status</th>
+          <div class="border-2 border-brand-black bg-white p-6 overflow-x-auto">
+            <p class="font-mono text-xs font-bold uppercase tracking-widest text-brand-accent mb-4">Lookup Result</p>
+            <table class="w-full text-left text-sm font-sans whitespace-nowrap border-2 border-brand-black">
+              <thead class="bg-gray-50 border-b-2 border-brand-black">
+                <tr class="font-mono text-xs font-bold uppercase tracking-widest text-brand-black">
+                  <th class="px-4 py-2 border-r-2 border-brand-black">ID</th>
+                  <th class="px-4 py-2 border-r-2 border-brand-black">Username</th>
+                  <th class="px-4 py-2 border-r-2 border-brand-black">Role</th>
+                  <th class="px-4 py-2">Status</th>
                 </tr>
               </thead>
               <tbody>
-                <tr class="border-b border-slate-100">
-                  <td class="px-2 py-2 font-mono font-bold text-slate-900">{{.LookupUser.UserID}}</td>
-                  <td class="px-2 py-2">{{.LookupUser.Username}}</td>
-                  <td class="px-2 py-2">{{.LookupUser.Email}}</td>
-                  <td class="px-2 py-2">{{if .LookupUser.RoleCode}}{{.LookupUser.RoleCode}}{{else}}-{{end}}</td>
-                  <td class="px-2 py-2">{{.LookupUser.Status}}</td>
+                <tr>
+                  <td class="px-4 py-2 border-r-2 border-brand-black font-mono font-bold">{{.LookupUser.UserID}}</td>
+                  <td class="px-4 py-2 border-r-2 border-brand-black font-mono">{{.LookupUser.Username}}</td>
+                  <td class="px-4 py-2 border-r-2 border-brand-black font-mono text-xs text-brand-accent">{{if .LookupUser.RoleCode}}{{.LookupUser.RoleCode}}{{else}}-{{end}}</td>
+                  <td class="px-4 py-2 font-mono text-xs">{{.LookupUser.Status}}</td>
                 </tr>
               </tbody>
             </table>
           </div>
           {{end}}
 
-          <form method="get" action="/admin" class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
-            <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Lookup Users By Role</p>
-            <input name="role_code" value="{{.LookupRole}}" placeholder="role_code" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <button class="inline-flex items-center justify-center rounded-lg bg-slate-700 px-3 py-2 text-xs font-bold text-white" type="submit">Lookup</button>
+          <form method="get" action="/admin" class="border-2 border-brand-black p-6 space-y-4 bg-gray-50">
+            <p class="font-mono text-xs font-bold uppercase tracking-widest text-brand-black border-b-2 border-brand-black pb-2">Lookup By Role</p>
+            <div class="flex gap-2">
+              <input name="role_code" value="{{.LookupRole}}" placeholder="role_code" class="flex-1 border-2 border-brand-black px-3 py-2 font-mono text-sm focus:outline-none focus:ring-0 focus:border-brand-accent">
+              <button class="border-2 border-brand-black bg-white px-4 py-2 font-mono text-xs font-bold text-brand-black hover:bg-brand-black hover:text-white transition-colors" type="submit">FIND</button>
+            </div>
           </form>
 
-          <form method="post" action="/admin/actions/users/assign-role" class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+          <form method="post" action="/admin/actions/users/assign-role" class="border-2 border-brand-black p-6 space-y-4">
             <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-            <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Assign Role To User</p>
-            <input name="user_id" placeholder="user_id" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <input name="role_code" placeholder="role_code" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <select name="privilege_mask" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white">
-              <option value="">Use role default (no privilege override)</option>
+            <p class="font-mono text-xs font-bold uppercase tracking-widest text-brand-accent border-b-2 border-brand-black pb-2">Assign Role</p>
+            <input name="user_id" placeholder="user_id" class="w-full border-2 border-brand-black px-3 py-2 font-mono text-sm focus:outline-none focus:ring-0 focus:border-brand-accent">
+            <input name="role_code" placeholder="role_code" class="w-full border-2 border-brand-black px-3 py-2 font-mono text-sm focus:outline-none focus:ring-0 focus:border-brand-accent">
+            <select name="privilege_mask" class="w-full border-2 border-brand-black px-3 py-2 font-mono text-sm focus:outline-none focus:ring-0 focus:border-brand-accent bg-white appearance-none">
+              <option value="">Default (No Override)</option>
               {{range .PrivilegePresets}}
-              <option value="{{.Value}}">{{.Label}} | {{.Value}} | {{.Composition}}</option>
+              <option value="{{.Value}}">{{.Label}} [{{.Value}}]</option>
               {{end}}
             </select>
-            <input name="privilege_mask_custom" placeholder="custom privilege_mask (optional, overrides dropdown)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <input name="tenant_scope" placeholder="tenant_scope (optional)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <button class="inline-flex items-center justify-center rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white" type="submit">Assign</button>
+            <input name="privilege_mask_custom" placeholder="custom mask (optional)" class="w-full border-2 border-brand-black px-3 py-2 font-mono text-sm focus:outline-none focus:ring-0 focus:border-brand-accent">
+            <input name="tenant_scope" placeholder="tenant_scope (optional)" class="w-full border-2 border-brand-black px-3 py-2 font-mono text-sm focus:outline-none focus:ring-0 focus:border-brand-accent">
+            <button class="w-full border-2 border-brand-black bg-brand-black px-4 py-3 font-mono text-sm font-bold text-white hover:bg-brand-accent transition-colors" type="submit">ASSIGN</button>
           </form>
 
-          <form method="post" action="/admin/actions/users/logout-all" class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
-            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-            <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Force Logout User</p>
-            <input name="user_id" placeholder="user_id" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <button class="inline-flex items-center justify-center rounded-lg bg-rose-700 px-3 py-2 text-xs font-bold text-white" type="submit">Logout All Sessions</button>
-          </form>
-
-          <form method="post" action="/admin/actions/users/change-password" class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
-            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-            <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Change User Password</p>
-            <input name="user_id" placeholder="user_id" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <input name="new_password" type="password" autocomplete="new-password" placeholder="new password (>=8 chars, letters + digits)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <button class="inline-flex items-center justify-center rounded-lg bg-amber-700 px-3 py-2 text-xs font-bold text-white" type="submit">Change Password</button>
-          </form>
-
-          <form method="post" action="/admin/actions/users/unlock" class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
-            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-            <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Unlock User Account</p>
-            <input name="user_id" placeholder="user_id" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <p class="text-xs text-slate-600">Clears lock state and failed-login counters, and restores <span class="font-semibold">locked -> active</span>.</p>
-            <button class="inline-flex items-center justify-center rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white" type="submit">Unlock User</button>
-          </form>
-
-          <form method="post" action="/admin/actions/keys/rotate" class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
-            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-            <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Manual Signing Key Rotation</p>
-            <p class="text-xs text-slate-600">Rotate immediately and promote a new active signing key (requires KEY.MANAGE).</p>
-            <button class="inline-flex items-center justify-center rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white" type="submit">Rotate Signing Key Now</button>
-          </form>
+          <div class="grid grid-cols-2 gap-4">
+            <form method="post" action="/admin/actions/users/unlock" class="border-2 border-brand-black p-4 space-y-3 bg-gray-50">
+              <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+              <p class="font-mono text-xs font-bold uppercase tracking-widest text-brand-black">Unlock</p>
+              <input name="user_id" placeholder="user_id" class="w-full border-2 border-brand-black px-2 py-2 font-mono text-xs focus:outline-none focus:border-brand-accent">
+              <button class="w-full border-2 border-brand-black bg-white px-2 py-2 font-mono text-xs font-bold hover:bg-brand-black hover:text-white transition-colors" type="submit">EXECUTE</button>
+            </form>
+            <form method="post" action="/admin/actions/users/logout-all" class="border-2 border-brand-black p-4 space-y-3 bg-gray-50">
+              <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+              <p class="font-mono text-xs font-bold uppercase tracking-widest text-brand-black">Force Logout</p>
+              <input name="user_id" placeholder="user_id" class="w-full border-2 border-brand-black px-2 py-2 font-mono text-xs focus:outline-none focus:border-brand-accent">
+              <button class="w-full border-2 border-brand-black bg-white px-2 py-2 font-mono text-xs font-bold hover:bg-brand-black hover:text-white transition-colors" type="submit">EXECUTE</button>
+            </form>
+          </div>
 
           {{if .LookupUsers}}
-          <div class="rounded-xl border border-slate-200 bg-white p-4 overflow-x-auto">
-            <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Users in role {{.LookupRole}}</p>
-            <table class="mt-3 w-full min-w-[560px] text-left text-sm">
-              <thead>
-                <tr class="border-b border-slate-200 text-xs uppercase tracking-[0.14em] text-slate-500">
-                  <th class="px-2 py-2">User ID</th>
-                  <th class="px-2 py-2">Username</th>
-                  <th class="px-2 py-2">Status</th>
-                  <th class="px-2 py-2">Mask</th>
+          <div class="border-2 border-brand-black bg-white p-6 overflow-x-auto mt-6">
+            <p class="font-mono text-xs font-bold uppercase tracking-widest text-brand-accent mb-4">Users in: {{.LookupRole}}</p>
+            <table class="w-full text-left text-sm font-sans whitespace-nowrap border-2 border-brand-black">
+              <thead class="bg-gray-50 border-b-2 border-brand-black">
+                <tr class="font-mono text-xs font-bold uppercase tracking-widest text-brand-black">
+                  <th class="px-4 py-2 border-r-2 border-brand-black">ID</th>
+                  <th class="px-4 py-2 border-r-2 border-brand-black">User</th>
+                  <th class="px-4 py-2 border-r-2 border-brand-black">Mask</th>
+                  <th class="px-4 py-2">Stat</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody class="divide-y-2 divide-brand-black">
                 {{range .LookupUsers}}
-                <tr class="border-b border-slate-100">
-                  <td class="px-2 py-2">{{.UserID}}</td>
-                  <td class="px-2 py-2">{{.Username}}</td>
-                  <td class="px-2 py-2">{{.Status}}</td>
-                  <td class="px-2 py-2 font-mono">{{.PrivilegeMask}}</td>
+                <tr class="hover:bg-gray-50">
+                  <td class="px-4 py-2 border-r-2 border-brand-black font-mono text-xs">{{.UserID}}</td>
+                  <td class="px-4 py-2 border-r-2 border-brand-black font-mono font-bold">{{.Username}}</td>
+                  <td class="px-4 py-2 border-r-2 border-brand-black font-mono text-xs text-brand-accent">{{.PrivilegeMask}}</td>
+                  <td class="px-4 py-2 font-mono text-xs">{{.Status}}</td>
                 </tr>
                 {{end}}
               </tbody>
@@ -295,50 +304,54 @@
           </div>
           {{end}}
         </div>
-      </article>
-    </section>
+      </section>
+    </div>
 
-    <section class="mt-6 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_20px_70px_rgba(15,23,42,0.08)] backdrop-blur">
-      <h3 class="text-lg font-extrabold tracking-tight">OAuth Client Operations</h3>
-      <p class="mt-2 text-sm text-slate-600">Requires <span class="font-semibold">AUTH.EXEC + CLIENT.MANAGE</span>. Values support comma or newline separators.</p>
+    <section class="bg-white border-2 border-brand-black p-8 md:p-12 shadow-[8px_8px_0_0_#0F0F11]">
+      <div class="mb-8">
+        <h3 class="font-serif text-3xl font-extrabold tracking-tight mb-2">OAuth Client Operations</h3>
+        <p class="font-mono text-xs text-gray-500 uppercase tracking-widest">Requires AUTH.EXEC + CLIENT.MANAGE.</p>
+      </div>
 
-      <div class="mt-4 grid gap-6 lg:grid-cols-3">
-        <form method="post" action="/admin/actions/clients/create" class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+      <div class="grid gap-8 lg:grid-cols-3">
+        <form method="post" action="/admin/actions/clients/create" class="border-2 border-brand-black p-6 space-y-4 col-span-1 lg:col-span-2 bg-gray-50">
           <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-          <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Create Client</p>
-          <input name="client_id" placeholder="client_id" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          <input name="client_name" placeholder="Client Name" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          <input name="client_secret" placeholder="Client Secret (for confidential)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          <input name="client_type" placeholder="client_type (confidential/public)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          <input name="token_endpoint_auth_method" placeholder="auth_method (client_secret_basic/client_secret_post/none)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          <input name="require_pkce" placeholder="require_pkce (true/false, optional)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          <input name="require_consent" placeholder="require_consent (true/false, optional)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          <input name="access_token_ttl_seconds" placeholder="access_token_ttl_seconds (optional)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          <input name="refresh_token_ttl_seconds" placeholder="refresh_token_ttl_seconds (optional)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          <input name="id_token_ttl_seconds" placeholder="id_token_ttl_seconds (optional)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          <textarea name="grant_types" rows="2" placeholder="grant_types, e.g. authorization_code,refresh_token" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></textarea>
-          <textarea name="scopes" rows="2" placeholder="scopes, e.g. openid,profile,offline_access" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></textarea>
-          <textarea name="redirect_uris" rows="3" placeholder="redirect_uris, one-per-line or comma-separated" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></textarea>
-          <textarea name="post_logout_redirect_uris" rows="2" placeholder="post_logout_redirect_uris (optional)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></textarea>
-          <input name="status" placeholder="status (active/inactive, optional)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          <button class="inline-flex items-center justify-center rounded-lg bg-indigo-700 px-3 py-2 text-xs font-bold text-white" type="submit">Create Client</button>
+          <p class="font-mono text-xs font-bold uppercase tracking-widest text-brand-accent border-b-2 border-brand-black pb-2">Create Client</p>
+          
+          <div class="grid md:grid-cols-2 gap-4">
+            <input name="client_id" placeholder="client_id" class="w-full border-2 border-brand-black px-3 py-2 font-mono text-sm focus:outline-none focus:border-brand-accent bg-white">
+            <input name="client_name" placeholder="Name" class="w-full border-2 border-brand-black px-3 py-2 font-mono text-sm focus:outline-none focus:border-brand-accent bg-white">
+            <input name="client_secret" placeholder="Secret (confidential)" class="w-full border-2 border-brand-black px-3 py-2 font-mono text-sm focus:outline-none focus:border-brand-accent bg-white">
+            <input name="client_type" placeholder="Type (confidential/public)" class="w-full border-2 border-brand-black px-3 py-2 font-mono text-sm focus:outline-none focus:border-brand-accent bg-white">
+            <input name="token_endpoint_auth_method" placeholder="Auth Method (basic/post/none)" class="w-full border-2 border-brand-black px-3 py-2 font-mono text-sm focus:outline-none focus:border-brand-accent bg-white">
+            <input name="status" placeholder="Status (active/inactive)" class="w-full border-2 border-brand-black px-3 py-2 font-mono text-sm focus:outline-none focus:border-brand-accent bg-white">
+          </div>
+          
+          <div class="grid md:grid-cols-2 gap-4">
+            <textarea name="grant_types" rows="2" placeholder="grant_types (comma sep)" class="w-full border-2 border-brand-black px-3 py-2 font-mono text-sm focus:outline-none focus:border-brand-accent bg-white"></textarea>
+            <textarea name="scopes" rows="2" placeholder="scopes (comma sep)" class="w-full border-2 border-brand-black px-3 py-2 font-mono text-sm focus:outline-none focus:border-brand-accent bg-white"></textarea>
+          </div>
+          
+          <textarea name="redirect_uris" rows="2" placeholder="redirect_uris (one per line)" class="w-full border-2 border-brand-black px-3 py-2 font-mono text-sm focus:outline-none focus:border-brand-accent bg-white"></textarea>
+          <button class="border-2 border-brand-black bg-brand-black px-6 py-3 font-mono text-sm font-bold text-white hover:bg-brand-accent transition-colors" type="submit">CREATE CLIENT</button>
         </form>
 
-        <form method="post" action="/admin/actions/clients/redirect-uris" class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
-          <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-          <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Register Redirect URIs</p>
-          <input name="client_id" placeholder="client_id" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          <textarea name="redirect_uris" rows="8" placeholder="redirect_uris, one-per-line or comma-separated" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></textarea>
-          <button class="inline-flex items-center justify-center rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white" type="submit">Register Redirect URIs</button>
-        </form>
+        <div class="space-y-6">
+          <form method="post" action="/admin/actions/clients/redirect-uris" class="border-2 border-brand-black p-6 space-y-4">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <p class="font-mono text-xs font-bold uppercase tracking-widest text-brand-black border-b-2 border-brand-black pb-2">URIs</p>
+            <input name="client_id" placeholder="client_id" class="w-full border-2 border-brand-black px-3 py-2 font-mono text-sm focus:outline-none focus:border-brand-accent">
+            <textarea name="redirect_uris" rows="4" placeholder="redirect_uris" class="w-full border-2 border-brand-black px-3 py-2 font-mono text-sm focus:outline-none focus:border-brand-accent"></textarea>
+            <button class="w-full border-2 border-brand-black bg-white px-4 py-3 font-mono text-sm font-bold hover:bg-brand-black hover:text-white transition-colors" type="submit">UPDATE URIS</button>
+          </form>
 
-        <form method="post" action="/admin/actions/clients/post-logout-redirect-uris" class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
-          <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-          <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Register Post Logout Redirect URIs</p>
-          <input name="client_id" placeholder="client_id" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          <textarea name="post_logout_redirect_uris" rows="8" placeholder="post_logout_redirect_uris, one-per-line or comma-separated" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></textarea>
-          <button class="inline-flex items-center justify-center rounded-lg bg-slate-800 px-3 py-2 text-xs font-bold text-white" type="submit">Register Post Logout URIs</button>
-        </form>
+          <form method="post" action="/admin/actions/keys/rotate" class="border-2 border-brand-black p-6 space-y-4 bg-gray-50">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <p class="font-mono text-xs font-bold uppercase tracking-widest text-brand-black border-b-2 border-brand-black pb-2">Signing Keys</p>
+            <p class="font-mono text-xs text-gray-600">Force immediate key rotation.</p>
+            <button class="w-full border-2 border-brand-black bg-brand-black px-4 py-3 font-mono text-sm font-bold text-white hover:bg-brand-accent transition-colors" type="submit">ROTATE KEYS</button>
+          </form>
+        </div>
       </div>
     </section>
   </div>

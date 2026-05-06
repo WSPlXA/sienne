@@ -3,14 +3,23 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sign Out</title>
+  <title>Sign Out | Sienne IDP</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
       theme: {
         extend: {
           fontFamily: {
-            sans: ["Manrope", "sans-serif"]
+            serif: ["'Playfair Display'", "serif"],
+            sans: ["'Inter'", "sans-serif"],
+            mono: ["'JetBrains Mono'", "monospace"],
+          },
+          colors: {
+            brand: {
+              black: "#0F0F11",
+              white: "#FFFFFF",
+              accent: "#2563EB",
+            }
           }
         }
       }
@@ -18,49 +27,64 @@
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&family=Playfair+Display:ital,wght@0,600;0,800;1,600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 </head>
-<body class="min-h-screen bg-[radial-gradient(circle_at_12%_12%,#fee2e2_0%,transparent_30%),radial-gradient(circle_at_85%_90%,#ffedd5_0%,transparent_32%),linear-gradient(135deg,#fff7ed_0%,#fffaf5_45%,#fef2f2_100%)] text-slate-900">
-  <div class="mx-auto flex min-h-screen w-full max-w-3xl items-center justify-center px-4 py-10 sm:px-6">
-    <main class="w-full max-w-lg rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_30px_100px_rgba(15,23,42,0.12)] backdrop-blur sm:p-8">
-      <div class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-50 text-orange-700">
+<body class="min-h-screen bg-gray-50 text-brand-black font-sans selection:bg-brand-accent selection:text-white flex flex-col antialiased">
+  <div class="absolute inset-0 bg-[linear-gradient(to_right,#e5e7eb_1px,transparent_1px),linear-gradient(to_bottom,#e5e7eb_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-30 pointer-events-none fixed"></div>
+
+  <header class="w-full border-b-2 border-brand-black px-6 py-4 flex justify-between items-center bg-white relative z-20">
+    <div class="flex items-center gap-3">
+      <div class="h-6 w-6 bg-brand-black text-white flex items-center justify-center text-xs">
         <i class="fa-solid fa-right-from-bracket"></i>
       </div>
-      <p class="mt-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">End Session</p>
-      <h1 class="mt-2 text-3xl font-extrabold tracking-tight">Sign Out</h1>
+      <span class="font-mono text-xs font-bold uppercase tracking-widest">Sienne IDP</span>
+    </div>
+    <div class="font-mono text-xs text-gray-500 uppercase tracking-widest hidden sm:block">SYS.LOGOUT.01</div>
+  </header>
 
-      {{if .Error}}
-      <div class="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-        <i class="fa-solid fa-circle-exclamation mr-2"></i>{{.Error}}
-      </div>
-      {{end}}
-
-      <div class="mt-6 space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm">
-        <div>
-          <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Client ID</p>
-          <p class="mt-1 break-all font-semibold text-slate-800">{{if .ClientID}}{{.ClientID}}{{else}}-{{end}}</p>
-        </div>
-        <div>
-          <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Post Logout Redirect</p>
-          <p class="mt-1 break-all font-semibold text-slate-800">{{if .PostLogoutRedirectURI}}{{.PostLogoutRedirectURI}}{{else}}/login{{end}}</p>
-        </div>
+  <main class="flex-1 flex items-center justify-center p-6 relative z-10">
+    <div class="w-full max-w-2xl bg-white border-2 border-brand-black shadow-[8px_8px_0_0_#0F0F11]">
+      <div class="p-8 md:p-12 border-b-2 border-brand-black bg-white relative overflow-hidden">
+        <div class="absolute right-0 top-0 opacity-10 text-[8rem] font-serif font-black leading-none pointer-events-none text-brand-black">OUT</div>
+        <p class="font-mono text-xs font-bold uppercase tracking-widest text-brand-accent mb-4">End Session</p>
+        <h1 class="font-serif text-4xl md:text-5xl font-extrabold tracking-tight">Sign Out</h1>
       </div>
 
-      <form id="logout-form" method="post" action="/connect/logout" class="mt-6">
-        <input type="hidden" name="client_id" value="{{.ClientID}}">
-        <input type="hidden" name="post_logout_redirect_uri" value="{{.PostLogoutRedirectURI}}">
-        <input type="hidden" name="state" value="{{.State}}">
-        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-        <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-600 to-red-600 px-4 py-3 text-sm font-bold text-white shadow-[0_14px_30px_rgba(234,88,12,0.28)] transition hover:brightness-105">
-          <i class="fa-solid fa-power-off"></i>
-          Sign Out
-        </button>
-      </form>
+      <div class="p-8 md:p-12 bg-gray-50">
+        {{if .Error}}
+        <div class="mb-8 border-2 border-brand-black bg-red-100 p-4 font-mono text-sm text-brand-black font-bold shadow-[4px_4px_0_0_#0F0F11]">
+          <i class="fa-solid fa-triangle-exclamation mr-2 text-red-600"></i>[ERR] {{.Error}}
+        </div>
+        {{end}}
 
-      <p class="mt-3 text-center text-xs text-slate-500">If automatic submission does not start, click the button.</p>
-    </main>
-  </div>
+        <div class="border-2 border-brand-black bg-white mb-8 p-6 space-y-4 font-mono text-sm">
+          <div>
+            <p class="text-xs font-bold uppercase tracking-widest text-gray-500 mb-1">Client ID</p>
+            <p class="break-all font-bold text-brand-black">{{if .ClientID}}{{.ClientID}}{{else}}-{{end}}</p>
+          </div>
+          <div>
+            <p class="text-xs font-bold uppercase tracking-widest text-gray-500 mb-1">Post Logout Redirect</p>
+            <p class="break-all font-bold text-brand-black">{{if .PostLogoutRedirectURI}}{{.PostLogoutRedirectURI}}{{else}}/login{{end}}</p>
+          </div>
+        </div>
+
+        <form id="logout-form" method="post" action="/connect/logout">
+          <input type="hidden" name="client_id" value="{{.ClientID}}">
+          <input type="hidden" name="post_logout_redirect_uri" value="{{.PostLogoutRedirectURI}}">
+          <input type="hidden" name="state" value="{{.State}}">
+          <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+          <button type="submit" class="w-full border-2 border-brand-black bg-brand-black px-4 py-4 font-mono text-sm font-bold text-white transition-all hover:bg-white hover:text-brand-black hover:shadow-[4px_4px_0_0_#0F0F11]">
+            <span class="flex items-center justify-center gap-2">
+              <i class="fa-solid fa-power-off"></i> EXECUTE SIGN OUT
+            </span>
+          </button>
+        </form>
+
+        <p class="mt-6 text-center font-mono text-xs text-gray-500 uppercase tracking-widest">If automatic submission does not start, click the button.</p>
+      </div>
+    </div>
+  </main>
 
   <script>
     window.addEventListener("load", function () {

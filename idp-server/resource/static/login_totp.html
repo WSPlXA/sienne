@@ -3,14 +3,23 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MFA Verification</title>
+  <title>MFA Verification | Sienne IDP</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
       theme: {
         extend: {
           fontFamily: {
-            sans: ["Manrope", "sans-serif"]
+            serif: ["'Playfair Display'", "serif"],
+            sans: ["'Inter'", "sans-serif"],
+            mono: ["'JetBrains Mono'", "monospace"],
+          },
+          colors: {
+            brand: {
+              black: "#0F0F11",
+              white: "#FFFFFF",
+              accent: "#2563EB",
+            }
           }
         }
       }
@@ -18,83 +27,115 @@
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&family=Playfair+Display:ital,wght@0,600;0,800;1,600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <style>
+    input:-webkit-autofill {
+      -webkit-box-shadow: 0 0 0 1000px white inset !important;
+      -webkit-text-fill-color: #0F0F11 !important;
+    }
+  </style>
 </head>
-<body class="min-h-screen bg-[radial-gradient(circle_at_20%_10%,#d1fae5_0%,transparent_30%),radial-gradient(circle_at_90%_90%,#a7f3d0_0%,transparent_25%),linear-gradient(135deg,#f0fdfa_0%,#f8fafc_55%,#ecfeff_100%)] text-slate-900">
-  <div class="mx-auto flex min-h-screen w-full max-w-4xl items-center justify-center px-4 py-10">
-    <main class="w-full max-w-md rounded-3xl border border-slate-200 bg-white/85 p-7 shadow-[0_24px_90px_rgba(15,23,42,0.15)] backdrop-blur sm:p-9">
-      <div class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+<body class="min-h-screen bg-brand-white text-brand-black font-sans selection:bg-brand-accent selection:text-white flex flex-col antialiased">
+  <header class="w-full border-b-2 border-brand-black px-6 py-4 flex justify-between items-center bg-white">
+    <div class="flex items-center gap-3">
+      <div class="h-6 w-6 bg-brand-black text-white flex items-center justify-center text-xs">
         <i class="fa-solid fa-shield-halved"></i>
       </div>
-      <p class="mt-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">MFA Check</p>
-      <h1 class="mt-2 text-3xl font-extrabold tracking-tight">Choose Verify Method</h1>
-      <p class="mt-2 text-sm text-slate-500">You can sign in with Passkey or TOTP. TOTP fallback remains available.</p>
+      <span class="font-mono text-xs font-bold uppercase tracking-widest">Sienne IDP</span>
+    </div>
+    <div class="font-mono text-xs text-gray-500 uppercase tracking-widest hidden sm:block">SYS.MFA.01</div>
+  </header>
 
-      <div class="mt-5 grid grid-cols-2 gap-2 rounded-xl border border-slate-200 bg-slate-50 p-1">
-        <button id="method-passkey" type="button" class="rounded-lg px-3 py-2 text-sm font-bold">
-          <i class="fa-solid fa-key mr-1"></i>Passkey
-        </button>
-        <button id="method-totp" type="button" class="rounded-lg px-3 py-2 text-sm font-bold">
-          <i class="fa-solid fa-hashtag mr-1"></i>TOTP
-        </button>
+  <main class="flex-1 grid grid-cols-1 md:grid-cols-2">
+    <div class="border-b-2 md:border-b-0 md:border-r-2 border-brand-black p-8 md:p-16 lg:p-24 flex flex-col justify-center bg-gray-50 relative overflow-hidden">
+      <div class="absolute -left-10 -top-10 text-[10rem] text-gray-200/50 font-serif font-black leading-none select-none pointer-events-none">MFA</div>
+      <div class="relative z-10">
+        <p class="font-mono text-xs uppercase tracking-widest text-brand-accent mb-6 font-bold">MFA Check</p>
+        <h1 class="font-serif text-5xl md:text-6xl lg:text-7xl font-extrabold leading-none tracking-tight mb-8 text-brand-black">Verify Identity</h1>
+        <p class="text-lg text-gray-600 max-w-md font-sans">Secondary authentication required. You can sign in with Passkey or TOTP. TOTP fallback remains available.</p>
       </div>
+    </div>
 
-      {{if .PushEnabled}}
-      <section class="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4">
-        <p class="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">Push Challenge</p>
-        <p class="mt-2 text-sm text-slate-700">Approve on your trusted device with this number.</p>
-        <div class="mt-3 flex items-center justify-between rounded-xl bg-white px-4 py-3">
-          <span class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Number Match</span>
-          <span id="push-code" class="text-2xl font-black text-emerald-700">{{.PushCode}}</span>
-        </div>
-        <div class="mt-3 text-xs text-slate-600">
-          <p>Challenge ID: <span class="font-mono">{{.ChallengeID}}</span></p>
-          <p id="push-status" class="mt-1">Status: {{.PushStatus}}</p>
-        </div>
-      </section>
-      {{end}}
-
-      {{if .Error}}
-      <div class="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-        <i class="fa-solid fa-circle-exclamation mr-2"></i>{{.Error}}
-      </div>
-      {{end}}
-
-      <input type="hidden" id="csrf-token" value="{{.CSRFToken}}">
-      <input type="hidden" id="challenge-id" value="{{.ChallengeID}}">
-      <input type="hidden" id="passkey-enabled" value="{{if .PasskeyEnabled}}1{{else}}0{{end}}">
-
-      <section id="panel-passkey" class="mt-6 rounded-2xl border border-cyan-200 bg-cyan-50/60 p-4">
-        {{if .PasskeyEnabled}}
-        <p class="text-xs font-bold uppercase tracking-[0.18em] text-cyan-700">Passkey Sign-in</p>
-        <p class="mt-2 text-sm text-slate-700">Continue to trigger WebAuthn. Browser/OS may show a QR for phone scan.</p>
-        <button id="passkey-button" type="button" class="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-600 to-sky-700 px-4 py-3 text-sm font-bold text-white shadow-[0_14px_30px_rgba(8,145,178,0.25)] transition hover:brightness-105">
-          <i class="fa-solid fa-mobile-screen-button"></i>
-          Continue With Passkey
-        </button>
-        <p id="passkey-status" class="mt-2 text-xs text-slate-600"></p>
-        {{else}}
-        <p class="text-xs font-bold uppercase tracking-[0.18em] text-amber-700">Passkey Not Registered</p>
-        <p class="mt-2 text-sm text-slate-700">Use TOTP once. After successful TOTP login, system will require Passkey registration first.</p>
-        {{end}}
-      </section>
-
-      <section id="panel-totp" class="mt-6">
-        <form method="post" class="space-y-5">
-          <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-          <label class="block">
-            <span class="mb-2 block text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Authenticator Code</span>
-            <input id="code" name="code" maxlength="6" autocomplete="one-time-code" inputmode="numeric" placeholder="123456" class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-center text-2xl font-bold tracking-[0.35em] outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100">
-          </label>
-          <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 px-4 py-3 text-sm font-bold text-white shadow-[0_14px_30px_rgba(5,150,105,0.25)] transition hover:brightness-105">
-            <i class="fa-solid fa-check"></i>
-            Verify With TOTP
+    <div class="p-8 md:p-16 lg:p-24 flex flex-col justify-center relative bg-white">
+      <div class="absolute inset-0 bg-[linear-gradient(to_right,#e5e7eb_1px,transparent_1px),linear-gradient(to_bottom,#e5e7eb_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_60%_at_50%_50%,#000_70%,transparent_100%)] opacity-30 pointer-events-none"></div>
+      
+      <div class="w-full max-w-md mx-auto relative z-10">
+        
+        <div class="mb-8 grid grid-cols-2 gap-0 border-2 border-brand-black bg-white">
+          <button id="method-passkey" type="button" class="px-3 py-3 font-mono text-xs font-bold uppercase tracking-widest transition-all">
+            <i class="fa-solid fa-key mr-2"></i>Passkey
           </button>
-        </form>
-      </section>
-    </main>
-  </div>
+          <button id="method-totp" type="button" class="px-3 py-3 font-mono text-xs font-bold uppercase tracking-widest transition-all border-l-2 border-brand-black">
+            <i class="fa-solid fa-hashtag mr-2"></i>TOTP
+          </button>
+        </div>
+
+        {{if .PushEnabled}}
+        <section class="mb-8 border-2 border-brand-black bg-[#f0fdf9] p-6 shadow-[4px_4px_0_0_#0F0F11]">
+          <p class="font-mono text-xs font-bold uppercase tracking-widest text-brand-black mb-4">Push Challenge</p>
+          <p class="text-sm text-gray-700 font-sans mb-4">Approve on your trusted device with this number.</p>
+          <div class="border-2 border-brand-black bg-white p-4 flex items-center justify-between">
+            <span class="font-mono text-xs font-bold uppercase tracking-widest text-gray-500">Number Match</span>
+            <span id="push-code" class="text-3xl font-serif font-black text-brand-black">{{.PushCode}}</span>
+          </div>
+          <div class="mt-4 font-mono text-xs text-gray-600 space-y-1">
+            <p>Challenge ID: <span class="text-brand-black">{{.ChallengeID}}</span></p>
+            <p id="push-status">Status: {{.PushStatus}}</p>
+          </div>
+        </section>
+        {{end}}
+
+        {{if .Error}}
+        <div class="mb-8 border-2 border-brand-black bg-red-100 p-4 font-mono text-sm text-brand-black font-bold shadow-[4px_4px_0_0_#0F0F11]">
+          <i class="fa-solid fa-triangle-exclamation mr-2 text-red-600"></i>[ERR] {{.Error}}
+        </div>
+        {{end}}
+
+        <input type="hidden" id="csrf-token" value="{{.CSRFToken}}">
+        <input type="hidden" id="challenge-id" value="{{.ChallengeID}}">
+        <input type="hidden" id="passkey-enabled" value="{{if .PasskeyEnabled}}1{{else}}0{{end}}">
+
+        <section id="panel-passkey" class="border-2 border-brand-black bg-white p-6 shadow-[4px_4px_0_0_#0F0F11]">
+          {{if .PasskeyEnabled}}
+          <p class="font-mono text-xs font-bold uppercase tracking-widest text-brand-black mb-4">Passkey Sign-in</p>
+          <p class="text-sm text-gray-700 font-sans mb-6">Continue to trigger WebAuthn. Browser/OS may show a QR for phone scan.</p>
+          <button id="passkey-button" type="button" class="w-full border-2 border-brand-black bg-brand-black px-4 py-4 font-mono text-sm font-bold text-white transition-all hover:bg-brand-accent hover:border-brand-accent hover:shadow-[4px_4px_0_0_#0F0F11]">
+            <span class="flex items-center justify-center gap-2">
+              <i class="fa-solid fa-mobile-screen-button"></i>
+              CONTINUE WITH PASSKEY
+            </span>
+          </button>
+          <p id="passkey-status" class="mt-4 font-mono text-xs text-gray-600"></p>
+          {{else}}
+          <p class="font-mono text-xs font-bold uppercase tracking-widest text-brand-black mb-4">Passkey Not Registered</p>
+          <p class="text-sm text-gray-700 font-sans">Use TOTP once. After successful TOTP login, system will require Passkey registration first.</p>
+          {{end}}
+        </section>
+
+        <section id="panel-totp" class="border-2 border-brand-black bg-white p-6 shadow-[4px_4px_0_0_#0F0F11]">
+          <form method="post" class="space-y-6">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <div class="space-y-2">
+              <label class="flex justify-between items-baseline">
+                <span class="font-mono text-xs font-bold uppercase tracking-widest text-brand-black">Authenticator Code</span>
+              </label>
+              <input id="code" name="code" maxlength="6" autocomplete="one-time-code" inputmode="numeric" placeholder="123456" 
+                class="w-full border-2 border-brand-black bg-white px-4 py-4 font-mono text-3xl font-bold text-center tracking-[0.3em] outline-none transition focus:shadow-[4px_4px_0_0_#2563EB] placeholder-gray-300">
+            </div>
+            <button type="submit" class="w-full border-2 border-brand-black bg-brand-black px-4 py-4 font-mono text-sm font-bold text-white transition-all hover:bg-brand-accent hover:border-brand-accent hover:shadow-[4px_4px_0_0_#0F0F11]">
+              <span class="flex items-center justify-center gap-2">
+                <i class="fa-solid fa-check"></i>
+                VERIFY WITH TOTP
+              </span>
+            </button>
+          </form>
+        </section>
+
+      </div>
+    </div>
+  </main>
+
   <script>
     (function () {
       const challengeID = (document.getElementById("challenge-id") || {}).value || "";
@@ -110,8 +151,9 @@
         const usePasskey = method === "passkey" && passkeyEnabled;
         passkeyPanel.classList.toggle("hidden", !usePasskey);
         totpPanel.classList.toggle("hidden", usePasskey);
-        passkeyMethodButton.className = "rounded-lg px-3 py-2 text-sm font-bold " + (usePasskey ? "bg-cyan-600 text-white" : "text-slate-600");
-        totpMethodButton.className = "rounded-lg px-3 py-2 text-sm font-bold " + (!usePasskey ? "bg-emerald-600 text-white" : "text-slate-600");
+        
+        passkeyMethodButton.className = "px-3 py-3 font-mono text-xs font-bold uppercase tracking-widest transition-all " + (usePasskey ? "bg-brand-black text-white" : "bg-white text-gray-500 hover:bg-gray-100");
+        totpMethodButton.className = "px-3 py-3 font-mono text-xs font-bold uppercase tracking-widest transition-all border-l-2 border-brand-black " + (!usePasskey ? "bg-brand-black text-white" : "bg-white text-gray-500 hover:bg-gray-100");
       }
 
       passkeyMethodButton.addEventListener("click", function () { setMethod("passkey"); });
