@@ -1,6 +1,6 @@
 # Sienne-idp
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 语言: [English](README.md) | [简体中文](README.zh-CN.md)
 
@@ -103,4 +103,4 @@ go test ./...
 
 ## 许可证
 
-本项目采用 [MIT 许可证](LICENSE) 进行开源。
+本项目采用 [Apache 2.0 许可证](LICENSE) 进行开源。

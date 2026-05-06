@@ -1,6 +1,6 @@
 # Sienne-idp
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 Language: [English](README.md) | [简体中文](README.zh-CN.md)
 
@@ -103,4 +103,4 @@ The application supports file-backed signing keys for local development, but mul
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the [Apache 2.0 License](LICENSE).
