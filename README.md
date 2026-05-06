@@ -1,4 +1,4 @@
-# oauth2-sienne-idp
+# sienne-idp
 
 Language: [English](README.md) | [简体中文](README.zh-CN.md)
 
