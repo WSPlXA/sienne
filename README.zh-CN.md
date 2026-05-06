@@ -1,8 +1,8 @@
-# sienne-idp
+# Sienne-idp
 
 语言: [English](README.md) | [简体中文](README.zh-CN.md)
 
-`oauth2-sienne-idp` 是一个基于 Go 的 Identity Provider，实现 OAuth2 与 OpenID Connect。项目采用无状态应用节点 + MySQL + Redis 的架构，覆盖会话状态、令牌生命周期、防重放、MFA、审计日志和签名密钥轮转等生产向能力。
+`Sienne-idp` 是一个基于 Go 的 Identity Provider，实现 OAuth2 与 OpenID Connect。项目采用无状态应用节点 + MySQL + Redis 的架构，覆盖会话状态、令牌生命周期、防重放、MFA、审计日志和签名密钥轮转等生产向能力。
 
 ## 核心能力
 

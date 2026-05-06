@@ -1,8 +1,8 @@
-# sienne-idp
+# Sienne-idp
 
 Language: [English](README.md) | [简体中文](README.zh-CN.md)
 
-`oauth2-sienne-idp` is a Go-based Identity Provider implementing OAuth2 and OpenID Connect. It is designed around stateless application nodes backed by MySQL and Redis, with production-oriented controls for session state, token lifecycle, replay protection, MFA, audit logging, and signing-key rotation.
+`Sienne-idp` is a Go-based Identity Provider implementing OAuth2 and OpenID Connect. It is designed around stateless application nodes backed by MySQL and Redis, with production-oriented controls for session state, token lifecycle, replay protection, MFA, audit logging, and signing-key rotation.
 
 ## Highlights
 
